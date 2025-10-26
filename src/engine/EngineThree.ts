@@ -48,6 +48,10 @@ export class EngineThree {
     return this.mixWeights[id] ?? 1.0; // default 1.0 = full bone
   };
 
+  hasBoneBinding = (id: number) => {
+    return !!BONE_AU_TO_BINDINGS[id];
+  };
+
   onReady = ({ meshes, model }: { meshes: THREE.Mesh[]; model?: THREE.Object3D }) => {
     this.meshes = meshes;
     if (model) {
@@ -129,6 +133,8 @@ export class EngineThree {
         const side = match[2].toUpperCase() as 'L' | 'R';
         const keys = this.keysForSide(au, side);
         if (keys.length) this.applyMorphs(keys, v);
+        this.auValues = this.auValues || {};
+        this.auValues[au] = v;
         return;
       }
       const n = Number(id);
@@ -136,27 +142,196 @@ export class EngineThree {
       return;
     }
 
-    const hasMorph = (AU_TO_MORPHS[id] || []).length > 0;
-    const hasBone = !!BONE_AU_TO_BINDINGS[id];
-    const isMixed = hasMorph && hasBone;
-    const weight = clamp01(this.getAUMixWeight(id));
+    // Store last AU values for composite computation
+    this.auValues = this.auValues || {};
+    this.auValues[id] = v;
 
-    if (!hasMorph && !hasBone) return;
+    // Handle composites for head and eyes
+    const yawHead   = (this.auValues[32] ?? 0) - (this.auValues[31] ?? 0);
+    const pitchHead = (this.auValues[33] ?? 0) - (this.auValues[54] ?? 0);
+    const yawEye    = (this.auValues[62] ?? 0) - (this.auValues[61] ?? 0);
+    const pitchEye  = (this.auValues[63] ?? 0) - (this.auValues[64] ?? 0);
 
-    if (isMixed) {
-      // Drive both morphs and bones together, scaled by ratio
-      const morphVal = v * (1 - weight);
-      const boneVal = v * weight;
-      this.applyBothSides(id, morphVal);
-      this.applyBones(id, boneVal);
-    } else if (hasMorph) {
-      this.applyBothSides(id, v);
-    } else if (hasBone) {
-      this.applyBones(id, v);
-    }
+    this.applyHeadComposite(yawHead, pitchHead);
+    this.applyEyeComposite(yawEye, pitchEye);
+  };
+
+  /** Unified composite handler for head and eyes with full pitch/yaw combination */
+  private applyCompositeMotion(
+    baseYawId: number,
+    basePitchId: number,
+    yaw: number,
+    pitch: number,
+    downIdOverride?: number,
+    reverseYaw?: boolean
+  ) {
+    const yawMix = this.getAUMixWeight(baseYawId);
+    const pitchMix = this.getAUMixWeight(basePitchId);
+
+    const leftId = baseYawId;
+    const rightId = baseYawId + 1;
+    const upId = basePitchId;
+    const downId = downIdOverride ?? basePitchId + 21; // 33->54 (head), 63->64 (eyes)
+
+    // --- Reverse yaw for bones only to match morph direction ---
+    const yawBone = -yaw;
+    const yawAbs = Math.abs(yawBone);
+    const pitchAbs = Math.abs(pitch);
+
+    // --- Bones: compose yaw + pitch in a single pass per node to avoid axis stomping ---
+    this.applyBoneComposite(
+      { leftId, rightId, upId, downId },
+      { yaw: yawBone, pitch }
+    );
+
+    // --- Morphs: keep existing polarity (no reversal) ---
+    this.applyMorphs(AU_TO_MORPHS[leftId] || [], yaw < 0 ? Math.abs(yaw) * yawMix : 0);
+    this.applyMorphs(AU_TO_MORPHS[rightId] || [], yaw > 0 ? Math.abs(yaw) * yawMix : 0);
+    this.applyMorphs(AU_TO_MORPHS[downId] || [], pitch < 0 ? pitchAbs * pitchMix : 0);
+    this.applyMorphs(AU_TO_MORPHS[upId] || [], pitch > 0 ? pitchAbs * pitchMix : 0);
 
     this.model?.updateMatrixWorld(true);
-  };
+  }
+
+  /**
+   * Compose bone rotations for yaw + pitch in a single write per affected node.
+   * Avoids the prior issue where sequential calls (yaw then pitch) overwrote each other.
+   */
+  private applyBoneComposite(
+    ids: { leftId: number; rightId: number; upId: number; downId: number },
+    vals: { yaw: number; pitch: number }
+  ) {
+    if (!this.model) return;
+
+    // Determine which AU ids are active by sign
+    const yawId = vals.yaw < 0 ? ids.leftId : vals.yaw > 0 ? ids.rightId : null;
+    const pitchId = vals.pitch < 0 ? ids.downId : vals.pitch > 0 ? ids.upId : null;
+
+    // Nothing to do
+    if (!yawId && !pitchId) return;
+
+    // Gather bindings for active ids
+    const selected: Array<{ id: number; v: number; bindings: any[] }> = [];
+    if (yawId) selected.push({ id: yawId, v: Math.abs(vals.yaw), bindings: BONE_AU_TO_BINDINGS[yawId] || [] });
+    if (pitchId) selected.push({ id: pitchId, v: Math.abs(vals.pitch), bindings: BONE_AU_TO_BINDINGS[pitchId] || [] });
+
+    if (!selected.length) return;
+
+    // Group intended channel deltas by resolved node
+    type R = { rx?: number; ry?: number; rz?: number; tx?: number; ty?: number; tz?: number; base: NodeBase };
+    const perNode = new Map<THREE.Object3D, R>();
+
+    for (const sel of selected) {
+      for (const raw of sel.bindings) {
+        // Clone to allow eye-axis overrides
+        const b = { ...raw };
+
+        // Eye axis overrides for CC rigs (match behavior of applyBones)
+        if (sel.id >= 61 && sel.id <= 62) {
+          b.channel = EYE_AXIS.yaw;
+        } else if (sel.id >= 63 && sel.id <= 64) {
+          b.channel = EYE_AXIS.pitch;
+        }
+
+        // Resolve node
+        const entry = this.bones[b.node as keyof ResolvedBones];
+        if (!entry) continue;
+
+        // Compute signed scalar in natural [-1, 1]
+        const signed = Math.min(1, Math.max(-1, sel.v * (b.scale ?? 1)));
+
+        // Convert to radians/units
+        const radians = b.maxDegrees ? deg2rad(b.maxDegrees) * signed : 0;
+        const units = b.maxUnits ? b.maxUnits * signed : 0;
+
+        // Accumulate per node/channel
+        let agg = perNode.get(entry.obj);
+        if (!agg) {
+          agg = { base: entry };
+          perNode.set(entry.obj, agg);
+        }
+        if (b.channel === 'rx' || b.channel === 'ry' || b.channel === 'rz') {
+          agg[b.channel] = (agg[b.channel] ?? 0) + radians;
+        } else {
+          agg[b.channel] = (agg[b.channel] ?? 0) + units;
+        }
+      }
+    }
+
+    // Now, for each node, write a single transform relative to its base
+    perNode.forEach((agg, obj) => {
+      const { base } = agg;
+
+      // Position: reset to base and apply any translations
+      obj.position.copy(base.basePos);
+      if (agg.tx || agg.ty || agg.tz) {
+        const dir = new THREE.Vector3(
+          agg.tx ?? 0,
+          agg.ty ?? 0,
+          agg.tz ?? 0
+        );
+        // Translate in the node's local axes oriented by base quaternion
+        dir.applyQuaternion(base.baseQuat);
+        obj.position.add(dir);
+      }
+
+      // Rotation: compose in a stable order (yaw→pitch→roll for head/eyes)
+      const q = new THREE.Quaternion();
+      const qx = new THREE.Quaternion();
+      const qy = new THREE.Quaternion();
+      const qz = new THREE.Quaternion();
+
+      qx.setFromAxisAngle(X_AXIS, agg.rx ?? 0);
+      qy.setFromAxisAngle(Y_AXIS, agg.ry ?? 0);
+      qz.setFromAxisAngle(Z_AXIS, agg.rz ?? 0);
+
+      // Start at base orientation, then apply Y, then X, then Z to match common rigs
+      q.copy(base.baseQuat).multiply(qy).multiply(qx).multiply(qz);
+      obj.quaternion.copy(q);
+
+      obj.updateMatrixWorld(false);
+    });
+  }
+
+  /** Apply composite head rotation/morphs for both axes */
+  private applyHeadComposite(yaw: number, pitch: number) {
+    // Head turn should use ry (horizontal yaw) and rx (vertical pitch)
+    this.applyCompositeMotion(31, 33, yaw, pitch, 54);
+  }
+
+  /** Apply composite eye rotation/morphs for both axes */
+  private applyEyeComposite(yaw: number, pitch: number) {
+    // Eyes turn should use rz (horizontal yaw) and rx (vertical pitch)
+    this.applyCompositeMotion(61, 63, yaw, pitch, 64);
+  }
+  // Handles bidirectional morph logic for eyes and head
+  private applyDirectionalMorphs(id: number, value: number) {
+    const absVal = Math.abs(value);
+    const dir = Math.sign(value);
+    const morphs = AU_TO_MORPHS[id] || [];
+    if (!morphs.length) return;
+
+    // Head
+    if (id === 31 || id === 32) {
+      // Horizontal (character POV)
+      this.applyMorphs(dir > 0 ? AU_TO_MORPHS[31] : AU_TO_MORPHS[32], absVal);
+    } else if (id === 33 || id === 54) {
+      // Vertical (character POV)
+      this.applyMorphs(dir > 0 ? AU_TO_MORPHS[33] : AU_TO_MORPHS[54], absVal);
+    }
+
+    // Eyes
+    else if (id === 61 || id === 62) {
+      this.applyMorphs(dir > 0 ? AU_TO_MORPHS[61] : AU_TO_MORPHS[62], absVal);
+    } else if (id === 63 || id === 64) {
+      this.applyMorphs(dir > 0 ? AU_TO_MORPHS[63] : AU_TO_MORPHS[64], absVal);
+    }
+
+    // Default
+    else {
+      this.applyMorphs(morphs, absVal);
+    }
+  }
 
   /** Engine internals **/
   private applyBothSides = (id: number, v: number) => {
@@ -181,20 +356,15 @@ export class EngineThree {
     const bindings = BONE_AU_TO_BINDINGS[id];
     if (!bindings || !bindings.length || !this.model) return;
     const bones = this.bones;
-    const val = clamp01(v);
+
+    // Clamp to normalized range (-1 to +1) to preserve natural limits
+    const val = Math.min(1, Math.max(-1, v));
 
     for (const b of bindings) {
       const entry = bones[b.node as BoneKeys];
-
-      // HEAD fallback: if HEAD unresolved for 51–58, try NECK
-      if (!entry && (id >= 51 && id <= 58) && b.node === 'HEAD' && bones.NECK) {
-        const neckEntry = bones.NECK as NodeBase;
-        this.applySingleBinding(neckEntry, { ...b, node: 'NECK' as const }, val);
-        continue;
-      }
       if (!entry) continue;
 
-      // Eye axis override: adapt to CC rigs where yaw uses Z instead of Y
+      // Eye axis override for CC rigs
       let binding = { ...b };
       if (id >= 61 && id <= 62) {
         binding = { ...binding, channel: EYE_AXIS.yaw };
@@ -202,9 +372,16 @@ export class EngineThree {
         binding = { ...binding, channel: EYE_AXIS.pitch };
       }
 
-      this.applySingleBinding(entry, binding, val);
+      // Use absolute magnitude (0–1) with signed rotation respecting maxDegrees
+      const absVal = Math.abs(val);
+      const signedScale = Math.sign(val) || 1;
+      const radians = b.maxDegrees ? deg2rad(b.maxDegrees) * absVal * b.scale * signedScale : 0;
+      const units = b.maxUnits ? b.maxUnits * absVal * b.scale * signedScale : 0;
 
-      // Blend a portion into NECK for rigs that weight head motion to neck twist bones
+      // Apply the binding
+      this.applySingleBinding(entry, { ...binding, maxDegrees: b.maxDegrees, maxUnits: b.maxUnits, scale: b.scale }, val);
+
+      // Blend a portion into neck for rigs that weight head motion to neck twist bones
       if ((id >= 31 && id <= 33) || (id >= 51 && id <= 58)) {
         if (bones.NECK) {
           const neckEntry = bones.NECK as NodeBase;
@@ -221,28 +398,42 @@ export class EngineThree {
     this.model.updateMatrixWorld(true);
   };
 
-  private applySingleBinding(entry: NodeBase, b: { channel: string; maxDegrees?: number; maxUnits?: number; scale: number }, val: number) {
-    const { obj, basePos, baseEuler, baseQuat } = entry;
-    // Reset to base
+  private applySingleBinding(
+    entry: NodeBase,
+    b: { channel: string; maxDegrees?: number; maxUnits?: number; scale: number; node?: string },
+    val: number
+  ) {
+    const { obj, basePos, baseQuat } = entry;
+
+    // Clamp input to natural range [-1, 1]
+    const clampedVal = Math.min(1, Math.max(-1, val));
+
+    // Calculate radians/units respecting maxDegrees and scale
+    const radians = b.maxDegrees ? deg2rad(b.maxDegrees) * clampedVal * b.scale : 0;
+    const units = b.maxUnits ? b.maxUnits * clampedVal * b.scale : 0;
+
+    // Maintain base position (no drift)
     obj.position.copy(basePos);
-    obj.rotation.copy(baseEuler);
 
-    // Apply delta (quaternion for rotations, local-axis offset for translations)
-    const radians = b.maxDegrees ? deg2rad(b.maxDegrees) * val * b.scale : 0;
-    const units = b.maxUnits ? b.maxUnits * val * b.scale : 0;
-
+    // Apply combined axis rotation while preserving boundaries
     if (b.channel === 'rx' || b.channel === 'ry' || b.channel === 'rz') {
       const deltaQ = new THREE.Quaternion();
-      const axis = (b.channel === 'rx') ? X_AXIS : (b.channel === 'ry') ? Y_AXIS : Z_AXIS;
+      const axis = b.channel === 'rx' ? X_AXIS : b.channel === 'ry' ? Y_AXIS : Z_AXIS;
+
+      // Compute new rotation relative to baseQuat (no accumulation here; callers should compose before calling)
       deltaQ.setFromAxisAngle(axis, radians);
       obj.quaternion.copy(baseQuat).multiply(deltaQ);
     } else {
-      const dir = (b.channel === 'tx') ? X_AXIS.clone() : (b.channel === 'ty') ? Y_AXIS.clone() : Z_AXIS.clone();
+      const dir =
+        b.channel === 'tx' ? X_AXIS.clone() :
+        b.channel === 'ty' ? Y_AXIS.clone() : Z_AXIS.clone();
       dir.applyQuaternion(baseQuat);
       const offset = dir.multiplyScalar(units);
       obj.position.copy(basePos).add(offset);
     }
-    obj.updateMatrixWorld(true);
+
+    // Update only this node’s matrix without resetting others
+    obj.updateMatrixWorld(false);
   }
 
   /** Resolve bones: prioritize skeleton bones by exact name, then pattern, then fallback to mesh nodes. Enhanced logging marks Bone/Node. **/

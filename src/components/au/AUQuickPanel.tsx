@@ -107,7 +107,7 @@ export default function AUQuickPanel({
     setVisemeValues({});
   };
 
-  return (
+  returns (
     <Box
       position="fixed"
       top="12px"

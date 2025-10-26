@@ -172,12 +172,12 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
     { node: 'NECK', channel: 'rx', scale: 1, maxDegrees: 4 },
   ],
   61: [
-    { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 15 },
-    { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 15 },
+    { node: 'EYE_L', channel: 'ry', scale: -1, maxDegrees: 15 },
+    { node: 'EYE_R', channel: 'ry', scale: -1, maxDegrees: 15 },
   ],
   62: [
-    { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 15 },
-    { node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 15 },
+    { node: 'EYE_L', channel: 'ry', scale: 1, maxDegrees: 15 },
+    { node: 'EYE_R', channel: 'ry', scale: 1, maxDegrees: 15 },
   ],
   63: [
     { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 12 },
@@ -207,8 +207,8 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
 
   // Head (HEAD + smaller NECK co-binding for visible motion on CC rigs)
   51: [
-    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 15 },
-    { node: 'NECK', channel: 'ry', scale: -1, maxDegrees: 6 },
+    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 15 },
+    { node: 'NECK', channel: 'ry', scale: 1, maxDegrees: 6 },
   ],
   52: [
     { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 15 },
@@ -351,9 +351,35 @@ export const EYE_AXIS = {
 };
 
 /**
- * Which AUs have both morphs and bones (so they can blend between them).
+ * Combined AUs for continuous bidirectional eye control.
  */
-export const MIXED_AUS = new Set([31, 32, 33, 54, 61, 62, 63, 64, 26]);
+export const EYE_COMBINED_AXES = {
+  horizontal: { left: 61, right: 62 },
+  vertical: { up: 63, down: 64 },
+};
+
+/**
+ * Combined AUs for continuous bidirectional head control.
+ */
+export const HEAD_COMBINED_AXES = {
+  horizontal: { left: 31, right: 32 },
+  vertical: { up: 33, down: 54 },
+};
+
+/**
+ * Which AUs have both morphs and bones (so they can blend between them).
+ * Now includes all head turn/tilt AUs so they appear with ratio sliders in the UI.
+ */
+export const MIXED_AUS = new Set([31, 32, 33, 54, 55, 56, 61, 62, 63, 64, 26]);
+
+/**
+ * Automatically computed mixed AUs — any AU that has both morphs and bone bindings.
+ */
+export const AUTO_MIXED_AUS = new Set(
+  Object.keys(AU_TO_MORPHS)
+    .map(Number)
+    .filter((id) => AU_TO_MORPHS[id]?.length && BONE_AU_TO_BINDINGS[id]?.length)
+);
 
 /**
  * Default mix weights (0 = morph only, 1 = bone only)

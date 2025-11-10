@@ -67,9 +67,10 @@ export default function App() {
     target:   [1.851, 5.597, -0.000] as [number, number, number],
   }), []);
 
-  // Use GitHub Release for large GLB file in production, local for dev
+  // Use CORS proxy for GitHub Release in production, local for dev
+  // GitHub Releases don't have CORS headers, so we use allorigins.win as a proxy
   const glbSrc = import.meta.env.PROD
-    ? "https://github.com/meekmachine/LoomLarge/releases/download/v1.0.0/jonathan.glb"
+    ? "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://github.com/meekmachine/LoomLarge/releases/download/v1.0.0/jonathan.glb")
     : "/characters/jonathan.glb";
 
   return (

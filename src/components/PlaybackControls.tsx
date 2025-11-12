@@ -36,8 +36,9 @@ import { useThreeState } from '../context/threeContext';
  * Provides snippet loading, playback controls, and JSON export/import
  */
 export default function PlaybackControls() {
-  const { anim } = useThreeState();
+  const { anim, engine } = useThreeState();
   const toast = useToast();
+  const [enginePaused, setEnginePaused] = useState(false);
 
   const [jsonFilename, setJsonFilename] = useState('animation.json');
   const [snippets, setSnippets] = useState<any[]>([]);
@@ -273,12 +274,6 @@ export default function PlaybackControls() {
     anim?.setSnippetTime?.(sn.name, val);
   }
 
-  function handleMaxTime(idx: number, val: number) {
-    const sn = snippets[idx];
-    // Max time is not a real concept in the new scheduler, just skip this
-    // anim?.setSnippetTime?.(sn.name, val);
-  }
-
   function handlePlaybackRate(idx: number, val: number) {
     const sn = snippets[idx];
     anim?.setSnippetPlaybackRate?.(sn.name, val);
@@ -381,32 +376,58 @@ export default function PlaybackControls() {
       </HStack>
 
       {/* Global playback controls */}
-      <HStack spacing={2} mb={4}>
-        <Button
-          size="sm"
-          leftIcon={<FaPlay />}
-          colorScheme="green"
-          onClick={() => anim?.play?.()}
-        >
-          Play All
-        </Button>
-        <Button
-          size="sm"
-          leftIcon={<FaPause />}
-          colorScheme="yellow"
-          onClick={() => anim?.pause?.()}
-        >
-          Pause
-        </Button>
-        <Button
-          size="sm"
-          leftIcon={<FaStop />}
-          colorScheme="red"
-          onClick={() => anim?.stop?.()}
-        >
-          Stop
-        </Button>
-      </HStack>
+      <VStack align="stretch" spacing={2} mb={4}>
+        <HStack spacing={2}>
+          <Button
+            size="sm"
+            leftIcon={<FaPlay />}
+            colorScheme="green"
+            onClick={() => anim?.play?.()}
+          >
+            Play All
+          </Button>
+          <Button
+            size="sm"
+            leftIcon={<FaPause />}
+            colorScheme="yellow"
+            onClick={() => anim?.pause?.()}
+          >
+            Pause
+          </Button>
+          <Button
+            size="sm"
+            leftIcon={<FaStop />}
+            colorScheme="red"
+            onClick={() => anim?.stop?.()}
+          >
+            Stop
+          </Button>
+        </HStack>
+
+        {/* Engine-level pause (pauses all transitions) */}
+        <HStack spacing={2} p={2} bg="gray.100" borderRadius="md">
+          <Text fontSize="xs" fontWeight="bold">Engine Transitions:</Text>
+          <Button
+            size="xs"
+            colorScheme={enginePaused ? 'gray' : 'blue'}
+            onClick={() => {
+              if (enginePaused) {
+                engine?.resume?.();
+                setEnginePaused(false);
+              } else {
+                engine?.pause?.();
+                setEnginePaused(true);
+              }
+            }}
+            leftIcon={enginePaused ? <FaPlay /> : <FaPause />}
+          >
+            {enginePaused ? 'Resume' : 'Pause'}
+          </Button>
+          <Text fontSize="xs" color="gray.600">
+            ({engine?.getActiveTransitionCount?.() || 0} active)
+          </Text>
+        </HStack>
+      </VStack>
 
       {/* Download / Load JSON */}
       <HStack spacing={2} mb={4}>
@@ -503,13 +524,13 @@ export default function PlaybackControls() {
                 </HStack>
 
                 <Text fontSize="xs" mt={1}>
-                  Time: {sn.currentTime?.toFixed(2) || 0} / {(sn.wallTime || 5).toFixed(2)} s (wall)
+                  Time: {sn.currentTime?.toFixed(2) || 0} / {(sn.duration || 0).toFixed(2)} s
                 </Text>
                 <Slider
                   aria-label="time"
                   colorScheme="blue"
                   min={0}
-                  max={sn.maxTime || 5}
+                  max={sn.duration || 1}
                   step={0.01}
                   value={sn.currentTime || 0}
                   onChange={(val) => handleScrubTime(idx, val)}
@@ -522,25 +543,6 @@ export default function PlaybackControls() {
                   <SliderThumb boxSize={3}>
                     <TimeIcon boxSize={2} />
                   </SliderThumb>
-                </Slider>
-
-                <Text fontSize="xs">
-                  Max Time: {sn.maxTime?.toFixed(1) || 5}
-                </Text>
-                <Slider
-                  colorScheme="purple"
-                  min={1}
-                  max={30}
-                  step={0.5}
-                  value={sn.maxTime || 5}
-                  onChange={(val) => handleMaxTime(idx, val)}
-                  mb={2}
-                  size="sm"
-                >
-                  <SliderTrack>
-                    <SliderFilledTrack />
-                  </SliderTrack>
-                  <SliderThumb boxSize={3} />
                 </Slider>
 
                 <Text fontSize="xs">

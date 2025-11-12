@@ -46,6 +46,7 @@ export type NormalizedSnippet = {
   // Playback bookkeeping (UI/engine parity)
   currentTime: number;
   startWallTime: number;
+  duration: number;  // Calculated from keyframes (max time across all curves)
   cursor: Record<string, number>;
 };
 
@@ -118,15 +119,67 @@ export type AnimEvent =
   | ManualSetEvent
   | ManualClearEvent;
 
-// ---------- Host capabilities passed into the Service/Scheduler ----------
-export type HostCaps = {
-  applyAU: (id: number | string, v: number) => void;
-  setMorph: (key: string, v: number) => void;
-  transitionAU?: (id: number | string, v: number, dur?: number) => void;
-  transitionMorph?: (key: string, v: number, dur?: number) => void;
-  /** Called when a non-looping snippet naturally finishes (not user-stopped). */
+// ---------- Engine interface (3D rendering layer) ----------
+
+/**
+ * Engine - The 3D rendering engine interface (EngineThree)
+ *
+ * The Animation Agency delegates rendering to the Engine, which handles:
+ * - Applying AU values to morph targets and bones
+ * - Smooth transitions using requestAnimationFrame
+ * - Multi-axis composite motions (e.g., eyes looking up-left)
+ * - Mix weight blending between morphs and bones
+ *
+ * The Animation Agency decides WHAT values to apply and WHEN,
+ * while the Engine decides HOW to render them.
+ */
+export interface Engine {
+  /**
+   * Apply AU value immediately (no transition)
+   * Used for instant updates or when transition timing is handled elsewhere
+   */
+  applyAU: (id: number | string, value: number) => void;
+
+  /**
+   * Apply morph value immediately (no transition)
+   * Used for viseme or morph targets
+   */
+  setMorph: (name: string, value: number) => void;
+
+  /**
+   * Transition AU value smoothly over duration
+   * Preferred method - creates smooth interpolation using RAF
+   *
+   * @param id - AU number (e.g., 12 for lip corner puller)
+   * @param value - Target value in [0, 1]
+   * @param durationMs - Transition duration in milliseconds (default: 120ms)
+   */
+  transitionAU?: (id: number | string, value: number, durationMs?: number) => void;
+
+  /**
+   * Transition morph value smoothly over duration
+   * Used for visemes and custom morph targets
+   *
+   * @param name - Morph target name (e.g., 'jawOpen', 'aa', 'ee')
+   * @param value - Target value in [0, 1]
+   * @param durationMs - Transition duration in milliseconds (default: 80ms)
+   */
+  transitionMorph?: (name: string, value: number, durationMs?: number) => void;
+
+  /**
+   * Callback invoked when a non-looping snippet naturally completes
+   * NOT called when user manually stops a snippet
+   *
+   * @param name - Snippet name that completed
+   */
   onSnippetEnd?: (name: string) => void;
-};
+}
+
+/**
+ * @deprecated Use `Engine` instead
+ * Maintained for backwards compatibility only
+ */
+export type HostCaps = Engine;
 
 // ---------- Scheduler plumbing ----------
 export type RuntimeSched = { name: string; startsAt: number; offset: number; enabled: boolean };

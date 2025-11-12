@@ -8,7 +8,7 @@ describe('AnimationMachine', () => {
 
   beforeEach(() => {
     // Mock performance.now() for consistent timestamps
-    const originalPerformance = global.performance;
+    const originalPerformance = globalThis.performance;
     vi.stubGlobal('performance', {
       ...originalPerformance,
       now: () => Date.now()

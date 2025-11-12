@@ -34,10 +34,9 @@ type ResolvedBones = Partial<Record<BoneKeys, NodeBase>>;
 
 export class EngineThree {
   private auValues: Record<number, number> = {};
-  private externalTiming = true; // run transitions via external clock (ThreeProvider) by default
   private transitions: Array<{
     kind: 'au'|'morph'; id: number|string; key?: string;
-    from: number; to: number; start: number; dur: number; elapsed?: number;
+    from: number; to: number; elapsed: number; dur: number;
     ease: (t:number)=>number
   }> = [];
   // Track current eye and head positions for composite motion
@@ -46,42 +45,22 @@ export class EngineThree {
   private currentHeadYaw: number = 0;
   private currentHeadPitch: number = 0;
   private currentHeadRoll: number = 0;
-  private rafId: number | null = null;
-  private now = () => (typeof performance!=='undefined' ? performance.now() : Date.now());
+  private isPaused: boolean = false;
   private easeInOutQuad = (t:number) => (t<0.5? 2*t*t : -1+(4-2*t)*t);
-  private startRAF = () => {
-    // If using external timing (preferred), we do not spin our own RAF.
-    if (this.externalTiming) return;
-    if (this.rafId != null) return;
-    const step = () => {
-      const time = this.now();
-      this.advanceTransitionsByMs(0, time); // 0 dt, uses wall-time deltas
-      if (this.transitions.length) {
-        this.rafId = requestAnimationFrame(step);
-      } else {
-        this.rafId = null;
-      }
-    };
-    this.rafId = requestAnimationFrame(step);
-  };
-  private advanceTransitionsByMs = (dtMs: number, nowWall?: number) => {
-    if (!this.transitions.length) return;
-    const now = nowWall ?? this.now();
+
+  /** Advance all active transitions by delta time (called from external RAF loop) */
+  private advanceTransitionsByMs = (dtMs: number) => {
+    if (!this.transitions.length || this.isPaused) return;
+
     this.transitions = this.transitions.filter(tr => {
-      if (this.externalTiming) {
-        tr.elapsed = (tr.elapsed ?? 0) + dtMs;
-        const p = Math.min(1, Math.max(0, (tr.elapsed) / Math.max(1, tr.dur)));
-        const v = tr.from + (tr.to - tr.from) * tr.ease(p);
-        if (tr.kind === 'au') this.setAU(tr.id, v);
-        else if (tr.kind === 'morph' && tr.key) this.setMorph(tr.key, v);
-        return p < 1;
-      } else {
-        const p = Math.min(1, Math.max(0, (now - tr.start) / Math.max(1, tr.dur)));
-        const v = tr.from + (tr.to - tr.from) * tr.ease(p);
-        if (tr.kind === 'au') this.setAU(tr.id, v);
-        else if (tr.kind === 'morph' && tr.key) this.setMorph(tr.key, v);
-        return p < 1;
-      }
+      tr.elapsed += dtMs;
+      const p = Math.min(1, Math.max(0, tr.elapsed / Math.max(1, tr.dur)));
+      const v = tr.from + (tr.to - tr.from) * tr.ease(p);
+
+      if (tr.kind === 'au') this.setAU(tr.id, v);
+      else if (tr.kind === 'morph' && tr.key) this.setMorph(tr.key, v);
+
+      return p < 1; // Keep transition if not complete
     });
   };
   private getMorphValue(key: string): number {
@@ -105,8 +84,15 @@ export class EngineThree {
     this.transitions = this.transitions.filter(t => !(t.kind === 'au' && t.id === id));
 
     const from = typeof id === 'string' ? (this.auValues[Number(id.replace(/[^\d]/g,''))] ?? 0) : (this.auValues[id] ?? 0);
-    this.transitions.push({ kind:'au', id, from: clamp01(from), to: clamp01(to), start: this.now(), dur: durationMs, elapsed: 0, ease: this.easeInOutQuad });
-    this.startRAF();
+    this.transitions.push({
+      kind:'au',
+      id,
+      from: clamp01(from),
+      to: clamp01(to),
+      dur: durationMs,
+      elapsed: 0,
+      ease: this.easeInOutQuad
+    });
   };
 
   /** Smoothly tween a morph to a target value */
@@ -115,10 +101,18 @@ export class EngineThree {
     this.transitions = this.transitions.filter(t => !(t.kind === 'morph' && t.key === key));
 
     const from = this.getMorphValue(key);
-    this.transitions.push({ kind:'morph', id:key, key, from: clamp01(from), to: clamp01(to), start: this.now(), dur: durationMs, elapsed: 0, ease: this.easeInOutQuad });
-    this.startRAF();
+    this.transitions.push({
+      kind:'morph',
+      id:key,
+      key,
+      from: clamp01(from),
+      to: clamp01(to),
+      dur: durationMs,
+      elapsed: 0,
+      ease: this.easeInOutQuad
+    });
   };
-  /** Advance internal transition tweens by deltaSeconds (preferred when using shared Three clock). */
+  /** Advance internal transition tweens by deltaSeconds (called from ThreeProvider RAF loop). */
   update(deltaSeconds: number) {
     const dtMs = Math.max(0, (deltaSeconds || 0) * 1000);
     if (dtMs <= 0) return;
@@ -130,10 +124,24 @@ export class EngineThree {
     this.transitions = [];
   }
 
-  /** Opt-in/out of external timing; when true, the engine does not spin its own RAF. */
-  useExternalTiming(flag: boolean) {
-    this.externalTiming = !!flag;
-    if (!this.externalTiming) this.startRAF();
+  /** Pause all active transitions (they will resume when update() is called again). */
+  pause() {
+    this.isPaused = true;
+  }
+
+  /** Resume all paused transitions. */
+  resume() {
+    this.isPaused = false;
+  }
+
+  /** Get current pause state. */
+  getPaused(): boolean {
+    return this.isPaused;
+  }
+
+  /** Get count of active transitions (useful for debugging). */
+  getActiveTransitionCount(): number {
+    return this.transitions.length;
   }
   private meshes: THREE.Mesh[] = [];
   private model: THREE.Object3D | null = null;

@@ -15,7 +15,7 @@ describe('AnimationScheduler', () => {
     vi.useFakeTimers();
 
     // Mock performance.now() to use Date.now() so fake timers work
-    const originalPerformance = global.performance;
+    const originalPerformance = globalThis.performance;
     vi.stubGlobal('performance', {
       ...originalPerformance,
       now: () => Date.now()

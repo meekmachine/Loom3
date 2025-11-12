@@ -5,6 +5,23 @@ type RuntimeSched = { name: string; startsAt: number; offset: number; enabled: b
 const isNum = (s: string) => /^\d+$/.test(s);
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
+/**
+ * Apply logarithmic intensity scaling for better control at low values.
+ * Maps UI scale [0, 2] to multiplier with these characteristics:
+ * - 0.0 → 0.0 (silent)
+ * - 1.0 → 1.0 (neutral, no change)
+ * - 2.0 → 4.0 (4x amplification)
+ *
+ * Uses exponential curve: multiplier = scale^2
+ * This gives finer control at low intensities and smooth amplification at high.
+ */
+const applyIntensityScale = (rawValue: number, scale: number): number => {
+  // For scale values around 1.0, use quadratic scaling for smooth transitions
+  // scale^2 gives: 0.5→0.25, 0.75→0.56, 1.0→1.0, 1.5→2.25, 2.0→4.0
+  const multiplier = scale * scale;
+  return rawValue * multiplier;
+};
+
 export function normalize(sn: any): Snippet & { curves: Record<string, Array<{ time: number; intensity: number }>> } {
   if (sn && sn.curves) {
     const curves: Record<string, Array<{ time: number; intensity: number }>> = {};
@@ -176,10 +193,9 @@ export class AnimationScheduler {
 
       for (const [curveId, arr] of Object.entries(sn.curves || {})) {
         // Sample the curve at the current local time
-        // Apply intensity scale directly to JSON values, then clamp to [0,1] for engine
-        // At scale=1.0, the JSON value is used as-is (may exceed 1.0 and get clamped)
+        // Apply logarithmic intensity scaling for better control at low values
         const rawValue = sampleAt(arr, local);
-        const scaled = rawValue * scale;
+        const scaled = applyIntensityScale(rawValue, scale);
         const v = clamp01(scaled);
 
         // Find next keyframe to calculate tween duration

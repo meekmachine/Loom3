@@ -23,13 +23,30 @@ function normalizeCurves(input?: Record<string, Array<CurvePoint | { t?: number;
   return out;
 }
 
+/**
+ * Calculate snippet duration from keyframes - finds the latest keyframe time across all curves
+ */
+function calculateDuration(curves: Record<string, CurvePoint[]>): number {
+  if (!curves || !Object.keys(curves).length) return 0;
+  let maxTime = 0;
+  for (const arr of Object.values(curves)) {
+    if (arr.length > 0) {
+      const lastTime = arr[arr.length - 1].time;
+      if (lastTime > maxTime) maxTime = lastTime;
+    }
+  }
+  return maxTime;
+}
+
 function coerceSnippet(d: NonNullable<LoadAnimationEvent['data']>, playing: boolean): NormalizedSnippet {
   const rate = typeof d.snippetPlaybackRate === 'number' ? d.snippetPlaybackRate : 1;
   const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const curves = normalizeCurves(d.curves);
+  const duration = calculateDuration(curves);
 
   return {
     name: d.name ?? `sn_${Date.now()}`,
-    curves: normalizeCurves(d.curves),
+    curves,
     isPlaying: playing,
     loop: !!d.loop,
     snippetPlaybackRate: rate,
@@ -38,6 +55,7 @@ function coerceSnippet(d: NonNullable<LoadAnimationEvent['data']>, playing: bool
     snippetPriority: typeof (d as any).snippetPriority === 'number' ? (d as any).snippetPriority : 0,
     currentTime: 0,
     startWallTime: now,  // Initialize to current time for wall-clock anchoring
+    duration,  // Calculated from keyframes
     cursor: {}
   };
 }

@@ -20,6 +20,7 @@ type Props = {
   src?: string;              // path to the .glb in /public
   autoRotate?: boolean;      // slow autorotate for idle viewing
   onReady?: (payload: CharacterReady) => void; // callback when model is loaded
+  onProgress?: (progress: number) => void; // callback for loading progress (0-100)
   className?: string;        // optional class for the container div
   cameraOverride?: CameraOverride; // manually set camera for quick testing
   skyboxUrl?: string;        // path to HDR/EXR skybox file in /public
@@ -29,6 +30,7 @@ export default function CharacterGLBScene({
   src = '/characters/jonathan.glb',
   autoRotate = false,
   onReady,
+  onProgress,
   className,
   cameraOverride,
   skyboxUrl,
@@ -184,9 +186,90 @@ export default function CharacterGLBScene({
           }
         });
 
+        // DEBUG: Log raw GLB structure for Character Creator inspection
+        console.group('🔍 [CharacterGLBScene] RAW GLB MODEL LOADED');
+        console.log('GLTF object:', gltf);
+        console.log('Model root:', model);
+
+        // Log all bones from skeleton
+        console.group('📋 SKELETON BONES');
+        const allBones: THREE.Bone[] = [];
+        model.traverse((obj) => {
+          if ((obj as any).isBone) {
+            allBones.push(obj as THREE.Bone);
+          }
+        });
+        console.log(`Total bones found: ${allBones.length}`);
+
+        // Categorize bones
+        const jawBones = allBones.filter(b => /jaw/i.test(b.name));
+        const headBones = allBones.filter(b => /head|neck/i.test(b.name));
+        const eyeBones = allBones.filter(b => /eye/i.test(b.name));
+
+        if (jawBones.length) {
+          console.log('🦴 JAW BONES:', jawBones.map(b => b.name));
+          console.log('🦴 JAW BONE OBJECTS:', jawBones);
+        } else {
+          console.warn('⚠️ NO JAW BONES FOUND!');
+        }
+
+        if (headBones.length) {
+          console.log('🦴 HEAD/NECK BONES:', headBones.map(b => b.name));
+        }
+
+        if (eyeBones.length) {
+          console.log('🦴 EYE BONES:', eyeBones.map(b => b.name));
+        }
+
+        console.log('🦴 ALL BONE NAMES:', allBones.map(b => b.name));
+        console.groupEnd();
+
+        // Log morph targets per mesh
+        console.group('🎭 MORPH TARGETS (BLENDSHAPES)');
+        console.log(`Total meshes with morphs: ${meshes.length}`);
+
+        meshes.forEach((mesh, idx) => {
+          const dict = (mesh as any).morphTargetDictionary;
+          if (dict) {
+            const allMorphNames = Object.keys(dict);
+
+            // Categorize morphs
+            const jawMorphs = allMorphNames.filter(n => /jaw/i.test(n));
+            const mouthMorphs = allMorphNames.filter(n => /mouth|lip/i.test(n));
+            const visemeMorphs = allMorphNames.filter(n => /^[A-Z]{1,3}$/.test(n) || /viseme/i.test(n));
+
+            console.group(`Mesh[${idx}] "${mesh.name}" (${allMorphNames.length} morphs)`);
+            console.log('morphTargetDictionary:', dict);
+            console.log('morphTargetInfluences:', mesh.morphTargetInfluences);
+
+            if (jawMorphs.length) {
+              console.log('👄 JAW MORPHS:', jawMorphs);
+            }
+            if (mouthMorphs.length) {
+              console.log('👄 MOUTH/LIP MORPHS:', mouthMorphs);
+            }
+            if (visemeMorphs.length) {
+              console.log('🗣️ VISEME MORPHS:', visemeMorphs);
+            }
+
+            console.log('📝 ALL MORPH NAMES (alphabetical):', allMorphNames.sort());
+            console.groupEnd();
+          }
+        });
+        console.groupEnd();
+
+        console.log('✅ Model loading complete - check logs above for bone/morph names');
+        console.groupEnd();
+
         onReady?.({ scene, model, meshes });
       },
-      undefined,
+      (progressEvent) => {
+        // Calculate loading progress percentage
+        if (progressEvent.lengthComputable) {
+          const percentComplete = (progressEvent.loaded / progressEvent.total) * 100;
+          onProgress?.(Math.round(percentComplete));
+        }
+      },
       (err) => {
         console.error(`Failed to load ${src}. Place your GLB under public/`, err);
       }
@@ -221,7 +304,7 @@ export default function CharacterGLBScene({
       dracoLoader.dispose();
       mount.removeChild(renderer.domElement);
     };
-  }, [src, autoRotate, onReady, cameraOverride, skyboxUrl]);
+  }, [src, autoRotate, onReady, onProgress, cameraOverride, skyboxUrl]);
 
   return <div ref={mountRef} className={className} />;
 }

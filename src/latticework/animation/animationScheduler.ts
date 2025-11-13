@@ -1,4 +1,5 @@
 import type { Snippet, HostCaps, ScheduleOpts } from './types';
+import { VISEME_KEYS } from '../../engine/arkit/shapeDict';
 
 type RuntimeSched = { name: string; startsAt: number; offset: number; enabled: boolean };
 
@@ -180,7 +181,7 @@ export class AnimationScheduler {
   }
 
   private buildTargetMap(snippets: Array<Snippet & { curves: Record<string, Array<{ time: number; intensity: number }>> }>, tPlay: number, ignorePlayingState = false) {
-    const targets = new Map<string, { v: number; pri: number; durMs: number }>();
+    const targets = new Map<string, { v: number; pri: number; durMs: number; category: string }>();
     const now = this.now();
 
     // Track conflicts for debugging
@@ -239,7 +240,7 @@ export class AnimationScheduler {
         // Old agency approach: higher priority wins, ties broken by higher value
         const wins = !prev || pri > prev.pri || (pri === prev.pri && v > prev.v);
         if (wins) {
-          targets.set(curveId, { v, pri, durMs });
+          targets.set(curveId, { v, pri, durMs, category: sn.snippetCategory || 'default' });
           if (prev && conflicts.has(curveId)) {
             // Mark this one as winner
             const arr = conflicts.get(curveId)!;
@@ -437,16 +438,13 @@ export class AnimationScheduler {
     if (!this.useExternalStep || !this.playing) {
       return;
     }
+
+    const snippets = this.currentSnippets();
+    // Early exit if no snippets loaded - no work to do
+    if (!snippets.length) return;
+
     this.playTimeSec += Math.max(0, dtSec || 0);
     const tPlay = this.playTimeSec;
-    // Debug logging - show first 20 steps and every 60 steps after that
-    const snippets = this.currentSnippets();
-    if (this.playTimeSec < 1 || Math.floor(tPlay) % 3 === 0) {
-      console.log('[AnimationScheduler] step() tPlay=', tPlay.toFixed(3), 'snippets=', snippets.length, 'playing:', this.playing);
-      snippets.forEach(sn => {
-        console.log('  -', sn.name, 'isPlaying:', (sn as any).isPlaying, 'currentTime:', (sn as any).currentTime?.toFixed(3), 'curves:', Object.keys(sn.curves || {}).length);
-      });
-    }
     // Handle natural completions before applying targets
     this.checkCompletions(tPlay);
     // Only tick if playing
@@ -485,10 +483,20 @@ export class AnimationScheduler {
 
     const targets = this.buildTargetMap(snippets, tPlay);
     targets.forEach((entry, curveId) => {
-      // Clamp AU values to [0,1]
+      // Clamp values to [0,1]
       const v = clamp01(entry.v);
-      // Use the calculated duration to next keyframe (already accounts for playback rate)
-      (this.host.transitionAU ?? this.host.applyAU)(parseInt(curveId, 10), v, entry.durMs);
+
+      // Handle viseme snippets differently - map index to viseme morph name
+      if (entry.category === 'visemeSnippet') {
+        const visemeIndex = parseInt(curveId, 10);
+        if (!isNaN(visemeIndex) && visemeIndex >= 0 && visemeIndex < VISEME_KEYS.length) {
+          const morphName = VISEME_KEYS[visemeIndex];
+          (this.host.transitionMorph ?? this.host.setMorph)?.(morphName, v, entry.durMs);
+        }
+      } else {
+        // AU snippets: apply as Action Unit ID
+        (this.host.transitionAU ?? this.host.applyAU)(parseInt(curveId, 10), v, entry.durMs);
+      }
     });
   }
 

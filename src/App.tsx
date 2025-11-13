@@ -1,6 +1,7 @@
 import React, { useCallback, useState, useMemo } from 'react';
 import CharacterGLBScene from './scenes/CharacterGLBScene';
 import SliderDrawer from './components/SliderDrawer';
+import Preloader from './components/Preloader';
 import { useThreeState } from './context/threeContext';
 import './styles.css';
 import { Text } from '@chakra-ui/react';
@@ -12,6 +13,8 @@ export default function App() {
 
   const [auditSummary, setAuditSummary] = useState<{ morphCount:number; totalAUs:number; fullCovered:number; partial:number; zero:number } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Helper: audit morph coverage
   function auditMorphCoverage(model: any) {
@@ -57,9 +60,14 @@ export default function App() {
         setAuditSummary(summary);
       } catch {}
       anim?.play?.();
+      setIsLoading(false);
     },
     [engine, anim]
   );
+
+  const handleProgress = useCallback((progress: number) => {
+    setLoadingProgress(progress);
+  }, []);
 
   // Camera override memoized
   const cameraOverride = useMemo(() => ({
@@ -73,12 +81,19 @@ export default function App() {
 
   return (
     <div className="fullscreen-scene">
+      <Preloader
+        text="Loading Model"
+        progress={loadingProgress}
+        show={isLoading}
+        skyboxUrl={skyboxUrl}
+      />
       <CharacterGLBScene
         src={glbSrc}
         className="fullscreen-scene"
         cameraOverride={cameraOverride}
         skyboxUrl={skyboxUrl}
         onReady={handleReady}
+        onProgress={handleProgress}
       />
       <SliderDrawer isOpen={drawerOpen} onToggle={() => setDrawerOpen(!drawerOpen)} />
     </div>

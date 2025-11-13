@@ -121,10 +121,11 @@ export const MORPH_VARIANTS: Record<string, string[]> = {
   'Cheek_Puff_L': ['cheekPuffLeft','puffLeft'],
   'Cheek_Puff_R': ['cheekPuffRight','puffRight'],
 
-  'Jaw_Open':    ['jawOpen','Mouth_Open'],
-  'Jaw_Forward': ['jawForward','jawThrust'],
-  'Jaw_L':       ['jawLeft','jawSideLeft'],
-  'Jaw_R':       ['jawRight','jawSideRight'],
+  'Jaw_Open':    ['jawOpen','Mouth_Open','JawOpen','jaw_open'],
+  'Mouth_Close': ['mouthClose','MouthClose','mouth_close'],
+  'Jaw_Forward': ['jawForward','jawThrust','JawForward'],
+  'Jaw_L':       ['jawLeft','jawSideLeft','JawLeft'],
+  'Jaw_R':       ['jawRight','jawSideRight','JawRight'],
 
   'Tongue_Out':  ['tongueOut','tongueShow'],
   'Tongue_Bulge_L': ['tongueBulgeLeft'],
@@ -174,22 +175,24 @@ export type BoneBinding = {
 };
 
 export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
-  // Head (legacy and extended)
+  // Head turn and tilt - use HEAD bone only (NECK should not rotate with head)
   31: [
-    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 15 },
-    { node: 'NECK', channel: 'ry', scale: -1, maxDegrees: 6 },
+    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 30 },  // Head turn left
   ],
   32: [
-    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 15 },
-    { node: 'NECK', channel: 'ry', scale: 1, maxDegrees: 6 },
+    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 },   // Head turn right
   ],
   33: [
-    { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 10 },
-    { node: 'NECK', channel: 'rx', scale: -1, maxDegrees: 4 },
+    { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 20 },  // Head up
   ],
   54: [
-    { node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 10 },
-    { node: 'NECK', channel: 'rx', scale: 1, maxDegrees: 4 },
+    { node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 20 },   // Head down
+  ],
+  55: [
+    { node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 15 },  // Head tilt left
+  ],
+  56: [
+    { node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 15 },   // Head tilt right
   ],
   61: [
     { node: 'EYE_L', channel: 'ry', scale: -1, maxDegrees: 25 },
@@ -233,36 +236,6 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
   ],
   30: [
     { node: 'JAW', channel: 'tx', scale: 1, maxUnits: 0.006 },
-  ],
-
-  // Head (HEAD + smaller NECK co-binding for visible motion on CC rigs)
-  51: [
-    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 15 },
-    { node: 'NECK', channel: 'ry', scale: 1, maxDegrees: 6 },
-  ],
-  52: [
-    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 15 },
-    { node: 'NECK', channel: 'ry', scale: 1, maxDegrees: 6 },
-  ],
-  53: [
-    { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 10 },
-    { node: 'NECK', channel: 'rx', scale: -1, maxDegrees: 4 },
-  ],
-  55: [
-    { node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 10 },
-    { node: 'NECK', channel: 'rz', scale: -1, maxDegrees: 4 },
-  ],
-  56: [
-    { node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 10 },
-    { node: 'NECK', channel: 'rz', scale: 1, maxDegrees: 4 },
-  ],
-  57: [
-    { node: 'HEAD', channel: 'tz', scale: -1, maxUnits: 0.006 },
-    { node: 'NECK', channel: 'tz', scale: -1, maxUnits: 0.003 },
-  ],
-  58: [
-    { node: 'HEAD', channel: 'tz', scale: 1, maxUnits: 0.006 },
-    { node: 'NECK', channel: 'tz', scale: 1, maxUnits: 0.003 },
   ],
 
   // Tongue
@@ -369,10 +342,9 @@ export const AU_INFO: Record<string, AUInfo> = {
  * This informs the engine to apply rotations/translations via skeleton bones.
  */
 export const BONE_DRIVEN_AUS = new Set([
-  31, 32, 33, // head legacy turn/up
-  51, 52, 53, 54, 55, 56, 57, 58, // head extended
-  61, 62, 63, 64, // eyes
-  26, 29, 30 // jaw and related
+  31, 32, 33, 54, 55, 56, // head turn/tilt (left, right, up, down, tilt left, tilt right)
+  61, 62, 63, 64, // eyes (left, right, up, down)
+  25, 26, 27, 29, 30 // jaw (lips part, jaw drop, mouth stretch, jaw forward, jaw sideways)
 ]);
 
 /**

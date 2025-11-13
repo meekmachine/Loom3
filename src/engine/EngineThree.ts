@@ -178,29 +178,110 @@ export class EngineThree {
       this.model = model;
       this.bones = this.resolveBones(model);
       this.logResolvedOnce(this.bones);
-      // DEBUG: Dump model tree, bones, and morph keys for mapping inspection
+      // DEBUG: Dump model tree, bones, and morph keys for Character Creator mapping inspection
       try {
-        // Log top-level model
         // eslint-disable-next-line no-console
-        console.log('[EngineThree] GLB model root:', this.model);
+        console.group('[EngineThree] 🔍 CHARACTER CREATOR MODEL INSPECTION');
 
-        // Log all skeleton bones (names)
-        const allBones: string[] = [];
-        this.collectSkeletonBones(model).forEach(b => allBones.push(b.name || '(unnamed)'));
         // eslint-disable-next-line no-console
-        console.log('[EngineThree] Skeleton bones:', allBones);
+        console.log('GLB model root:', this.model);
 
-        // Log per-mesh morph target keys
+        // Log all skeleton bones (names) - organized by relevance
+        const allBones = this.collectSkeletonBones(model);
+        const boneNames = allBones.map(b => b.name || '(unnamed)');
+        const jawBones = boneNames.filter(n => /jaw/i.test(n));
+        const headBones = boneNames.filter(n => /head|neck/i.test(n));
+        const eyeBones = boneNames.filter(n => /eye/i.test(n));
+
+        // eslint-disable-next-line no-console
+        console.group('📋 SKELETON BONES');
+        // eslint-disable-next-line no-console
+        console.log(`Total bones: ${boneNames.length}`);
+        if (jawBones.length) {
+          // eslint-disable-next-line no-console
+          console.log('🦴 Jaw bones:', jawBones);
+        } else {
+          // eslint-disable-next-line no-console
+          console.warn('⚠️ No jaw bones found!');
+        }
+        if (headBones.length) {
+          // eslint-disable-next-line no-console
+          console.log('🦴 Head/Neck bones:', headBones);
+        }
+        if (eyeBones.length) {
+          // eslint-disable-next-line no-console
+          console.log('🦴 Eye bones:', eyeBones);
+        }
+        // eslint-disable-next-line no-console
+        console.log('🦴 All bones:', boneNames);
+        // eslint-disable-next-line no-console
+        console.groupEnd();
+
+        // Log per-mesh morph target keys - focus on jaw/mouth morphs
+        // eslint-disable-next-line no-console
+        console.group('🎭 MORPH TARGETS (BLENDSHAPES)');
+        let totalMorphs = 0;
         (this.meshes || []).forEach((m, i) => {
           const dict: any = (m as any).morphTargetDictionary;
           if (dict) {
+            const allMorphs = Object.keys(dict);
+            totalMorphs += allMorphs.length;
+
+            // Group morphs by category
+            const jawMorphs = allMorphs.filter(k => /jaw/i.test(k));
+            const mouthMorphs = allMorphs.filter(k => /mouth|lip/i.test(k));
+            const visemeMorphs = allMorphs.filter(k => /^[A-Z]{1,3}$/.test(k) || /viseme/i.test(k));
+
             // eslint-disable-next-line no-console
-            console.log(`[EngineThree] Mesh[${i}] ${m.name} morphs:`, Object.keys(dict));
+            console.group(`Mesh[${i}] "${m.name}" (${allMorphs.length} morphs)`);
+
+            if (jawMorphs.length) {
+              // eslint-disable-next-line no-console
+              console.log('👄 Jaw morphs:', jawMorphs);
+            }
+            if (mouthMorphs.length) {
+              // eslint-disable-next-line no-console
+              console.log('👄 Mouth/Lip morphs:', mouthMorphs);
+            }
+            if (visemeMorphs.length) {
+              // eslint-disable-next-line no-console
+              console.log('🗣️ Viseme morphs:', visemeMorphs);
+            }
+
+            // eslint-disable-next-line no-console
+            console.log('📝 All morphs:', allMorphs);
+            // eslint-disable-next-line no-console
+            console.groupEnd();
           }
         });
+        // eslint-disable-next-line no-console
+        console.log(`Total morphs across all meshes: ${totalMorphs}`);
+        // eslint-disable-next-line no-console
+        console.groupEnd();
+
+        // Show what AU 25 and 26 are currently mapped to
+        // eslint-disable-next-line no-console
+        console.group('🔗 CURRENT AU MAPPINGS (shapeDict.ts)');
+        // eslint-disable-next-line no-console
+        console.log('AU 25 (Lips Part) → morphs:', AU_TO_MORPHS[25]);
+        // eslint-disable-next-line no-console
+        console.log('AU 25 (Lips Part) → bone:', BONE_AU_TO_BINDINGS[25]);
+        // eslint-disable-next-line no-console
+        console.log('AU 26 (Jaw Drop) → morphs:', AU_TO_MORPHS[26]);
+        // eslint-disable-next-line no-console
+        console.log('AU 26 (Jaw Drop) → bone:', BONE_AU_TO_BINDINGS[26]);
+        // eslint-disable-next-line no-console
+        console.log('AU 27 (Mouth Stretch) → morphs:', AU_TO_MORPHS[27]);
+        // eslint-disable-next-line no-console
+        console.log('AU 27 (Mouth Stretch) → bone:', BONE_AU_TO_BINDINGS[27]);
+        // eslint-disable-next-line no-console
+        console.groupEnd();
+
+        // eslint-disable-next-line no-console
+        console.groupEnd();
       } catch (e) {
         // eslint-disable-next-line no-console
-        console.warn('[EngineThree] Debug dump failed:', e);
+        console.warn('[EngineThree] Model inspection failed:', e);
       }
     }
   };
@@ -272,7 +353,14 @@ export class EngineThree {
       this.applyBothSides(id, v);
       // Bones: if bindings exist for this AU, apply them.
       if (this.hasBoneBinding(id)) {
+        if (id === 25 || id === 26 || id === 27) {
+          console.log(`[EngineThree] setAU(${id}, ${v.toFixed(2)}) - calling applyBones`);
+        }
         this.applyBones(id, v);
+      } else {
+        if (id === 25 || id === 26 || id === 27) {
+          console.log(`[EngineThree] setAU(${id}, ${v.toFixed(2)}) - NO BONE BINDINGS FOUND`);
+        }
       }
     }
 
@@ -590,8 +678,22 @@ export class EngineThree {
 
   private applyBones = (id: number, v: number) => {
     const bindings = BONE_AU_TO_BINDINGS[id];
-    if (!bindings || !bindings.length || !this.model) return;
+    if (!bindings || !bindings.length || !this.model) {
+      if (id === 25 || id === 26 || id === 27) {
+        console.log(`[EngineThree] applyBones AU${id}: bindings=${bindings?.length || 0}, model=${!!this.model}`);
+      }
+      return;
+    }
     const bones = this.bones;
+
+    // Debug jaw bone application
+    if (id === 25 || id === 26 || id === 27) {
+      console.log(`[EngineThree] applyBones AU${id} value=${v.toFixed(2)}`, {
+        bindings: bindings.map(b => `${b.node}:${b.channel}:${b.maxDegrees}deg`),
+        jawResolved: !!bones.JAW,
+        jawBoneName: bones.JAW?.obj?.name
+      });
+    }
 
     // Clamp to normalized range (-1 to +1) to preserve natural limits
     const val = Math.min(1, Math.max(-1, v));
@@ -723,7 +825,15 @@ export class EngineThree {
 
     // Jaw: prefer exact bone, then pattern
     const jawBone = getBoneExact(JAW_BONE_CANDIDATES) || byPattern(['jaw']);
-    if (jawBone) resolved.JAW = snapshot(jawBone);
+    if (jawBone) {
+      resolved.JAW = snapshot(jawBone);
+      console.log('[EngineThree] JAW bone resolved:', jawBone.name, jawBone);
+    } else {
+      console.warn('[EngineThree] JAW bone NOT FOUND - candidates:', JAW_BONE_CANDIDATES);
+      console.warn('[EngineThree] Available bones with "jaw" in name:',
+        bones.filter(b => /jaw/i.test(b.name)).map(b => b.name)
+      );
+    }
 
     // Neck: prefer exact bone, then pattern
     const neckBone = getBoneExact(NECK_BONE_CANDIDATES) || byPattern(['neck']);

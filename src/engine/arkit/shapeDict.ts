@@ -223,13 +223,13 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
 
   // Jaw
   25: [ // Lips Part — small jaw open
-    { node: 'JAW', channel: 'rx', scale: 1, maxDegrees: 8 },
+    { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 8 },
   ],
   26: [
-    { node: 'JAW', channel: 'rx', scale: 1, maxDegrees: 20 },
+    { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 20 },
   ],
   27: [ // Mouth Stretch — larger jaw open
-    { node: 'JAW', channel: 'rx', scale: 1, maxDegrees: 25 },
+    { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 25 },
   ],
   29: [
     { node: 'JAW', channel: 'tz', scale: 1, maxUnits: 0.01 },

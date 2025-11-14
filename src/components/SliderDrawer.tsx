@@ -19,6 +19,7 @@ import { AU_INFO, AUInfo } from '../engine/arkit/shapeDict';
 import AUSection from './au/AUSection';
 import VisemeSection from './au/VisemeSection';
 import WindSection from './au/WindSection';
+import TTSSection from './au/TTSSection';
 import DockableAccordionItem from './au/DockableAccordionItem';
 import PlaybackControls from './PlaybackControls';
 import { useThreeState } from '../context/threeContext';
@@ -29,6 +30,8 @@ interface SliderDrawerProps {
   disabled?: boolean;
 }
 
+type Keyframe = { time: number; value: number };
+
 export default function SliderDrawer({ isOpen, onToggle, disabled = false }: SliderDrawerProps) {
   const { engine, windEngine } = useThreeState();
 
@@ -37,6 +40,11 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
   const [visemeStates, setVisemeStates] = useState<Record<string, number>>({});
   const [showUnusedSliders, setShowUnusedSliders] = useState(false);
   const [segmentationMode, setSegmentationMode] = useState<'facePart' | 'faceArea'>('facePart');
+
+  // Curve editor mode and keyframe data
+  const [useCurveEditor, setUseCurveEditor] = useState(false);
+  const [auKeyframes, setAuKeyframes] = useState<Record<string, Keyframe[]>>({});
+  const [visemeKeyframes, setVisemeKeyframes] = useState<Record<string, Keyframe[]>>({});
 
   // Convert AU_INFO to array
   const actionUnits = useMemo(() => {
@@ -120,6 +128,16 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
               </Button>
 
               <HStack justify="space-between">
+                <Text fontSize="sm">Use curve editor</Text>
+                <Switch
+                  isChecked={useCurveEditor}
+                  onChange={(e) => setUseCurveEditor(e.target.checked)}
+                  size="sm"
+                  colorScheme="teal"
+                />
+              </HStack>
+
+              <HStack justify="space-between">
                 <Text fontSize="sm">Show unused sliders</Text>
                 <Switch
                   isChecked={showUnusedSliders}
@@ -144,6 +162,12 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
 
           <DrawerBody>
             <Accordion allowMultiple>
+              {/* Text-to-Speech Section */}
+              <TTSSection
+                engine={engine}
+                disabled={disabled}
+              />
+
               {/* Playback Controls Section */}
               <DockableAccordionItem title="Playback Controls">
                 <PlaybackControls />
@@ -161,6 +185,9 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
                 visemeStates={visemeStates}
                 onVisemeChange={handleVisemeChange}
                 disabled={disabled}
+                useCurveEditor={useCurveEditor}
+                visemeKeyframes={visemeKeyframes}
+                onKeyframesChange={setVisemeKeyframes}
               />
 
               {/* AU Sections (continuum sliders appear inline with their sections) */}
@@ -174,6 +201,9 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
                   showUnusedSliders={showUnusedSliders}
                   onAUChange={handleAUChange}
                   disabled={disabled}
+                  useCurveEditor={useCurveEditor}
+                  auKeyframes={auKeyframes}
+                  onKeyframesChange={setAuKeyframes}
                 />
               ))}
             </Accordion>

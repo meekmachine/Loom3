@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Drawer,
   DrawerBody,
@@ -23,7 +23,6 @@ import TTSSection from './au/TTSSection';
 import DockableAccordionItem from './au/DockableAccordionItem';
 import PlaybackControls from './PlaybackControls';
 import { useThreeState } from '../context/threeContext';
-import type { NormalizedSnippet, CurvePoint } from '../latticework/animation/types';
 
 interface SliderDrawerProps {
   isOpen: boolean;
@@ -33,23 +32,8 @@ interface SliderDrawerProps {
 
 type Keyframe = { time: number; value: number };
 
-type SnippetCurveData = {
-  snippetName: string;
-  keyframes: Keyframe[];
-  snippet: NormalizedSnippet;
-};
-
-// Helper to convert CurvePoint[] to Keyframe[]
-// Normalizes intensity from 0-100 to 0-1 range
-function curvePointsToKeyframes(points: CurvePoint[]): Keyframe[] {
-  return points.map(p => ({
-    time: p.time,
-    value: p.intensity > 1 ? p.intensity / 100 : p.intensity
-  }));
-}
-
 export default function SliderDrawer({ isOpen, onToggle, disabled = false }: SliderDrawerProps) {
-  const { engine, windEngine, anim, addFrameListener, removeFrameListener } = useThreeState();
+  const { engine, windEngine } = useThreeState();
 
   // Track AU intensities in local state for UI
   const [auStates, setAuStates] = useState<Record<string, number>>({});
@@ -57,104 +41,10 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
   const [showUnusedSliders, setShowUnusedSliders] = useState(false);
   const [segmentationMode, setSegmentationMode] = useState<'facePart' | 'faceArea'>('facePart');
 
-  // Curve editor mode and snippet data
+  // Curve editor mode and keyframe data
   const [useCurveEditor, setUseCurveEditor] = useState(false);
-  const [showOnlyPlayingSnippets, setShowOnlyPlayingSnippets] = useState(false);
-  // Map of AU/Viseme ID -> array of snippet curve data
-  const [auSnippetCurves, setAuSnippetCurves] = useState<Record<string, SnippetCurveData[]>>({});
-  const [visemeSnippetCurves, setVisemeSnippetCurves] = useState<Record<string, SnippetCurveData[]>>({});
-
-  // Animation snippets from animation service
-  const [snippets, setSnippets] = useState<NormalizedSnippet[]>([]);
-
-  // Poll machine state using Three.js frame listener
-  // NOTE: Can't use onTransition because animationScheduler mutates state directly
-  useEffect(() => {
-    if (!anim || !addFrameListener || !removeFrameListener) return;
-
-    console.log('[SliderDrawer] Setting up frame listener to poll machine state');
-
-    // Track animation list to detect changes
-    let lastAnimationNames: string[] = [];
-
-    const listener = (dt: number) => {
-      const state = anim.getState?.();
-      const animations = (state?.context?.animations as NormalizedSnippet[]) || [];
-
-      // Check if animations list changed (new animation added/removed)
-      const currentNames = animations.map(a => a.name).sort().join(',');
-      const listChanged = currentNames !== lastAnimationNames.join(',');
-
-      if (listChanged) {
-        console.log('[SliderDrawer] ========== Animation list changed ==========');
-        console.log('[SliderDrawer] Previous:', lastAnimationNames);
-        console.log('[SliderDrawer] Current:', animations.map(a => a.name));
-        lastAnimationNames = animations.map(a => a.name).sort();
-      }
-
-      // Always rebuild curve data (handles both list changes and currentTime updates)
-      const newAuCurves: Record<string, SnippetCurveData[]> = {};
-      const newVisemeCurves: Record<string, SnippetCurveData[]> = {};
-
-      animations.forEach(snippet => {
-        if (!snippet.curves) return;
-
-        // Filter by playing state if enabled
-        if (showOnlyPlayingSnippets && !snippet.isPlaying) return;
-
-        // Calculate current time from wall clock if playing
-        let currentTime = snippet.currentTime || 0;
-        if (snippet.isPlaying && snippet.startWallTime) {
-          const now = Date.now();
-          const rate = snippet.snippetPlaybackRate || 1;
-          currentTime = ((now - snippet.startWallTime) / 1000) * rate;
-
-          // Handle looping
-          if (snippet.loop && snippet.duration > 0) {
-            currentTime = ((currentTime % snippet.duration) + snippet.duration) % snippet.duration;
-          } else if (currentTime > snippet.duration) {
-            currentTime = snippet.duration;
-          }
-        }
-
-        if (listChanged) {
-          console.log(`[SliderDrawer] Processing snippet: ${snippet.name}, category: ${snippet.snippetCategory}, isPlaying: ${snippet.isPlaying}, curves:`, Object.keys(snippet.curves));
-        }
-
-        Object.entries(snippet.curves).forEach(([curveId, points]) => {
-          const keyframes = curvePointsToKeyframes(points);
-          const curveData: SnippetCurveData = {
-            snippetName: snippet.name,
-            keyframes,
-            snippet: { ...snippet, currentTime }
-          };
-
-          // Check snippet category to determine if it's AU or viseme
-          if (snippet.snippetCategory === 'visemeSnippet') {
-            if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
-            newVisemeCurves[curveId].push(curveData);
-          } else if (/^\d+$/.test(curveId)) {
-            if (!newAuCurves[curveId]) newAuCurves[curveId] = [];
-            newAuCurves[curveId].push(curveData);
-          } else {
-            if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
-            newVisemeCurves[curveId].push(curveData);
-          }
-        });
-      });
-
-      if (listChanged) {
-        console.log('[SliderDrawer] AU curves keys:', Object.keys(newAuCurves));
-        console.log('[SliderDrawer] Viseme curves keys:', Object.keys(newVisemeCurves));
-      }
-
-      setAuSnippetCurves(newAuCurves);
-      setVisemeSnippetCurves(newVisemeCurves);
-    };
-
-    addFrameListener(listener);
-    return () => removeFrameListener(listener);
-  }, [anim, addFrameListener, removeFrameListener, showOnlyPlayingSnippets]);
+  const [auKeyframes, setAuKeyframes] = useState<Record<string, Keyframe[]>>({});
+  const [visemeKeyframes, setVisemeKeyframes] = useState<Record<string, Keyframe[]>>({});
 
   // Convert AU_INFO to array
   const actionUnits = useMemo(() => {
@@ -177,19 +67,12 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
   // Filter sections to hide empty ones when showUnusedSliders is false
   const filteredSections = useMemo(() => {
     const entries = Object.entries(auGroups);
-
-    // In curve editor mode, always show all sections (user can choose which to view)
-    if (useCurveEditor) {
-      return entries;
-    }
-
-    // In slider mode, respect the showUnusedSliders toggle
     if (showUnusedSliders) return entries;
     return entries.filter(([_, aus]) => {
-      // Check if any AU has a value > 0
+      // Check if any AU in this section has a value > 0
       return aus.some(au => (auStates[au.id] ?? 0) > 0);
     });
-  }, [auGroups, auStates, showUnusedSliders, useCurveEditor]);
+  }, [auGroups, auStates, showUnusedSliders]);
 
   // Reset face to neutral
   const setFaceToNeutral = () => {
@@ -231,7 +114,7 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
         onClose={onToggle}
         size="md"
       >
-        <DrawerContent zIndex={9999}>
+        <DrawerContent>
           <DrawerCloseButton />
           <DrawerHeader borderBottomWidth="1px">
             Action Units
@@ -253,18 +136,6 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
                   colorScheme="teal"
                 />
               </HStack>
-
-              {useCurveEditor && (
-                <HStack justify="space-between">
-                  <Text fontSize="sm">Show only playing</Text>
-                  <Switch
-                    isChecked={showOnlyPlayingSnippets}
-                    onChange={(e) => setShowOnlyPlayingSnippets(e.target.checked)}
-                    size="sm"
-                    colorScheme="green"
-                  />
-                </HStack>
-              )}
 
               <HStack justify="space-between">
                 <Text fontSize="sm">Show unused sliders</Text>
@@ -315,7 +186,8 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
                 onVisemeChange={handleVisemeChange}
                 disabled={disabled}
                 useCurveEditor={useCurveEditor}
-                visemeSnippetCurves={visemeSnippetCurves}
+                visemeKeyframes={visemeKeyframes}
+                onKeyframesChange={setVisemeKeyframes}
               />
 
               {/* AU Sections (continuum sliders appear inline with their sections) */}
@@ -330,7 +202,8 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
                   onAUChange={handleAUChange}
                   disabled={disabled}
                   useCurveEditor={useCurveEditor}
-                  auSnippetCurves={auSnippetCurves}
+                  auKeyframes={auKeyframes}
+                  onKeyframesChange={setAuKeyframes}
                 />
               ))}
             </Accordion>

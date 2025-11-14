@@ -1,10 +1,22 @@
 import React from 'react';
-import { VStack, Box } from '@chakra-ui/react';
+import { VStack, Box, Text, Button, HStack, useToast } from '@chakra-ui/react';
+import { AddIcon } from '@chakra-ui/icons';
 import DockableAccordionItem from './DockableAccordionItem';
 import AUSlider from './AUSlider';
 import ContinuumSlider from './ContinuumSlider';
+import { CurveEditor } from '../CurveEditor';
 import { AUInfo, CONTINUUM_PAIRS } from '../../engine/arkit/shapeDict';
 import { EngineThree } from '../../engine/EngineThree';
+import type { NormalizedSnippet } from '../../latticework/animation/types';
+import { useThreeState } from '../../context/threeContext';
+
+type Keyframe = { time: number; value: number };
+
+type SnippetCurveData = {
+  snippetName: string;
+  keyframes: Keyframe[];
+  snippet: NormalizedSnippet;
+};
 
 interface AUSectionProps {
   section: string;
@@ -14,6 +26,8 @@ interface AUSectionProps {
   showUnusedSliders?: boolean;
   onAUChange?: (id: string, value: number) => void;
   disabled?: boolean;
+  useCurveEditor?: boolean;
+  auSnippetCurves?: Record<string, SnippetCurveData[]>;
 }
 
 /**
@@ -27,8 +41,13 @@ export default function AUSection({
   engine,
   showUnusedSliders = false,
   onAUChange,
-  disabled = false
+  disabled = false,
+  useCurveEditor = false,
+  auSnippetCurves = {}
 }: AUSectionProps) {
+  const { anim } = useThreeState();
+  const toast = useToast();
+
   // Build a map of AU ID to continuum pair info
   const continuumMap = new Map<number, { pair: typeof CONTINUUM_PAIRS[0]; isNegative: boolean }>();
   CONTINUUM_PAIRS.forEach(pair => {
@@ -39,6 +58,114 @@ export default function AUSection({
   // Track which AUs we've already rendered as part of a continuum
   const renderedAUs = new Set<string>();
 
+  // Create a new animation snippet for an AU
+  const createNewAnimation = (auId: string, auName: string) => {
+    if (!anim) {
+      toast({
+        title: 'Animation service not available',
+        status: 'error',
+        duration: 3000
+      });
+      return;
+    }
+
+    const name = prompt(`Enter name for ${auName} (AU ${auId}) animation:`, `${auName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`);
+    if (!name) return;
+
+    // Create a default animation with a simple rise-and-fall curve
+    const snippet = {
+      name,
+      snippetCategory: 'auSnippet',
+      snippetPriority: 0,
+      snippetPlaybackRate: 1,
+      snippetIntensityScale: 1,
+      loop: false,
+      curves: {
+        [auId]: [
+          { time: 0.0, intensity: 0 },
+          { time: 0.5, intensity: 70 },
+          { time: 1.5, intensity: 70 },
+          { time: 2.0, intensity: 0 }
+        ]
+      }
+    };
+
+    anim.schedule(snippet);
+    anim.setSnippetPlaying(name, true);
+
+    toast({
+      title: 'Animation created',
+      description: `${name} added to animation service`,
+      status: 'success',
+      duration: 3000
+    });
+  };
+
+  // If curve editor mode, render curve editors for all AUs (one per snippet)
+  if (useCurveEditor) {
+    console.log(`[AUSection:${section}] Curve editor mode enabled`);
+    console.log(`[AUSection:${section}] auSnippetCurves:`, auSnippetCurves);
+    console.log(`[AUSection:${section}] AUs in this section:`, aus.map(au => au.id));
+
+    return (
+      <DockableAccordionItem title={section}>
+        <VStack spacing={4} mt={2} align="stretch">
+          {aus.map((au) => {
+            const snippetCurves = auSnippetCurves[au.id] || [];
+            console.log(`[AUSection:${section}] AU ${au.id} (${au.name}) has ${snippetCurves.length} curves`);
+
+            // If no curves, show placeholder with add button
+            if (snippetCurves.length === 0) {
+              return (
+                <Box key={au.id} w="100%" p={3} bg="gray.50" borderRadius="md" border="1px dashed" borderColor="gray.300">
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="gray.600">
+                      {au.name} (AU {au.id})
+                    </Text>
+                    <Button
+                      size="xs"
+                      leftIcon={<AddIcon />}
+                      colorScheme="teal"
+                      variant="outline"
+                      onClick={() => createNewAnimation(au.id, au.name)}
+                    >
+                      Add Animation
+                    </Button>
+                  </HStack>
+                </Box>
+              );
+            }
+
+            // Render one curve editor per snippet
+            return (
+              <VStack key={au.id} w="100%" spacing={3} align="stretch">
+                {snippetCurves.map((curveData, idx) => (
+                  <Box key={`${au.id}-${curveData.snippetName}-${idx}`} w="100%">
+                    <CurveEditor
+                      auId={au.id}
+                      label={`${au.name} - ${curveData.snippetName}`}
+                      keyframes={curveData.keyframes}
+                      duration={curveData.snippet.duration || 2.0}
+                      currentTime={curveData.snippet.currentTime || 0}
+                      isPlaying={curveData.snippet.isPlaying || false}
+                      onChange={(updated) => {
+                        // Note: In this read-only view from animation service,
+                        // we don't update the snippets directly. The animation service
+                        // controls the keyframes. This is just for visualization.
+                        console.log('Curve edited:', au.id, curveData.snippetName, updated);
+                      }}
+                    />
+                  </Box>
+                ))}
+              </VStack>
+            );
+          })}
+        </VStack>
+      </DockableAccordionItem>
+    );
+  }
+
+  // Otherwise, render sliders (existing behavior)
   return (
     <DockableAccordionItem title={section}>
       <VStack spacing={4} mt={2} align="stretch">

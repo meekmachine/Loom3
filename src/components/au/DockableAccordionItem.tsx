@@ -22,6 +22,9 @@ interface DockableAccordionItemProps {
 /**
  * DockableAccordionItem - Accordion item that can be undocked into a draggable window
  */
+// Track panel count for positioning
+let panelCount = 0;
+
 function DockableAccordionItem({
   title,
   isDefaultExpanded = false,
@@ -29,7 +32,16 @@ function DockableAccordionItem({
 }: DockableAccordionItemProps) {
   const [isDocked, setIsDocked] = useState(true);
   const [isExpanded, setIsExpanded] = useState(isDefaultExpanded);
-  const [pos, setPos] = useState({ x: 150, y: 100 });
+
+  // Calculate initial position based on panel index
+  const [panelIndex] = useState(() => panelCount++);
+  const [pos, setPos] = useState(() => {
+    const baseX = 100;
+    const baseY = 80;
+    const offsetX = (panelIndex % 3) * 350; // 3 columns
+    const offsetY = Math.floor(panelIndex / 3) * 280; // Stack vertically after 3
+    return { x: baseX + offsetX, y: baseY + offsetY };
+  });
 
   const dragRef = useRef<HTMLDivElement>(null);
 
@@ -97,15 +109,19 @@ function DockableAccordionItem({
       >
         <Box
           ref={dragRef}
-          position="absolute"
-          zIndex={9999}
-          w="300px"
-          minW="200px"
-          minH="100px"
+          position="fixed"
+          top={0}
+          left={0}
+          zIndex={99999}
+          w="340px"
+          minW="280px"
+          maxW="600px"
+          minH="180px"
+          maxH="70vh"
           bg="white"
           border="1px solid #ccc"
           borderRadius="md"
-          boxShadow="lg"
+          boxShadow="2xl"
           sx={{ resize: 'both', overflow: 'auto' }}
         >
           <Box

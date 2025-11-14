@@ -1,14 +1,28 @@
 import React, { useState } from 'react';
-import { VStack, Box, Text, Slider, SliderTrack, SliderFilledTrack, SliderThumb, Tooltip, HStack } from '@chakra-ui/react';
+import { VStack, Box, Text, Slider, SliderTrack, SliderFilledTrack, SliderThumb, Tooltip, HStack, Button, useToast } from '@chakra-ui/react';
+import { AddIcon } from '@chakra-ui/icons';
 import DockableAccordionItem from './DockableAccordionItem';
+import { CurveEditor } from '../CurveEditor';
 import { EngineThree } from '../../engine/EngineThree';
 import { VISEME_KEYS } from '../../engine/arkit/shapeDict';
+import type { NormalizedSnippet } from '../../latticework/animation/types';
+import { useThreeState } from '../../context/threeContext';
+
+type Keyframe = { time: number; value: number };
+
+type SnippetCurveData = {
+  snippetName: string;
+  keyframes: Keyframe[];
+  snippet: NormalizedSnippet;
+};
 
 interface VisemeSectionProps {
   engine?: EngineThree;
   visemeStates: Record<string, number>;
   onVisemeChange: (key: string, value: number) => void;
   disabled?: boolean;
+  useCurveEditor?: boolean;
+  visemeSnippetCurves?: Record<string, SnippetCurveData[]>;
 }
 
 /**
@@ -17,9 +31,61 @@ interface VisemeSectionProps {
  *
  * Maps each viseme to appropriate jaw opening amount (0-1 scale)
  */
-export default function VisemeSection({ engine, visemeStates, onVisemeChange, disabled = false }: VisemeSectionProps) {
+export default function VisemeSection({
+  engine,
+  visemeStates,
+  onVisemeChange,
+  disabled = false,
+  useCurveEditor = false,
+  visemeSnippetCurves = {}
+}: VisemeSectionProps) {
+  const { anim } = useThreeState();
+  const toast = useToast();
   const [tooltipStates, setTooltipStates] = useState<Record<string, boolean>>({});
   const [jawRatios, setJawRatios] = useState<Record<string, number>>({});
+
+  // Create a new animation snippet for a viseme
+  const createNewVisemeAnimation = (visemeIndex: number, visemeKey: string) => {
+    if (!anim) {
+      toast({
+        title: 'Animation service not available',
+        status: 'error',
+        duration: 3000
+      });
+      return;
+    }
+
+    const name = prompt(`Enter name for ${visemeKey} (viseme ${visemeIndex}) animation:`, `${visemeKey.toLowerCase()}_${Date.now()}`);
+    if (!name) return;
+
+    // Create a default animation with a simple rise-and-fall curve
+    const snippet = {
+      name,
+      snippetCategory: 'visemeSnippet',
+      snippetPriority: -50,
+      snippetPlaybackRate: 1,
+      snippetIntensityScale: 1,
+      loop: false,
+      curves: {
+        [visemeIndex]: [
+          { time: 0.0, intensity: 0 },
+          { time: 0.3, intensity: 90 },
+          { time: 0.7, intensity: 90 },
+          { time: 1.0, intensity: 0 }
+        ]
+      }
+    };
+
+    anim.schedule(snippet);
+    anim.setSnippetPlaying(name, true);
+
+    toast({
+      title: 'Viseme animation created',
+      description: `${name} added to animation service`,
+      status: 'success',
+      duration: 3000
+    });
+  };
 
   // Jaw opening intensity per viseme (0 = closed, 1 = fully open)
   const VISEME_JAW_MAP: Record<string, number> = {
@@ -49,6 +115,70 @@ export default function VisemeSection({ engine, visemeStates, onVisemeChange, di
     return `rgb(${r}, ${g}, ${b})`;
   };
 
+  // If curve editor mode, render curve editors for all visemes (one per snippet)
+  if (useCurveEditor) {
+    return (
+      <DockableAccordionItem title="Visemes (Speech)">
+        <VStack spacing={4} mt={2} align="stretch">
+          {VISEME_KEYS.map((key, index) => {
+            // Viseme snippets use numeric indices (0-21) as curve IDs
+            // Map the ARKit key to its index to find the curves
+            const snippetCurves = visemeSnippetCurves[index.toString()] || [];
+
+            console.log(`[VisemeSection] Checking viseme ${key} (index ${index}):`, snippetCurves.length, 'curves');
+
+            // If no curves, show placeholder with add button
+            if (snippetCurves.length === 0) {
+              return (
+                <Box key={key} w="100%" p={3} bg="gray.50" borderRadius="md" border="1px dashed" borderColor="gray.300">
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="gray.600">
+                      {key} (index {index})
+                    </Text>
+                    <Button
+                      size="xs"
+                      leftIcon={<AddIcon />}
+                      colorScheme="teal"
+                      variant="outline"
+                      onClick={() => createNewVisemeAnimation(index, key)}
+                    >
+                      Add Animation
+                    </Button>
+                  </HStack>
+                </Box>
+              );
+            }
+
+            // Render one curve editor per snippet
+            return (
+              <VStack key={key} w="100%" spacing={3} align="stretch">
+                {snippetCurves.map((curveData, idx) => (
+                  <Box key={`${key}-${curveData.snippetName}-${idx}`} w="100%">
+                    <CurveEditor
+                      auId={index.toString()}
+                      label={`${key} (${index}) - ${curveData.snippetName}`}
+                      keyframes={curveData.keyframes}
+                      duration={curveData.snippet.duration || 2.0}
+                      currentTime={curveData.snippet.currentTime || 0}
+                      isPlaying={curveData.snippet.isPlaying || false}
+                      onChange={(updated) => {
+                        // Note: In this read-only view from animation service,
+                        // we don't update the snippets directly. The animation service
+                        // controls the keyframes. This is just for visualization.
+                        console.log('Viseme curve edited:', key, index, curveData.snippetName, updated);
+                      }}
+                    />
+                  </Box>
+                ))}
+              </VStack>
+            );
+          })}
+        </VStack>
+      </DockableAccordionItem>
+    );
+  }
+
+  // Otherwise, render sliders (existing behavior)
   return (
     <DockableAccordionItem title="Visemes (Speech)">
       <VStack spacing={4} mt={2} align="stretch">

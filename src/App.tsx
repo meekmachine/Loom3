@@ -1,11 +1,14 @@
 import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import CharacterGLBScene from './scenes/CharacterGLBScene';
+import { CharacterFiberScene } from './scenes/CharacterFiberScene';
 import SliderDrawer from './components/SliderDrawer';
 import ModulesMenu from './components/ModulesMenu';
 import Preloader from './components/Preloader';
 import { useThreeState } from './context/threeContext';
 import { ModulesProvider, useModulesContext } from './context/ModulesContext';
 import { createEyeHeadTrackingService } from './latticework/eyeHeadTracking/eyeHeadTrackingService';
+import { EngineType, SceneType } from './components/au/EngineSceneSwitcher';
+import { EngineFour } from './engine/EngineFour';
 import './styles.css';
 import { Text } from '@chakra-ui/react';
 
@@ -19,6 +22,9 @@ function AppContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentEngine, setCurrentEngine] = useState<EngineType>('three');
+  const [currentScene, setCurrentScene] = useState<SceneType>('glb');
+  const [fiberEngine, setFiberEngine] = useState<EngineFour | null>(null);
 
   // Helper: audit morph coverage
   function auditMorphCoverage(model: any) {
@@ -83,6 +89,33 @@ function AppContent() {
     setLoadingProgress(progress);
   }, []);
 
+  // Handle engine changes
+  const handleEngineChange = useCallback((newEngine: EngineType) => {
+    console.log('[App] Switching engine to:', newEngine);
+    setCurrentEngine(newEngine);
+
+    // If switching to fiber and engine doesn't exist yet, create it
+    if (newEngine === 'fiber' && !fiberEngine) {
+      const newFiberEngine = new EngineFour(() => {
+        // Optional state change callback
+      });
+      setFiberEngine(newFiberEngine);
+
+      // Expose to window for debugging
+      if (typeof window !== 'undefined') {
+        (window as any).engineFour = newFiberEngine;
+      }
+    }
+  }, [fiberEngine]);
+
+  // Handle scene changes
+  const handleSceneChange = useCallback((newScene: SceneType) => {
+    console.log('[App] Switching scene to:', newScene);
+    setCurrentScene(newScene);
+    setIsLoading(true);
+    setLoadingProgress(0);
+  }, []);
+
   // Initialize eye/head tracking service on app startup
   useEffect(() => {
     if (!engine) {
@@ -90,12 +123,12 @@ function AppContent() {
       return;
     }
 
-    console.log('[App] Creating standalone eye/head tracking service with engine:', engine);
+    console.log('[App] Creating standalone eye/head tracking service with animation manager:', anim);
     const service = createEyeHeadTrackingService({
       eyeTrackingEnabled: true,
       headTrackingEnabled: true,
       headFollowEyes: true,
-      engine: engine,
+      animationManager: anim, // Pass animation manager, not engine
     });
 
     service.start();
@@ -131,18 +164,36 @@ function AppContent() {
         show={isLoading}
         skyboxUrl={skyboxUrl}
       />
-      <CharacterGLBScene
-        src={glbSrc}
-        className="fullscreen-scene"
-        cameraOverride={cameraOverride}
-        skyboxUrl={skyboxUrl}
-        onReady={handleReady}
-        onProgress={handleProgress}
-      />
+
+      {/* Conditionally render scene based on currentScene */}
+      {currentScene === 'glb' ? (
+        <CharacterGLBScene
+          src={glbSrc}
+          className="fullscreen-scene"
+          cameraOverride={cameraOverride}
+          skyboxUrl={skyboxUrl}
+          onReady={handleReady}
+          onProgress={handleProgress}
+        />
+      ) : (
+        <CharacterFiberScene
+          src={glbSrc}
+          className="fullscreen-scene"
+          skyboxUrl={skyboxUrl}
+          environmentPreset="studio"
+          onReady={handleReady}
+          onProgress={handleProgress}
+        />
+      )}
+
       <SliderDrawer
         isOpen={drawerOpen}
         onToggle={() => setDrawerOpen(!drawerOpen)}
         disabled={isLoading}
+        currentEngine={currentEngine}
+        currentScene={currentScene}
+        onEngineChange={handleEngineChange}
+        onSceneChange={handleSceneChange}
       />
       <ModulesMenu animationManager={anim} />
     </div>

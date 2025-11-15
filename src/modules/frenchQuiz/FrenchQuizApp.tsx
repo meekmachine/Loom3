@@ -4,12 +4,11 @@ import { PhoneIcon } from '@chakra-ui/icons';
 import { ModuleSettings } from '../../types/modules';
 import { createTTSService } from '../../latticework/tts';
 import { createTranscriptionService } from '../../latticework/transcription';
-import { createLipSyncService } from '../../latticework/lipsync';
+import { LipSyncService } from '../../latticework/lipsync';
 import { createConversationService } from '../../latticework/conversation';
 import { createEyeHeadTrackingService } from '../../latticework/eyeHeadTracking';
 import type { TTSService } from '../../latticework/tts/ttsService';
 import type { TranscriptionService } from '../../latticework/transcription/transcriptionService';
-import type { LipSyncService } from '../../latticework/lipsync/lipSyncService';
 import type { ConversationService } from '../../latticework/conversation/conversationService';
 import type { EyeHeadTrackingService } from '../../latticework/eyeHeadTracking/eyeHeadTrackingService';
 import type { ConversationFlow } from '../../latticework/conversation/types';
@@ -81,7 +80,7 @@ export default function FrenchQuizApp({ animationManager, settings, toast }: Fre
     eyeHeadTrackingRef.current.start();
 
     // Create LipSync service for phoneme extraction
-    lipSyncRef.current = createLipSyncService(
+    lipSyncRef.current = new LipSyncService(
       {
         engine: 'webSpeech',
         onsetIntensity: 90,
@@ -93,7 +92,8 @@ export default function FrenchQuizApp({ animationManager, settings, toast }: Fre
       {}
     );
 
-    // Create TTS service with French voice and lip-sync integration
+    // Create TTS service with French voice
+    // TTS service now coordinates LipSync and Prosodic agencies internally
     ttsRef.current = createTTSService(
       {
         engine: 'webSpeech',
@@ -101,268 +101,24 @@ export default function FrenchQuizApp({ animationManager, settings, toast }: Fre
         pitch: 0.9,
         volume: 1.0,
         voiceName: 'Thomas', // Male French voice
+
+        // Agency coordination - TTS now manages these
+        lipSyncService: lipSyncRef.current,
+        animationManager: animationManager,
+        prosodicEnabled: true,
       },
       {
         onStart: () => {
           console.log('[FrenchQuiz] TTS started');
-          wordIndexRef.current = 0;
-
-          // Clear previous snippets from both categories
-          lipsyncSnippetsRef.current = [];
-          prosodicSnippetsRef.current = [];
-
-          animationManager.play?.();
+          // TTS service now handles snippet cleanup and animation play
         },
         onEnd: () => {
           console.log('[FrenchQuiz] TTS ended');
-
-          // Remove all snippets from both categories
-          if (animationManager) {
-            // Remove LipSync snippets (visemes + jaw)
-            lipsyncSnippetsRef.current.forEach(snippetName => {
-              animationManager.remove?.(snippetName);
-            });
-            lipsyncSnippetsRef.current = [];
-
-            // Remove Prosodic snippets (brow raises, head nods)
-            prosodicSnippetsRef.current.forEach(snippetName => {
-              animationManager.remove?.(snippetName);
-            });
-            prosodicSnippetsRef.current = [];
-
-            // Schedule a final neutral snippet to return ALL visemes and jaw to zero
-            const neutralSnippet = `neutral_${Date.now()}`;
-            const neutralCurves: Record<string, Array<{ time: number; intensity: number }>> = {};
-
-            // Add neutral curves for all 15 ARKit viseme indices (0-14)
-            for (let i = 0; i < 15; i++) {
-              neutralCurves[i.toString()] = [
-                { time: 0.0, intensity: 0 },
-                { time: 0.3, intensity: 0 },
-              ];
-            }
-
-            // Add jaw closure (AU 26)
-            neutralCurves['26'] = [
-              { time: 0.0, intensity: 0 },
-              { time: 0.3, intensity: 0 },
-            ];
-
-            animationManager.schedule?.({
-              name: neutralSnippet,
-              curves: neutralCurves,
-              maxTime: 0.3,
-              loop: false,
-              snippetCategory: 'combined',
-              snippetPriority: 60,
-              snippetPlaybackRate: 1.0,
-              snippetIntensityScale: 1.0,
-            });
-
-            // Remove neutral snippet after it completes
-            setTimeout(() => {
-              animationManager.remove?.(neutralSnippet);
-            }, 350);
-          }
+          // TTS service now handles all cleanup
         },
         onBoundary: ({ word }) => {
-          console.log(`[FrenchQuiz] Word boundary: "${word}"`);
-
-          // Extract visemes for this word using phoneme extraction
-          if (lipSyncRef.current && word && animationManager) {
-            const visemeTimeline = lipSyncRef.current.extractVisemeTimeline(word);
-            console.log(`[FrenchQuiz] Extracted ${visemeTimeline.length} visemes for "${word}"`);
-
-            // Create combined curves for both visemes AND jaw in ONE snippet
-            const combinedCurves: Record<string, Array<{ time: number; intensity: number }>> = {};
-            const lipsyncIntensity = 1.0;
-            const jawActivation = 1.5;
-
-            // Process each viseme and add both viseme and jaw curves
-            visemeTimeline.forEach((visemeEvent) => {
-              // Convert SAPI viseme ID to ARKit viseme index (0-14) for proper morph mapping
-              const arkitIndex = getARKitVisemeIndex(visemeEvent.visemeId);
-              const visemeId = arkitIndex.toString();
-              const timeInSec = visemeEvent.offsetMs / 1000;
-              const durationInSec = visemeEvent.durationMs / 1000;
-
-              // Smoother, more natural timing with anticipation
-              const anticipation = durationInSec * 0.1; // Small anticipation
-              const attack = durationInSec * 0.25; // Attack to peak
-              const sustain = durationInSec * 0.45; // Hold at peak
-
-              // Initialize curve array if needed
-              if (!combinedCurves[visemeId]) {
-                combinedCurves[visemeId] = [];
-              }
-
-              // Check if previous viseme was same - if so, don't go to zero
-              const lastKeyframe = combinedCurves[visemeId][combinedCurves[visemeId].length - 1];
-              const startIntensity = (lastKeyframe && lastKeyframe.time > timeInSec - 0.02)
-                ? lastKeyframe.intensity
-                : 0;
-
-              // Viseme animation with smooth, natural motion
-              combinedCurves[visemeId].push(
-                { time: timeInSec, intensity: startIntensity }, // Start from previous or zero
-                { time: timeInSec + anticipation, intensity: 30 * lipsyncIntensity }, // Gentle anticipation
-                { time: timeInSec + attack, intensity: 95 * lipsyncIntensity }, // Quick to peak
-                { time: timeInSec + sustain, intensity: 100 * lipsyncIntensity }, // Hold at peak
-                { time: timeInSec + durationInSec, intensity: 0 } // Smooth release
-              );
-
-              // Add jaw activation coordinated with viseme
-              const jawAmount = getJawAmountForViseme(visemeEvent.visemeId);
-              if (jawAmount > 0.05) { // Only animate jaw if significant movement
-                if (!combinedCurves['26']) {
-                  combinedCurves['26'] = [];
-                }
-
-                // Jaw moves slower and smoother than lips
-                const jawAnticipation = durationInSec * 0.15;
-                const jawAttack = durationInSec * 0.3;
-                const jawSustain = durationInSec * 0.4;
-
-                const lastJawKeyframe = combinedCurves['26'][combinedCurves['26'].length - 1];
-                const startJawIntensity = (lastJawKeyframe && lastJawKeyframe.time > timeInSec - 0.02)
-                  ? lastJawKeyframe.intensity
-                  : 0;
-
-                combinedCurves['26'].push(
-                  { time: timeInSec, intensity: startJawIntensity },
-                  { time: timeInSec + jawAnticipation, intensity: jawAmount * 20 * jawActivation }, // Gentle start
-                  { time: timeInSec + jawAttack, intensity: jawAmount * 90 * jawActivation }, // Rise to peak
-                  { time: timeInSec + jawSustain, intensity: jawAmount * 100 * jawActivation }, // Hold
-                  { time: timeInSec + durationInSec, intensity: 0 } // Smooth close
-                );
-              }
-            });
-
-            // Calculate max time with neutral hold
-            const lastVisemeEndTime = visemeTimeline.length > 0
-              ? Math.max(...visemeTimeline.map(v => (v.offsetMs + v.durationMs) / 1000))
-              : 0;
-            const maxTime = lastVisemeEndTime + 0.05; // Short 50ms neutral hold
-
-            // Create a SINGLE snippet with both visemes and jaw
-            const snippetName = `lipsync:${word.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-
-            animationManager.schedule?.({
-              name: snippetName,
-              curves: combinedCurves,
-              maxTime,
-              loop: false,
-              snippetCategory: 'combined', // Combined visemes + AU
-              snippetPriority: 50,
-              snippetPlaybackRate: 0.9,
-              snippetIntensityScale: 1.0,
-            });
-
-            // Track snippet for cleanup (LipSync agency)
-            lipsyncSnippetsRef.current.push(snippetName);
-            console.log(`[FrenchQuiz] Scheduled snippet "${snippetName}" with ${Object.keys(combinedCurves).length} curves, duration: ${maxTime.toFixed(3)}s`);
-          }
-
-          // === PROSODIC EXPRESSION AGENCY (SEPARATE FROM LIP-SYNC) ===
-          // Varied prosodic gestures for natural speech emphasis
-          if (animationManager) {
-            const wordMod = wordIndexRef.current % 6;
-
-            // Pattern 1: Brow raise + subtle head tilt (every 3 words)
-            if (wordMod === 0) {
-              const gestureTime = Date.now();
-              const gestureName = `prosodic:emphasis_${gestureTime}`;
-              animationManager.schedule?.({
-                name: gestureName,
-                curves: {
-                  '1': [ // Inner brow raiser (AU1)
-                    { time: 0.0, intensity: 0 },
-                    { time: 0.15, intensity: 35 },
-                    { time: 0.45, intensity: 45 },
-                    { time: 0.75, intensity: 0 },
-                  ],
-                  '2': [ // Outer brow raiser (AU2)
-                    { time: 0.0, intensity: 0 },
-                    { time: 0.15, intensity: 25 },
-                    { time: 0.45, intensity: 35 },
-                    { time: 0.75, intensity: 0 },
-                  ],
-                  '55': [ // Head tilt left (AU55) - subtle
-                    { time: 0.0, intensity: 0 },
-                    { time: 0.25, intensity: 15 },
-                    { time: 0.65, intensity: 15 },
-                    { time: 0.95, intensity: 0 },
-                  ],
-                },
-                maxTime: 0.95,
-                loop: false,
-                snippetCategory: 'prosodic',
-                snippetPriority: 30,
-                snippetPlaybackRate: 1.0,
-                snippetIntensityScale: 0.8,
-              });
-              prosodicSnippetsRef.current.push(gestureName);
-              console.log(`[Prosodic] Brow + tilt emphasis "${gestureName}"`);
-            }
-
-            // Pattern 2: Head nod (every 4 words) - more pronounced
-            else if (wordMod === 3) {
-              const gestureTime = Date.now();
-              const gestureName = `prosodic:nod_${gestureTime}`;
-              animationManager.schedule?.({
-                name: gestureName,
-                curves: {
-                  '33': [ // Head turn up (AU33) - nod down motion (increased intensity)
-                    { time: 0.0, intensity: 0 },
-                    { time: 0.15, intensity: 40 },  // Faster attack, higher intensity
-                    { time: 0.4, intensity: 50 },   // Higher peak
-                    { time: 0.75, intensity: 0 },   // Slightly longer duration
-                  ],
-                },
-                maxTime: 0.75,
-                loop: false,
-                snippetCategory: 'prosodic',
-                snippetPriority: 30,
-                snippetPlaybackRate: 1.0,
-                snippetIntensityScale: 0.9,
-              });
-              prosodicSnippetsRef.current.push(gestureName);
-              console.log(`[Prosodic] Head nod "${gestureName}"`);
-            }
-
-            // Pattern 3: Subtle frown for contemplative tone (every 5 words)
-            else if (wordMod === 4) {
-              const gestureTime = Date.now();
-              const gestureName = `prosodic:contemplate_${gestureTime}`;
-              animationManager.schedule?.({
-                name: gestureName,
-                curves: {
-                  '4': [ // Brow lowerer (AU4) - subtle frown
-                    { time: 0.0, intensity: 0 },
-                    { time: 0.2, intensity: 18 },
-                    { time: 0.6, intensity: 22 },
-                    { time: 1.0, intensity: 0 },
-                  ],
-                  '1': [ // Inner brow raiser (AU1) - slight counter for pensiveness
-                    { time: 0.0, intensity: 0 },
-                    { time: 0.25, intensity: 12 },
-                    { time: 0.65, intensity: 12 },
-                    { time: 1.0, intensity: 0 },
-                  ],
-                },
-                maxTime: 1.0,
-                loop: false,
-                snippetCategory: 'prosodic',
-                snippetPriority: 30,
-                snippetPlaybackRate: 1.0,
-                snippetIntensityScale: 0.6,
-              });
-              prosodicSnippetsRef.current.push(gestureName);
-              console.log(`[Prosodic] Contemplative frown "${gestureName}"`);
-            }
-          }
-
-          wordIndexRef.current++;
+          // TTS service now handles all lip sync and prosodic coordination
+          console.log(`[FrenchQuiz] Word: "${word}" (coordinated by TTS service)`);
         },
         onError: (error) => {
           console.error('[FrenchQuiz] TTS error:', error);

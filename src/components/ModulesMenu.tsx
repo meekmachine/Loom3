@@ -102,14 +102,16 @@ export default function ModulesMenu({ animationManager }: ModulesMenuProps) {
         position="fixed"
         right="1rem"
         top="1rem"
-        bg="white"
+        bg="gray.850"
         p={4}
         borderRadius="md"
         boxShadow="lg"
         zIndex={1000}
+        borderWidth="1px"
+        borderColor="gray.700"
       >
         <Flex justify="space-between" align="center">
-          <Text fontSize="xl" mb={isMenuOpen ? 4 : 0}>
+          <Text fontSize="xl" mb={isMenuOpen ? 4 : 0} color="gray.50" fontWeight="bold">
             Modules
           </Text>
           <IconButton
@@ -118,6 +120,9 @@ export default function ModulesMenu({ animationManager }: ModulesMenuProps) {
             variant="outline"
             size="sm"
             aria-label="Toggle modules menu"
+            colorScheme="brand"
+            color="gray.400"
+            _hover={{ color: 'gray.200', bg: 'gray.700' }}
           />
         </Flex>
 
@@ -131,29 +136,30 @@ export default function ModulesMenu({ animationManager }: ModulesMenuProps) {
         {isMenuOpen && (
           <Accordion allowMultiple>
             {modulesConfig.modules.map((module, index) => (
-              <AccordionItem key={index}>
-                <AccordionButton>
-                  <Box flex="1" textAlign="left">
+              <AccordionItem key={index} borderColor="gray.700">
+                <AccordionButton bg="gray.800" _hover={{ bg: 'gray.700' }}>
+                  <Box flex="1" textAlign="left" color="gray.50">
                     {module.name}
                   </Box>
-                  <AccordionIcon />
+                  <AccordionIcon color="gray.400" />
                 </AccordionButton>
-                <AccordionPanel pb={4}>
+                <AccordionPanel pb={4} bg="gray.800">
                   <VStack align="stretch" spacing={3}>
                     <Flex align="center" justify="space-between">
                       <Tooltip label={module.description} placement="top">
-                        <InfoIcon />
+                        <InfoIcon color="gray.400" />
                       </Tooltip>
                       <Switch
                         isChecked={activeModules[module.name] || false}
                         onChange={(e) => handleSwitchChange(module, e.target.checked)}
+                        colorScheme="brand"
                       />
                     </Flex>
 
                     {/* Settings for AI Chat module */}
                     {module.name === 'AI Chat' && (
                       <FormControl>
-                        <FormLabel fontSize="sm">Anthropic API Key</FormLabel>
+                        <FormLabel fontSize="sm" color="gray.300">Anthropic API Key</FormLabel>
                         <Input
                           type="password"
                           placeholder="sk-ant-..."
@@ -172,14 +178,19 @@ export default function ModulesMenu({ animationManager }: ModulesMenuProps) {
                             localStorage.setItem('anthropic_api_key', e.target.value);
                             localStorage.setItem(module.name, JSON.stringify(newSettings));
                           }}
+                          bg="gray.700"
+                          borderColor="gray.600"
+                          color="gray.50"
+                          _hover={{ borderColor: 'gray.500' }}
+                          _focus={{ borderColor: 'brand.500', bg: 'gray.700' }}
                         />
-                        <Text fontSize="xs" color="gray.500" mt={1}>
+                        <Text fontSize="xs" color="gray.400" mt={1}>
                           Get your API key from{' '}
                           <a
                             href="https://console.anthropic.com/"
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ textDecoration: 'underline' }}
+                            style={{ textDecoration: 'underline', color: '#60A5FA' }}
                           >
                             console.anthropic.com
                           </a>

@@ -50,7 +50,9 @@ export interface EyeHeadTrackingConfig {
   webcamTrackingEnabled?: boolean; // Enable webcam-based face tracking
   webcamLookAtUser?: boolean; // Make character look at user's face position
   webcamActivationInterval?: number; // How often to activate webcam tracking (ms)
-  engine?: any; // EngineThree for applying gaze directly
+
+  // Animation manager for scheduling curves (follows Society of Mind pattern)
+  animationManager?: any; // Animation service for scheduling smooth gaze transitions
 
   // Coordination with mouth
   mouthSyncEnabled?: boolean; // Coordinate with speech/lip-sync

@@ -36,5 +36,10 @@ export default defineConfig(({ mode }) => ({
       '@tensorflow-models/facemesh',
     ],
   },
-  server: { open: true },
+  build: {
+    sourcemap: true,
+  },
+  server: {
+    open: true,
+  },
 }));

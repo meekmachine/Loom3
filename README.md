@@ -1,3 +1,5 @@
+![Latticework by Lovelace LOL](https://github.com/user-attachments/assets/60a2f6de-8db3-4652-8d5e-96b8d88f8d15)
+
 # LoomLarge (Latticework Animation Platform)
 
 **LoomLarge** is a next-generation interactive 3D character animation platform built on **Latticework**, featuring reactive state management with XState, facial animation control via ARKit FACS (Facial Action Coding System), and modular agency-based architecture for lip-sync, eye/head tracking, prosodic expression, and conversational AI.
@@ -575,6 +577,53 @@ class EngineThree {
 3. **Check console for errors**:
    - Look for `[Animation]` prefixed logs
    - Validate keyframe curve format: `[[time, value], ...]`
+
+### TensorFlow.js Bundling Errors
+
+If you encounter errors related to TensorFlow.js modules (e.g., `@tensorflow/tfjs-core/dist/ops/ops_for_converter`), this is a **known issue** with TensorFlow.js 4.x and Vite.
+
+**The Problem:**
+- TensorFlow.js references internal module paths that don't actually exist in the npm package
+- Vite's esbuild optimizer cannot resolve these phantom paths
+- Results in 100+ bundling errors about missing exports and modules
+
+**Solution (Already Implemented):**
+LoomLarge loads TensorFlow.js and BlazeFace from **CDN** instead of npm packages:
+
+```html
+<!-- index.html -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.js"></script>
+```
+
+The code uses global `blazeface` object with TypeScript declarations:
+```typescript
+// useWebcamEyeTracking.ts
+declare const blazeface: any;
+const model = await blazeface.load();
+```
+
+Vite config excludes TensorFlow packages from optimization:
+```typescript
+// vite.config.ts
+optimizeDeps: {
+  exclude: [
+    '@tensorflow/tfjs',
+    '@tensorflow/tfjs-core',
+    '@tensorflow/tfjs-converter',
+    '@tensorflow/tfjs-backend-cpu',
+    '@tensorflow/tfjs-backend-webgl',
+    '@tensorflow-models/blazeface',
+  ],
+}
+```
+
+**If you still see errors:**
+1. Ensure TensorFlow packages are NOT in `package.json` dependencies
+2. Clear Vite cache: `rm -rf node_modules/.vite`
+3. Restart dev server: `yarn dev`
+
+See [src/hooks/README_useWebcamEyeTracking.md](src/hooks/README_useWebcamEyeTracking.md) for full documentation.
 
 ### Build Errors
 

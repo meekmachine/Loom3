@@ -1,443 +1,480 @@
 # LipSync Agency
 
-Lip-synchronization service for Latticework with phoneme extraction and viseme animation.
+A modular system for managing lip-sync animation during speech using XState for state management and a scheduler for precise timing control.
 
-Based on the JALI (Jaw And Lip Integration) model from "JALI: An Animator-Centric Viseme Model for Expressive Lip Synchronization" (Edwards et al., SIGGRAPH 2016). JALI demonstrates that visual speech is primarily controlled by two anatomical dimensions: **jaw articulation** and **lip shape**, which can be independently parameterized to create natural, expressive lip-sync.
+---
 
-**Reference**: Edwards, P., Landreth, C., Fiume, E., & Singh, K. (2016). JALI: An animator-centric viseme model for expressive lip synchronization. *ACM Transactions on Graphics*, 35(4). https://doi.org/10.1145/2897824.2925984
+## Architecture
 
-## Features
+The LipSync Agency follows the **Animation Agency pattern** with three core components:
 
-- **Dual Engine Support**: WebSpeech API and SAPI integration
-- **Phoneme Extraction**: Automatic phoneme detection from text
-- **Viseme Mapping**: 22-viseme Microsoft SAPI system (IDs 0-21) → ARKit 15-viseme set
-- **JALI-Based Control**: Independent jaw activation and lip intensity parameters
-- **Speech Style Variations**: Configurable articulation effort (relaxed, normal, precise, exaggerated)
-- **Timeline Animation**: Precise viseme timing with onset/hold/release curves
-- **Configurable Parameters**: Jaw activation, lip intensity, hold duration, speech rate control
-- **No External Dependencies**: Built-in phoneme dictionary and extraction
+```
+┌─────────────────────────────────────────────────────────┐
+│                  LipSync Agency                         │
+│                                                         │
+│  ┌───────────────────┐                                 │
+│  │  LipSyncService   │  ← Public API                   │
+│  │  (Factory)        │                                  │
+│  └─────────┬─────────┘                                 │
+│            │                                            │
+│    ┌───────▼─────────┐      ┌─────────────────────┐   │
+│    │  LipSyncMachine │◄─────┤  LipSyncScheduler   │   │
+│    │    (XState)     │      │  (Curve Building &  │   │
+│    └─────────────────┘      │   Scheduling)       │   │
+│            │                 └──────────┬──────────┘   │
+│            │                            │              │
+│            ▼                            ▼              │
+│     State Management          Animation Service        │
+│     (word tracking)          (schedule/remove)         │
+└─────────────────────────────────────────────────────────┘
+```
 
-## Installation
+### 1. **LipSyncMachine** (XState)
 
-The LipSync agency is part of Latticework and requires no additional installation.
+**File:** [lipSyncMachine.ts](./lipSyncMachine.ts)
 
-## Quick Start
+State machine managing:
+- **States:** `idle`, `speaking`, `ending`
+- **Context:** Snippets array, word count, config
+- **Events:** `START_SPEECH`, `PROCESS_WORD`, `END_SPEECH`, etc.
+
+**State Diagram:**
+```
+     idle
+      │
+      │ START_SPEECH
+      ▼
+   speaking ◄──────┐
+      │            │
+      │ PROCESS_WORD (for each word)
+      │            │
+      │ END_SPEECH
+      ▼            │
+   ending          │
+      │            │
+      │ (all snippets completed)
+      └────────────┘
+```
+
+### 2. **LipSyncScheduler**
+
+**File:** [lipSyncScheduler.ts](./lipSyncScheduler.ts)
+
+Manages:
+- Phoneme extraction (word → phonemes)
+- Viseme mapping (phonemes → SAPI visemes → ARKit indices)
+- Animation curve building with natural easing
+- Jaw coordination (AU 26) synchronized with visemes
+- Snippet scheduling to Animation Service
+- Neutral return animations
+- Optional emotional modulation and coarticulation
+
+### 3. **LipSyncService**
+
+**File:** [lipSyncService.ts](./lipSyncService.ts)
+
+Public API factory:
+- Creates machine + scheduler
+- Provides simple API: `startSpeech()`, `processWord()`, `endSpeech()`
+- Handles host integration with Animation Service
+- Supports callbacks for speech start/end events
+
+---
+
+## Usage
+
+### Basic Example
 
 ```typescript
-import { createLipSyncService } from '@/latticework/lipsync';
-import { EngineThree } from '@/engine/EngineThree';
+import { createLipSyncService } from './latticework/lipsync';
 
-const engine = new EngineThree();
-
-// Create LipSync service
+// Create service with animation service integration
 const lipSync = createLipSyncService(
   {
-    engine: 'webSpeech',
-    onsetIntensity: 90,  // 0-100
-    holdMs: 140,          // Viseme hold time
-    speechRate: 1.0,      // Speed multiplier
+    jawActivation: 1.5,
+    lipsyncIntensity: 1.0,
+    speechRate: 1.0,
+    useEmotionalModulation: false,
+    useCoarticulation: true,
   },
   {
-    onVisemeStart: (visemeId, intensity) => {
-      console.log(`Viseme ${visemeId} started at ${intensity}%`);
-      // Trigger facial animation
-      engine.setMouthShape(visemeId, intensity / 100);
-    },
-    onVisemeEnd: (visemeId) => {
-      console.log(`Viseme ${visemeId} ended`);
-      // Return to neutral
-      engine.setMouthShape(visemeId, 0);
-    },
     onSpeechStart: () => console.log('Speech started'),
     onSpeechEnd: () => console.log('Speech ended'),
+  },
+  {
+    scheduleSnippet: (snippet) => animationService.schedule(snippet),
+    removeSnippet: (name) => animationService.remove(name),
   }
 );
 
-// WebSpeech mode: Manual viseme triggers
-lipSync.handleViseme(21, 90); // P/B/M sound at 90% intensity
+// Start speech
+lipSync.startSpeech();
 
-// SAPI mode: Full timeline
-const sapiVisemes = [
-  { number: 21, offset: 0, duration: 100 },     // P
-  { number: 1, offset: 100, duration: 120 },    // AE
-  { number: 19, offset: 220, duration: 80 },    // T
-];
-const snippet = lipSync.handleSapiVisemes(sapiVisemes);
+// Process each word from TTS
+const words = ['Hello', 'world', 'this', 'is', 'amazing'];
+words.forEach((word, index) => {
+  lipSync.processWord(word, index);
+});
 
-// Extract viseme timeline from text
-const timeline = lipSync.extractVisemeTimeline('Hello world');
-console.log(timeline);
-// [
-//   { visemeId: 12, offsetMs: 0, durationMs: 100 },    // H
-//   { visemeId: 4, offsetMs: 100, durationMs: 100 },   // EH
-//   { visemeId: 14, offsetMs: 200, durationMs: 100 },  // L
-//   ...
-// ]
+// End speech (with graceful neutral return)
+lipSync.endSpeech();
 
-// Stop and cleanup
-lipSync.stop();
+// Cleanup
 lipSync.dispose();
 ```
 
-## JALI-Based Speech Styles
-
-Following the JALI model, speech can be parameterized along two independent dimensions:
-
-### 1. Jaw Activation (`jawActivation`)
-Controls the degree of jaw opening during speech. Higher values = more pronounced jaw movement.
-
-| Style | Jaw Activation | Description |
-|-------|---------------|-------------|
-| **Mumbled** | 0.3 - 0.6 | Minimal jaw movement, lazy articulation |
-| **Relaxed** | 0.8 - 1.0 | Natural, comfortable speech |
-| **Normal** | 1.0 - 1.5 | Standard conversational speech (default: 1.5) |
-| **Precise** | 1.5 - 1.8 | Clear, deliberate articulation |
-| **Exaggerated** | 1.8 - 2.0 | Theatrical, over-emphasized movement |
-
-### 2. Lip Intensity (`lipsyncIntensity`)
-Controls the strength of lip shaping for visemes. Higher values = more pronounced lip movements.
-
-| Style | Lip Intensity | Description |
-|-------|--------------|-------------|
-| **Subtle** | 0.4 - 0.7 | Understated lip movements |
-| **Natural** | 0.8 - 1.2 | Normal conversational lip activity (default: 1.0) |
-| **Expressive** | 1.3 - 1.7 | Animated, lively lip shaping |
-| **Theatrical** | 1.8 - 2.0 | Stage performance, maximum visibility |
-
-### Example Combinations
+### With TTS Integration
 
 ```typescript
-// Casual conversation (relaxed jaw, natural lips)
-const casual = { jawActivation: 0.9, lipsyncIntensity: 1.0 };
+import { createTTSService } from './latticework/tts';
+import { createLipSyncService } from './latticework/lipsync';
 
-// News anchor (precise jaw, expressive lips)
-const broadcaster = { jawActivation: 1.6, lipsyncIntensity: 1.4 };
+const tts = createTTSService({ engine: 'webSpeech' }, {
+  onStart: () => {
+    lipSync.startSpeech();
+  },
+  onBoundary: ({ word, charIndex }) => {
+    if (word) {
+      lipSync.processWord(word, wordIndex++);
+    }
+  },
+  onEnd: () => {
+    lipSync.endSpeech();
+  },
+});
 
-// Tired/mumbling (minimal jaw, subtle lips)
-const tired = { jawActivation: 0.5, lipsyncIntensity: 0.6 };
-
-// Stage performance (exaggerated jaw, theatrical lips)
-const theatrical = { jawActivation: 2.0, lipsyncIntensity: 1.9 };
+// Speak text
+await tts.speak('Hello world, this is amazing!');
 ```
+
+### Class-Based API (Backward Compatible)
+
+```typescript
+import { LipSyncService } from './latticework/lipsync';
+
+const lipSync = new LipSyncService(
+  { jawActivation: 1.5 },
+  { onSpeechStart: () => console.log('Started') }
+);
+
+lipSync.startSpeech();
+lipSync.processWord('hello', 0);
+lipSync.endSpeech();
+```
+
+---
 
 ## API Reference
 
-### `createLipSyncService(config?, callbacks?)`
+### `createLipSyncService(config, callbacks, hostCaps)`
 
-Creates a new LipSync service instance.
+Factory function to create a LipSync service.
 
 **Parameters:**
 
-- `config` - LipSync configuration
-  - `engine?: 'webSpeech' | 'sapi'` - TTS engine mode (default: `'webSpeech'`)
-  - `onsetIntensity?: number` - Initial viseme intensity, 0-100 (default: `90`)
-  - `holdMs?: number` - Viseme hold duration in ms (default: `140`)
-  - `speechRate?: number` - Speech rate multiplier, 0.1-10.0 (default: `1.0`)
-  - `jawActivation?: number` - Jaw movement multiplier, 0-2.0 (default: `1.0`)
-  - `lipsyncIntensity?: number` - Lip shaping multiplier, 0-2.0 (default: `1.0`)
-
-- `callbacks` - Event callbacks
-  - `onVisemeStart?: (visemeId: VisemeID, intensity: number) => void` - Viseme onset
-  - `onVisemeEnd?: (visemeId: VisemeID) => void` - Viseme release
-  - `onSpeechStart?: () => void` - Speech begins
-  - `onSpeechEnd?: () => void` - Speech ends
-  - `onError?: (error: Error) => void` - Error handler
-
-### `LipSyncService` Methods
-
-#### `handleViseme(visemeId: VisemeID, intensity?: number): void`
-
-Trigger a single viseme with hold duration (WebSpeech mode).
-
-```typescript
-lipSync.handleViseme(21, 90); // Bilabial (P/B/M) at 90% intensity
-```
-
-#### `handleSapiVisemes(visemes: SAPIViseme[]): VisemeSnippet`
-
-Process a SAPI viseme timeline and execute animation.
-
-```typescript
-const visemes = [
-  { number: 12, offset: 0, duration: 100 },
-  { number: 4, offset: 100, duration: 120 },
-];
-const snippet = lipSync.handleSapiVisemes(visemes);
-```
-
-**Returns:** `VisemeSnippet` with animation curves for all 22 visemes.
-
-#### `extractVisemeTimeline(text: string): VisemeEvent[]`
-
-Extract viseme sequence from text using phoneme analysis.
-
-```typescript
-const timeline = lipSync.extractVisemeTimeline('Hello');
-// Returns: [{ visemeId, offsetMs, durationMs }, ...]
-```
-
-#### `stop(): void`
-
-Stop current animation and return to neutral.
-
-```typescript
-lipSync.stop();
-```
-
-#### `updateConfig(config: Partial<LipSyncConfig>): void`
-
-Update service configuration.
-
-```typescript
-lipSync.updateConfig({ onsetIntensity: 80, speechRate: 1.2 });
-```
-
-#### `getState(): LipSyncState`
-
-Get current service state.
-
-```typescript
-const state = lipSync.getState();
-// { status: 'speaking', currentViseme: 21, intensity: 90 }
-```
-
-#### `dispose(): void`
-
-Cleanup and release resources.
-
-```typescript
-lipSync.dispose();
-```
-
-## Viseme System
-
-The LipSync agency uses the Microsoft SAPI 22-viseme system (IDs 0-21):
-
-| ID | Viseme | Phonemes | Description |
-|----|--------|----------|-------------|
-| 0 | Silence | sil, pau | Mouth closed/neutral |
-| 1 | AE-AX-AH | AE, AX, AH | Open front vowel |
-| 2 | AA | AA | Open back vowel |
-| 3 | AO | AO | Open-mid back rounded |
-| 4 | EY-EH-UH | EY, EH, UH | Mid front vowels |
-| 5 | ER | ER | R-colored vowel |
-| 6 | Y-IY-IH-IX | Y, IY, IH, IX | Close front vowels |
-| 7 | W-UW | W, UW | Close back rounded |
-| 8 | OW | OW | Diphthong O |
-| 9 | AW | AW | Diphthong OW |
-| 10 | OY | OY | Diphthong OI |
-| 11 | AY | AY | Diphthong AI |
-| 12 | H | H, HH | Glottal fricative |
-| 13 | R | R | Retroflex approximant |
-| 14 | L | L | Lateral approximant |
-| 15 | S-Z | S, Z | Alveolar fricatives |
-| 16 | SH-CH-JH-ZH | SH, CH, JH, ZH | Postalveolar fricatives |
-| 17 | TH-DH | TH, DH | Dental fricatives |
-| 18 | F-V | F, V | Labiodental fricatives |
-| 19 | D-T-N | D, T, N | Alveolar stops/nasal |
-| 20 | K-G-NG | K, G, NG | Velar stops/nasal |
-| 21 | P-B-M | P, B, M | Bilabial stops/nasal |
-
-## Phoneme Extraction
-
-The LipSync agency includes a built-in phoneme extractor:
-
-```typescript
-import { phonemeExtractor } from '@/latticework/lipsync';
-
-// Extract phonemes from text
-const phonemes = phonemeExtractor.extractPhonemes('Hello, world!');
-// Returns: ['HH', 'EH', 'L', 'OW', 'PAUSE_COMMA', 'W', 'ER', 'L', 'D', 'PAUSE_PERIOD']
-
-// Add custom words to dictionary
-phonemeExtractor.addWord('anthropic', ['AE', 'N', 'TH', 'R', 'AH', 'P', 'IH', 'K']);
-```
-
-**Pause Tokens:**
-- `PAUSE_SPACE` - 500ms between words
-- `PAUSE_COMMA` - 300ms after comma
-- `PAUSE_PERIOD` - 700ms after period
-- `PAUSE_QUESTION` - 700ms after question mark
-- `PAUSE_EXCLAMATION` - 700ms after exclamation
-
-## Viseme Mapping
-
-The viseme mapper converts phonemes to viseme IDs:
-
-```typescript
-import { visemeMapper } from '@/latticework/lipsync';
-
-// Get viseme and duration for a phoneme
-const mapping = visemeMapper.getVisemeAndDuration('P');
-// { phoneme: 'P', viseme: 21, duration: 100 }
-
-// Map multiple phonemes
-const mappings = visemeMapper.mapPhonemesToVisemes(['H', 'EH', 'L', 'OW']);
-
-// Check if phoneme is a vowel
-const isVowel = visemeMapper.isVowel('AE'); // true
-
-// Adjust duration by speech rate
-const adjustedDuration = visemeMapper.adjustDuration(100, 1.5); // 67ms
-```
-
-## Integration with Facial Engine
-
-Example integration with EngineThree:
-
-```typescript
-import { createLipSyncService } from '@/latticework/lipsync';
-import { EngineThree } from '@/engine/EngineThree';
-
-const engine = new EngineThree();
-
-const lipSync = createLipSyncService(
-  { engine: 'webSpeech', onsetIntensity: 90 },
+- **config**: `LipSyncConfig` (optional)
+  ```typescript
   {
-    onVisemeStart: (visemeId, intensity) => {
-      // Map viseme to jaw/lip AUs
-      const normalizedIntensity = intensity / 100;
+    jawActivation?: number;           // 0-2.0, jaw movement multiplier (default: 1.0)
+    lipsyncIntensity?: number;        // 0-2.0, viseme intensity multiplier (default: 1.0)
+    speechRate?: number;              // 0.1-10.0, speed multiplier (default: 1.0)
+    useEmotionalModulation?: boolean; // Enable emotion-based adjustments (default: false)
+    useCoarticulation?: boolean;      // Enable phoneme blending (default: true)
 
-      // Jaw drop (AU26) based on vowel openness
-      if (visemeId >= 1 && visemeId <= 11) {
-        engine.setAU(26, normalizedIntensity * 0.8);
-      }
-
-      // Lip rounding (AU18) for rounded vowels
-      if (visemeId === 7 || visemeId === 8) {
-        engine.setAU(18, normalizedIntensity * 0.6);
-      }
-
-      // Lip closure (AU24) for bilabials
-      if (visemeId === 21) {
-        engine.setAU(24, normalizedIntensity);
-      }
-
-      // Lip stretch for alveolar sounds
-      if (visemeId === 15 || visemeId === 19) {
-        engine.setAU(20, normalizedIntensity * 0.4);
-      }
-    },
-    onVisemeEnd: (visemeId) => {
-      // Smooth return to neutral
-      engine.setAU(26, 0); // Jaw
-      engine.setAU(18, 0); // Lip round
-      engine.setAU(24, 0); // Lip close
-      engine.setAU(20, 0); // Lip stretch
-    },
+    // Legacy parameters (for backward compatibility):
+    engine?: 'webSpeech' | 'sapi';    // TTS engine type (default: 'webSpeech')
+    onsetIntensity?: number;          // 0-100, initial intensity (default: 90)
+    holdMs?: number;                  // Hold duration in ms (default: 140)
   }
-);
-```
+  ```
 
-## Integration with TTS Agency
-
-Combine LipSync with TTS for automatic lip-sync:
-
-```typescript
-import { createTTSService } from '@/latticework/tts';
-import { createLipSyncService } from '@/latticework/lipsync';
-
-const lipSync = createLipSyncService({ engine: 'webSpeech' });
-
-const tts = createTTSService(
-  { engine: 'webSpeech', rate: 1.0 },
+- **callbacks**: `LipSyncCallbacks` (optional)
+  ```typescript
   {
-    onBoundary: ({ word }) => {
-      // Simple word-boundary lip pulse
-      lipSync.handleViseme(0, 70); // Neutral pulse
-    },
-    onViseme: (visemeId, duration) => {
-      // Direct viseme from TTS
-      lipSync.handleViseme(visemeId, 90);
-    },
+    onSpeechStart?: () => void;
+    onSpeechEnd?: () => void;
+    onError?: (error: Error) => void;
   }
-);
+  ```
 
-await tts.speak('Hello world!');
-```
+- **hostCaps**: `{ scheduleSnippet, removeSnippet }` (optional)
+  - Integration with Animation Service
+  - Defaults to global `window.anim` if available
 
-## Animation Snippet Format
+**Returns:** `LipSyncServiceAPI`
 
-### Combined JALI Snippets (Recommended)
+### LipSyncServiceAPI Methods
 
-Following the JALI model, snippets combine viseme morphs (indices 0-14) and jaw AU (26) in a single animation:
+#### `startSpeech()`
+Start lip-sync session (transition to speaking state).
 
-```json
+#### `processWord(word: string, wordIndex: number)`
+Process a word and generate lip-sync animation:
+1. Extracts phonemes from word
+2. Maps phonemes to visemes
+3. Builds animation curves with easing
+4. Adds coordinated jaw movement
+5. Schedules to Animation Service
+
+#### `endSpeech()`
+End speech with graceful neutral return (all visemes and jaw to 0).
+
+#### `stop()`
+Stop immediately without neutral return.
+
+#### `updateConfig(config: Partial<LipSyncConfig>)`
+Update configuration dynamically.
+
+#### `getState(): { status, wordCount, isSpeaking }`
+Get current state:
+```typescript
 {
-  "name": "lipsync:hello",
-  "description": "JALI-based lip-sync: 'hello' - Natural style",
-  "snippetCategory": "combined",
-  "snippetPriority": 50,
-  "snippetPlaybackRate": 1.0,
-  "snippetIntensityScale": 1.0,
-  "loop": false,
-  "maxTime": 0.65,
-  "jaliParameters": {
-    "jawActivation": 1.2,
-    "lipsyncIntensity": 1.0,
-    "speechStyle": "natural"
-  },
-  "curves": {
-    "12": [
-      {"time": 0.00, "intensity": 0},
-      {"time": 0.02, "intensity": 100},
-      {"time": 0.07, "intensity": 0}
-    ],
-    "1": [
-      {"time": 0.09, "intensity": 0},
-      {"time": 0.11, "intensity": 100},
-      {"time": 0.19, "intensity": 0}
-    ],
-    "26": [
-      {"time": 0.00, "intensity": 0},
-      {"time": 0.02, "intensity": 35},
-      {"time": 0.11, "intensity": 45},
-      {"time": 0.19, "intensity": 0}
-    ]
-  }
+  status: 'idle' | 'speaking' | 'ending';
+  wordCount: number;
+  isSpeaking: boolean;
 }
 ```
 
-### Curve Structure (JALI Model)
+#### `dispose()`
+Cleanup and release resources.
 
-#### Viseme Curves (indices 0-14)
-Map to ARKit viseme morphs via VISEME_KEYS array:
-- `0` = 'EE', `1` = 'Er', `2` = 'IH', `3` = 'Ah', `4` = 'Oh', `5` = 'W_OO'
-- `6` = 'S_Z', `7` = 'Ch_J', `8` = 'F_V', `9` = 'TH', `10` = 'T_L_D_N'
-- `11` = 'B_M_P', `12` = 'K_G_H_NG', `13` = 'AE', `14` = 'R'
+---
 
-**Standard viseme keyframe pattern**:
-1. **Pre-onset** (time: t): intensity = 0
-2. **Anticipation** (time: t + 10%): intensity = 30 * lipsyncIntensity
-3. **Peak** (time: t + 25%): intensity = 95-100 * lipsyncIntensity
-4. **Release** (time: t + duration): intensity = 0
+## State Machine Details
 
-#### Jaw Curve (AU 26)
-Controls jaw bone rotation (AU 26) coordinated with visemes:
-- **Amplitude** scaled by phonetic jaw opening (0.0-1.0) × jawActivation
-- **Timing** slightly slower than lips (15-30% attack vs 10-25%)
-- **Smooth transitions** between adjacent sounds
+### States
 
-**Jaw opening by phoneme class**:
-- Vowels (wide): 0.6-1.0 × jawActivation (e.g., "ah", "aa")
-- Vowels (mid): 0.4-0.7 × jawActivation (e.g., "eh", "oh")
-- Vowels (close): 0.2-0.4 × jawActivation (e.g., "ee", "oo")
-- Consonants: 0.0-0.2 × jawActivation (most have minimal jaw movement)
-- Silence: 0.0
+- **idle**: No speech active
+- **speaking**: Processing words, animating visemes
+- **ending**: Graceful transition back to neutral
 
-## Performance Considerations
+### Events
 
-- **WebSpeech mode**: Low overhead, real-time viseme triggers
-- **SAPI mode**: Higher upfront cost (curve building), but precise timing
-- **Phoneme extraction**: ~1-2ms per word using built-in dictionary
-- **Timeline execution**: Uses `setTimeout` for scheduling, accurate to ~4-10ms
+| Event | Description | Transitions |
+|-------|-------------|-------------|
+| `START_SPEECH` | Begin speech session | idle → speaking |
+| `PROCESS_WORD` | Process word boundary | (internal) |
+| `END_SPEECH` | Begin graceful end | speaking → ending |
+| `SNIPPET_SCHEDULED` | Track scheduled snippet | (internal) |
+| `SNIPPET_COMPLETED` | Remove completed snippet | (internal) |
+| `UPDATE_CONFIG` | Update configuration | (internal) |
+| `STOP_IMMEDIATE` | Force stop | any → idle |
 
-## Browser Compatibility
+### Context
 
-- **Core functionality**: All modern browsers
-- **WebSpeech API**: Chrome, Edge (best support), Safari (limited)
-- **Audio processing**: Requires Web Audio API support
+```typescript
+{
+  snippets: Array<{
+    word: string;
+    snippetName: string;
+    scheduledName: string | null;
+    completed: boolean;
+  }>;
+  isSpeaking: boolean;
+  wordCount: number;
+  config: {
+    jawActivation: number;
+    lipsyncIntensity: number;
+    speechRate: number;
+    useEmotionalModulation: boolean;
+    useCoarticulation: boolean;
+  };
+}
+```
 
-## License
+---
 
-Part of the LoomLarge project.
+## Scheduler Details
+
+### Responsibilities
+
+1. **Phoneme Extraction**: Text → phonemes using built-in dictionary
+2. **Viseme Mapping**: Phonemes → SAPI visemes (0-21) → ARKit indices (0-14)
+3. **Curve Building**: Generate smooth animation curves with easing
+4. **Jaw Coordination**: Synchronized jaw (AU 26) movements
+5. **Snippet Scheduling**: Package and schedule to Animation Service
+6. **Neutral Return**: Smooth transition back to neutral state
+
+### Animation Curve Generation
+
+For each viseme, the scheduler creates smooth keyframes:
+
+```typescript
+// Natural easing with anticipation
+const anticipation = durationInSec * 0.1;  // Small anticipation
+const attack = durationInSec * 0.25;       // Attack to peak
+const sustain = durationInSec * 0.45;      // Hold at peak
+
+[
+  { time: startTime, intensity: 0 },
+  { time: startTime + anticipation, intensity: 30 },
+  { time: startTime + attack, intensity: 95 },
+  { time: startTime + sustain, intensity: 95 },
+  { time: startTime + duration, intensity: 0 },
+]
+```
+
+### Jaw Coordination
+
+Jaw (AU 26) movements are calculated based on viseme type:
+- Open vowels (AE, AA, AO, AW, AY): High jaw amount (0.7-0.9)
+- Mid vowels (EY, OW, OY): Medium jaw amount (0.4-0.6)
+- Closed vowels (IY, UW, ER): Low jaw amount (0.1-0.3)
+- Consonants: Minimal jaw movement (0.0-0.2)
+
+Jaw animation uses slower, smoother curves than lips.
+
+---
+
+## Integration with Animation Service
+
+The LipSync Agency schedules snippets through the Animation Service with:
+
+- **Category**: `'combined'` (visemes + AU)
+- **Priority**: 50 (higher than emotions, lower than urgent overrides)
+- **Loop**: Always `false`
+- **Playback Rate**: Matches `speechRate` config
+- **Auto-Cleanup**: Snippets automatically removed after completion
+
+**Priority Hierarchy** (higher wins):
+- Neutral return: 60
+- Lip-sync visemes: 50
+- Prosodic gestures: 30
+- Emotional expressions: 1
+
+---
+
+## Phoneme → Viseme Mapping
+
+### SAPI Visemes (22 total, IDs 0-21)
+
+| Viseme ID | Phonemes | Description | ARKit Index |
+|-----------|----------|-------------|-------------|
+| 0 | Silence | Closed mouth | 0 |
+| 1 | AE, AX, AH | Low vowels | 1 |
+| 2 | AA | Open back vowel | 2 |
+| 3 | AO | Mid back vowel | 3 |
+| 4 | EY, EH, UH | Mid front vowels | 4 |
+| 5 | ER | R-colored vowel | 5 |
+| 6 | Y, IY, IH, IX | High front vowels | 6 |
+| 7 | W, UW | High back vowels | 7 |
+| 8 | OW | Mid back rounded | 8 |
+| 9 | AW | Low back rounded | 9 |
+| 10 | OY | Diphthong | 10 |
+| 11 | AY | Diphthong | 11 |
+| 12 | H | Glottal fricative | 12 |
+| 13 | R | Liquid | 13 |
+| 14 | L | Liquid | 14 |
+| 15 | S, Z | Alveolar fricatives | 0 (reused) |
+| 16 | SH, CH, JH, ZH | Post-alveolar fricatives | 1 (reused) |
+| 17 | TH, DH | Dental fricatives | 2 (reused) |
+| 18 | F, V | Labiodental fricatives | 3 (reused) |
+| 19 | D, T, N | Alveolar stops | 4 (reused) |
+| 20 | K, G, NG | Velar stops | 5 (reused) |
+| 21 | P, B, M | Bilabial stops | 6 (reused) |
+
+**Note:** ARKit has only 15 viseme blendshapes, so SAPI visemes 15-21 are mapped to reuse ARKit indices 0-6.
+
+---
+
+## Advanced Features
+
+### Emotional Modulation (Optional)
+
+When `useEmotionalModulation: true`, the system adjusts:
+- Viseme intensity (happy: +20%, sad: -20%)
+- Jaw activation (angry: +30%, contempt: -10%)
+- Duration (excited: -15%, relaxed: +10%)
+
+See [emotionalModulation.ts](./emotionalModulation.ts) for details.
+
+### Coarticulation (Default: Enabled)
+
+When `useCoarticulation: true`, the system applies:
+- **Anticipatory coarticulation**: Next phoneme influences current (40ms window)
+- **Carryover coarticulation**: Previous phoneme residual (30ms window)
+- **Dominance functions**: Linear, sigmoid, and cosine blending curves
+
+See [coarticulationModel.ts](./coarticulationModel.ts) for details.
+
+---
+
+## File Structure
+
+```
+lipsync/
+├── README.md                     ← This file
+├── index.ts                      ← Public API exports
+├── types.ts                      ← Type definitions
+├── lipSyncMachine.ts             ← XState machine (state management)
+├── lipSyncScheduler.ts           ← Scheduler (curve building & scheduling)
+├── lipSyncService.ts             ← Service factory (public API)
+├── PhonemeExtractor.ts           ← Text → phonemes
+├── VisemeMapper.ts               ← Phonemes → SAPI visemes
+├── visemeToARKit.ts              ← SAPI → ARKit mapping
+├── emotionalModulation.ts        ← Emotion-based adjustments (optional)
+├── coarticulationModel.ts        ← Phoneme blending (optional)
+└── performanceOptimizer.ts       ← LRU caching & metrics (optional)
+```
+
+---
+
+## Comparison with Other Agencies
+
+| Feature | Animation Agency | Prosodic Agency | LipSync Agency |
+|---------|-----------------|-----------------|----------------|
+| **State Machine** | ✅ `animationMachine.ts` | ✅ `prosodicMachine.ts` | ✅ `lipSyncMachine.ts` |
+| **Scheduler** | ✅ `animationScheduler.ts` | ✅ `prosodicScheduler.ts` | ✅ `lipSyncScheduler.ts` |
+| **Service Factory** | ✅ `createAnimationService()` | ✅ `createProsodicService()` | ✅ `createLipSyncService()` |
+| **XState-Based** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Multiple Channels** | ✅ Many snippets | ✅ 2 channels (brow/head) | ✅ Per-word snippets |
+| **Word Boundary** | ❌ No | ✅ Pulse timing | ✅ Word processing |
+| **Jaw Coordination** | ❌ No | ❌ No | ✅ AU 26 sync |
+| **Phoneme Extraction** | ❌ No | ❌ No | ✅ Built-in dictionary |
+| **Coarticulation** | ❌ No | ❌ No | ✅ Optional |
+
+---
+
+## Testing
+
+See [testUtilities.ts](./testUtilities.ts) for comprehensive test suite:
+
+```typescript
+import { createLipSyncTestSuite } from './latticework/lipsync/testUtilities';
+
+const testSuite = createLipSyncTestSuite();
+
+// Run all tests
+const results = [
+  ...testSuite.testPhonemeExtraction(),
+  ...testSuite.testVisemeMapping(),
+  ...testSuite.testARKitConversion(),
+  ...testSuite.testCoarticulation(),
+  ...testSuite.testPerformance(),
+];
+
+console.table(results);
+```
+
+---
+
+## Future Enhancements
+
+1. **SAPI Backend Integration**: Direct viseme timeline from Azure TTS
+2. **Multi-Language Support**: Phoneme dictionaries for other languages
+3. **Real-Time Adjustment**: Dynamic intensity based on audio analysis
+4. **Emotion-Aware Defaults**: Auto-detect emotion from text sentiment
+5. **Performance Metrics**: Track latency and cache hit rates
+
+---
+
+## Credits
+
+Based on the Animation Agency architecture pattern established in [src/latticework/animation/](../animation/).
+
+Inspired by JALI research: Edwards, P., Landreth, C., Fiume, E., & Singh, K. (2016). JALI: An animator-centric viseme model for expressive lip synchronization. *ACM Transactions on Graphics*, 35(4).
+
+**See also:**
+- [Animation Agency README](../animation/README.md)
+- [Prosodic Expression Agency README](../prosodic/README.md)
+- [Lip-Sync Complete Guide](../../../docs/LIPSYNC_COMPLETE_GUIDE.md)

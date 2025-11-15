@@ -23,6 +23,7 @@ import TTSSection from './au/TTSSection';
 import EyeHeadTrackingSection from './au/EyeHeadTrackingSection';
 import DockableAccordionItem from './au/DockableAccordionItem';
 import PlaybackControls from './PlaybackControls';
+import EngineSceneSwitcher, { EngineType, SceneType } from './au/EngineSceneSwitcher';
 import { useThreeState } from '../context/threeContext';
 import type { NormalizedSnippet, CurvePoint } from '../latticework/animation/types';
 
@@ -30,6 +31,10 @@ interface SliderDrawerProps {
   isOpen: boolean;
   onToggle: () => void;
   disabled?: boolean;
+  currentEngine?: EngineType;
+  currentScene?: SceneType;
+  onEngineChange?: (engine: EngineType) => void;
+  onSceneChange?: (scene: SceneType) => void;
 }
 
 type Keyframe = { time: number; value: number };
@@ -49,7 +54,15 @@ function curvePointsToKeyframes(points: CurvePoint[]): Keyframe[] {
   }));
 }
 
-export default function SliderDrawer({ isOpen, onToggle, disabled = false }: SliderDrawerProps) {
+export default function SliderDrawer({
+  isOpen,
+  onToggle,
+  disabled = false,
+  currentEngine = 'three',
+  currentScene = 'glb',
+  onEngineChange,
+  onSceneChange
+}: SliderDrawerProps) {
   const { engine, windEngine, anim, addFrameListener } = useThreeState();
 
   // Track AU intensities in local state for UI
@@ -327,6 +340,18 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
                 windEngine={windEngine}
                 disabled={disabled}
               />
+
+              {/* Engine and Scene Switcher */}
+              {onEngineChange && onSceneChange && (
+                <DockableAccordionItem title="Engine & Scene Switcher">
+                  <EngineSceneSwitcher
+                    currentEngine={currentEngine}
+                    currentScene={currentScene}
+                    onEngineChange={onEngineChange}
+                    onSceneChange={onSceneChange}
+                  />
+                </DockableAccordionItem>
+              )}
 
               {/* Viseme Section */}
               <VisemeSection

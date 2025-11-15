@@ -32,6 +32,8 @@ export interface LipSyncConfig {
   speechRate?: number; // 0.1-10.0, default: 1.0
   jawActivation?: number; // 0-2.0, multiplier for jaw movement, default: 1.0
   lipsyncIntensity?: number; // 0-2.0, multiplier for viseme intensity, default: 1.0
+  useEmotionalModulation?: boolean; // Enable emotional modulation, default: false
+  useCoarticulation?: boolean; // Enable coarticulation, default: true
 }
 
 export interface LipSyncState {

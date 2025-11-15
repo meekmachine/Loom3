@@ -1,94 +1,293 @@
 /**
- * LipSync Service
- * Provides lip-sync animation based on TTS engine output
- * Supports both WebSpeech and SAPI engines
+ * LipSync Service (Refactored with XState)
+ * Provides lip-sync animation for speech synthesis
+ * Follows the Animation Agency architecture pattern
  */
 
-import type {
-  LipSyncConfig,
-  LipSyncState,
-  LipSyncCallbacks,
-  VisemeEvent,
-  VisemeSnippet,
-  AnimationCurve,
-  SAPIViseme,
-  VisemeID,
-} from './types';
-import { visemeMapper } from './VisemeMapper';
+import { createActor } from 'xstate';
+import { lipSyncMachine } from './lipSyncMachine';
+import { LipSyncScheduler } from './lipSyncScheduler';
+import type { LipSyncConfig, LipSyncCallbacks, VisemeEvent } from './types';
 import { phonemeExtractor } from './PhonemeExtractor';
+import { visemeMapper } from './VisemeMapper';
 
-export class LipSyncService {
-  private config: Required<LipSyncConfig>;
-  private state: LipSyncState;
-  private callbacks: LipSyncCallbacks;
-  private timelineTimeouts: number[] = [];
-  private currentVisemeTimeout: number | null = null;
+export interface LipSyncServiceAPI {
+  startSpeech: () => void;
+  processWord: (word: string, wordIndex: number) => void;
+  endSpeech: () => void;
+  stop: () => void;
+  updateConfig: (config: Partial<LipSyncConfig>) => void;
+  getState: () => {
+    status: 'idle' | 'speaking' | 'ending';
+    wordCount: number;
+    isSpeaking: boolean;
+  };
+  dispose: () => void;
+}
 
-  constructor(config: LipSyncConfig = {}, callbacks: LipSyncCallbacks = {}) {
-    this.config = {
-      engine: config.engine || 'webSpeech',
-      onsetIntensity: config.onsetIntensity ?? 90,
-      holdMs: config.holdMs ?? 140,
-      speechRate: config.speechRate ?? 1.0,
-      jawActivation: config.jawActivation ?? 1.0,
-      lipsyncIntensity: config.lipsyncIntensity ?? 1.0,
-    };
+export interface LipSyncHostCaps {
+  scheduleSnippet: (snippet: any) => string | null;
+  removeSnippet: (name: string) => void;
+}
 
-    this.callbacks = callbacks;
+/**
+ * Default configuration
+ */
+const DEFAULT_CONFIG: Required<LipSyncConfig> = {
+  jawActivation: 1.0,
+  lipsyncIntensity: 1.0,
+  speechRate: 1.0,
+  useEmotionalModulation: false,
+  useCoarticulation: true,
+  onsetIntensity: 90,
+  holdMs: 140,
+  engine: 'webSpeech',
+};
 
-    this.state = {
-      status: 'idle',
-    };
-  }
+/**
+ * Create a LipSync Service with XState machine and scheduler
+ */
+export function createLipSyncService(
+  config: LipSyncConfig = {},
+  callbacks: LipSyncCallbacks = {},
+  hostCaps?: LipSyncHostCaps
+): LipSyncServiceAPI {
+  const fullConfig: Required<LipSyncConfig> = {
+    ...DEFAULT_CONFIG,
+    ...config,
+  };
 
-  /**
-   * Handle a single viseme event (WebSpeech mode)
-   * Triggers viseme with hold duration
-   */
-  public handleViseme(visemeId: VisemeID, intensity?: number): void {
-    const finalIntensity = intensity ?? this.config.onsetIntensity;
+  // Create XState machine
+  const machine = createActor(lipSyncMachine, {
+    input: {
+      config: {
+        jawActivation: fullConfig.jawActivation,
+        lipsyncIntensity: fullConfig.lipsyncIntensity,
+        speechRate: fullConfig.speechRate,
+        useEmotionalModulation: fullConfig.useEmotionalModulation,
+        useCoarticulation: fullConfig.useCoarticulation,
+      },
+    },
+  }).start();
 
-    // Clear any existing viseme
-    if (this.currentVisemeTimeout) {
-      clearTimeout(this.currentVisemeTimeout);
+  // Host capabilities (animation service integration)
+  const host: LipSyncHostCaps = hostCaps ?? {
+    scheduleSnippet: (snippet: any) => {
+      // Fallback: Try to use global animation service
+      if (typeof window !== 'undefined') {
+        const anim = (window as any).anim;
+        if (anim && typeof anim.schedule === 'function') {
+          return anim.schedule(snippet);
+        }
+      }
+      console.warn('[LipSyncService] No animation service available for scheduling');
+      return null;
+    },
+    removeSnippet: (name: string) => {
+      if (typeof window !== 'undefined') {
+        const anim = (window as any).anim;
+        if (anim && typeof anim.remove === 'function') {
+          anim.remove(name);
+        }
+      }
+    },
+  };
+
+  // Create scheduler
+  const scheduler = new LipSyncScheduler(
+    machine,
+    host,
+    {
+      jawActivation: fullConfig.jawActivation,
+      lipsyncIntensity: fullConfig.lipsyncIntensity,
+      speechRate: fullConfig.speechRate,
+      useEmotionalModulation: fullConfig.useEmotionalModulation,
+      useCoarticulation: fullConfig.useCoarticulation,
+    }
+  );
+
+  // Subscribe to machine state changes for callbacks
+  machine.subscribe((snapshot) => {
+    const state = snapshot.value;
+    const context = snapshot.context;
+
+    // Handle callbacks based on state transitions
+    if (state === 'speaking' && context.isSpeaking) {
+      callbacks.onSpeechStart?.();
     }
 
-    // Start viseme
-    this.setState({ status: 'speaking', currentViseme: visemeId, intensity: finalIntensity });
-    this.callbacks.onVisemeStart?.(visemeId, finalIntensity);
+    if (state === 'idle' && !context.isSpeaking) {
+      callbacks.onSpeechEnd?.();
+    }
+  });
 
-    // Schedule viseme end
-    this.currentVisemeTimeout = window.setTimeout(() => {
-      this.setState({ status: 'idle', currentViseme: undefined, intensity: 0 });
-      this.callbacks.onVisemeEnd?.(visemeId);
-    }, this.config.holdMs);
+  // Public API
+  return {
+    /**
+     * Start speech - transition to speaking state
+     */
+    startSpeech(): void {
+      machine.send({ type: 'START_SPEECH' });
+    },
+
+    /**
+     * Process a word - extract visemes and schedule animation
+     */
+    processWord(word: string, wordIndex: number): void {
+      machine.send({ type: 'PROCESS_WORD', word, wordIndex });
+      scheduler.processWord(word, wordIndex);
+    },
+
+    /**
+     * End speech - gracefully return to neutral
+     */
+    endSpeech(): void {
+      machine.send({ type: 'END_SPEECH' });
+      scheduler.scheduleNeutralReturn();
+    },
+
+    /**
+     * Stop immediately (clear all animations)
+     */
+    stop(): void {
+      machine.send({ type: 'STOP_IMMEDIATE' });
+      scheduler.dispose();
+      callbacks.onSpeechEnd?.();
+    },
+
+    /**
+     * Update configuration dynamically
+     */
+    updateConfig(newConfig: Partial<LipSyncConfig>): void {
+      Object.assign(fullConfig, newConfig);
+
+      // Update machine context
+      machine.send({
+        type: 'UPDATE_CONFIG',
+        config: {
+          jawActivation: fullConfig.jawActivation,
+          lipsyncIntensity: fullConfig.lipsyncIntensity,
+          speechRate: fullConfig.speechRate,
+          useEmotionalModulation: fullConfig.useEmotionalModulation,
+          useCoarticulation: fullConfig.useCoarticulation,
+        } as Partial<import('./lipSyncScheduler').LipSyncSchedulerConfig>,
+      });
+
+      // Update scheduler config
+      const schedulerConfig: Partial<import('./lipSyncScheduler').LipSyncSchedulerConfig> = {
+        jawActivation: fullConfig.jawActivation,
+        lipsyncIntensity: fullConfig.lipsyncIntensity,
+        speechRate: fullConfig.speechRate,
+        useEmotionalModulation: fullConfig.useEmotionalModulation,
+        useCoarticulation: fullConfig.useCoarticulation,
+      };
+      scheduler.updateConfig(schedulerConfig);
+    },
+
+    /**
+     * Get current state
+     */
+    getState(): { status: 'idle' | 'speaking' | 'ending'; wordCount: number; isSpeaking: boolean } {
+      const snapshot = machine.getSnapshot();
+      const context = snapshot?.context;
+      const state = snapshot?.value as string;
+
+      return {
+        status: state === 'speaking'
+          ? 'speaking'
+          : state === 'ending'
+          ? 'ending'
+          : 'idle',
+        wordCount: context?.wordCount ?? 0,
+        isSpeaking: context?.isSpeaking ?? false,
+      };
+    },
+
+    /**
+     * Cleanup and release resources
+     */
+    dispose(): void {
+      scheduler.dispose();
+      try {
+        machine.stop();
+      } catch {
+        // Ignore errors on cleanup
+      }
+    },
+  };
+}
+
+// For backward compatibility - export class-based service
+export class LipSyncService {
+  private api: LipSyncServiceAPI;
+
+  constructor(config: LipSyncConfig = {}, callbacks: LipSyncCallbacks = {}) {
+    this.api = createLipSyncService(config, callbacks);
   }
 
   /**
-   * Handle SAPI viseme timeline
-   * Builds complete animation snippet with all visemes
+   * Start speech
    */
-  public handleSapiVisemes(visemes: SAPIViseme[]): VisemeSnippet {
-    const snippet = this.buildVisemeSnippet(visemes, this.config.onsetIntensity, this.config.speechRate);
-
-    // Execute timeline
-    this.executeVisemeTimeline(visemes);
-
-    return snippet;
+  public startSpeech(): void {
+    this.api.startSpeech();
   }
 
   /**
-   * Process text and extract viseme timeline (WebSpeech fallback)
-   * Uses phoneme extraction + viseme mapping
+   * Process word with viseme animation
+   */
+  public processWord(word: string, wordIndex: number): void {
+    this.api.processWord(word, wordIndex);
+  }
+
+  /**
+   * End speech gracefully
+   */
+  public endSpeech(): void {
+    this.api.endSpeech();
+  }
+
+  /**
+   * Stop immediately
+   */
+  public stop(): void {
+    this.api.stop();
+  }
+
+  /**
+   * Update configuration
+   */
+  public updateConfig(config: Partial<LipSyncConfig>): void {
+    this.api.updateConfig(config);
+  }
+
+  /**
+   * Get current state
+   */
+  public getState(): { status: 'idle' | 'speaking' | 'ending'; wordCount: number; isSpeaking: boolean } {
+    return this.api.getState();
+  }
+
+  /**
+   * Cleanup
+   */
+  public dispose(): void {
+    this.api.dispose();
+  }
+
+  /**
+   * @deprecated Use processWord() instead - this method is for backward compatibility only
+   * Extract viseme timeline from text (old API for compatibility)
    */
   public extractVisemeTimeline(text: string): VisemeEvent[] {
+    console.warn('[LipSync] extractVisemeTimeline is deprecated. Use processWord() instead.');
+
     const phonemes = phonemeExtractor.extractPhonemes(text);
     const visemeEvents: VisemeEvent[] = [];
     let offsetMs = 0;
 
     for (const phoneme of phonemes) {
       const mapping = visemeMapper.getVisemeAndDuration(phoneme);
-      const durationMs = visemeMapper.adjustDuration(mapping.duration, this.config.speechRate);
+      const durationMs = mapping.duration;
 
       visemeEvents.push({
         visemeId: mapping.viseme,
@@ -101,196 +300,4 @@ export class LipSyncService {
 
     return visemeEvents;
   }
-
-  /**
-   * Execute a viseme timeline
-   * Schedules all viseme events with precise timing
-   */
-  private executeVisemeTimeline(visemes: SAPIViseme[]): void {
-    this.clearTimeline();
-    this.callbacks.onSpeechStart?.();
-
-    for (const viseme of visemes) {
-      const offsetMs = viseme.offset ?? viseme.audioPosition ?? 0;
-      const durationMs = viseme.duration;
-
-      // Schedule viseme start
-      const timeout = window.setTimeout(() => {
-        this.setState({
-          status: 'speaking',
-          currentViseme: viseme.number,
-          intensity: this.config.onsetIntensity,
-        });
-        this.callbacks.onVisemeStart?.(viseme.number, this.config.onsetIntensity);
-
-        // Schedule viseme end
-        const endTimeout = window.setTimeout(() => {
-          this.callbacks.onVisemeEnd?.(viseme.number);
-        }, durationMs);
-
-        this.timelineTimeouts.push(endTimeout);
-      }, offsetMs / this.config.speechRate);
-
-      this.timelineTimeouts.push(timeout);
-    }
-
-    // Schedule speech end
-    if (visemes.length > 0) {
-      const lastViseme = visemes[visemes.length - 1];
-      const totalDuration = (lastViseme.offset ?? lastViseme.audioPosition ?? 0) + lastViseme.duration;
-      const endTimeout = window.setTimeout(() => {
-        this.setState({ status: 'idle', currentViseme: undefined, intensity: 0 });
-        this.callbacks.onSpeechEnd?.();
-      }, totalDuration / this.config.speechRate);
-
-      this.timelineTimeouts.push(endTimeout);
-    }
-  }
-
-  /**
-   * Build viseme animation snippet from SAPI viseme array
-   * Creates curves for all 22 viseme IDs (0-21)
-   */
-  private buildVisemeSnippet(
-    visemes: SAPIViseme[],
-    onsetIntensity: number,
-    speechRate: number
-  ): VisemeSnippet {
-    const curves: Record<VisemeID, AnimationCurve[]> = {};
-
-    // Initialize all viseme curves to silence
-    for (let i = 0; i <= 21; i++) {
-      curves[i] = [];
-    }
-
-    // Build curves for each viseme
-    let maxTime = 0;
-
-    for (const viseme of visemes) {
-      const visemeId = viseme.number;
-      const offsetMs = viseme.offset ?? viseme.audioPosition ?? 0;
-      const durationMs = viseme.duration;
-
-      const startTime = offsetMs / 1000 / speechRate;
-      const holdTime = startTime + (durationMs * 0.9) / 1000 / speechRate; // 90% hold
-      const endTime = startTime + durationMs / 1000 / speechRate;
-
-      if (!curves[visemeId]) {
-        curves[visemeId] = [];
-      }
-
-      // Add keyframes: onset -> hold -> release
-      curves[visemeId].push(
-        { time: startTime, intensity: 0 },
-        { time: startTime + 0.01, intensity: onsetIntensity },
-        { time: holdTime, intensity: onsetIntensity },
-        { time: endTime, intensity: 0 }
-      );
-
-      maxTime = Math.max(maxTime, endTime);
-    }
-
-    // Ensure all curves have at least start and end points
-    for (let i = 0; i <= 21; i++) {
-      if (curves[i].length === 0) {
-        curves[i] = [
-          { time: 0, intensity: 0 },
-          { time: maxTime, intensity: 0 },
-        ];
-      }
-    }
-
-    const snippet: VisemeSnippet = {
-      name: `lipsync_${Date.now()}`,
-      curves,
-      maxTime,
-      loop: false,
-      snippetPlaybackRate: 1.0,
-      snippetIntensityScale: 1.0,
-    };
-
-    return snippet;
-  }
-
-  /**
-   * Stop current lip-sync and return to neutral
-   */
-  public stop(): void {
-    this.clearTimeline();
-
-    if (this.currentVisemeTimeout) {
-      clearTimeout(this.currentVisemeTimeout);
-      this.currentVisemeTimeout = null;
-    }
-
-    // Return to neutral
-    if (this.state.currentViseme !== undefined) {
-      this.callbacks.onVisemeEnd?.(this.state.currentViseme);
-    }
-
-    this.setState({ status: 'stopped', currentViseme: undefined, intensity: 0 });
-    this.callbacks.onSpeechEnd?.();
-  }
-
-  /**
-   * Update configuration
-   */
-  public updateConfig(config: Partial<LipSyncConfig>): void {
-    this.config = {
-      ...this.config,
-      ...config,
-    };
-  }
-
-  /**
-   * Get current state
-   */
-  public getState(): LipSyncState {
-    return { ...this.state };
-  }
-
-  /**
-   * Get current config
-   */
-  public getConfig(): Required<LipSyncConfig> {
-    return { ...this.config };
-  }
-
-  /**
-   * Clear all scheduled timeouts
-   */
-  private clearTimeline(): void {
-    for (const timeout of this.timelineTimeouts) {
-      clearTimeout(timeout);
-    }
-    this.timelineTimeouts = [];
-  }
-
-  /**
-   * Update state and notify listeners
-   */
-  private setState(updates: Partial<LipSyncState>): void {
-    this.state = {
-      ...this.state,
-      ...updates,
-    };
-  }
-
-  /**
-   * Cleanup and release resources
-   */
-  public dispose(): void {
-    this.stop();
-    this.clearTimeline();
-  }
-}
-
-/**
- * Factory function to create a LipSync service
- */
-export function createLipSyncService(
-  config?: LipSyncConfig,
-  callbacks?: LipSyncCallbacks
-): LipSyncService {
-  return new LipSyncService(config, callbacks);
 }

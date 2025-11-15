@@ -17,11 +17,10 @@ import { PhoneIcon } from '@chakra-ui/icons';
 import { ModuleSettings } from '../../types/modules';
 import { createTTSService } from '../../latticework/tts';
 import { createTranscriptionService } from '../../latticework/transcription';
-import { createLipSyncService } from '../../latticework/lipsync';
+import { LipSyncService } from '../../latticework/lipsync';
 import { createConversationService } from '../../latticework/conversation';
 import type { TTSService } from '../../latticework/tts/ttsService';
 import type { TranscriptionService } from '../../latticework/transcription/transcriptionService';
-import type { LipSyncService } from '../../latticework/lipsync/lipSyncService';
 import type { ConversationService } from '../../latticework/conversation/conversationService';
 import type { ConversationFlow } from '../../latticework/conversation/types';
 import { getJawAmountForViseme, getARKitVisemeIndex } from '../../latticework/lipsync/visemeToARKit';
@@ -130,11 +129,8 @@ export default function AIChatApp({ animationManager, settings, toast }: AIChatA
   const anthropicRef = useRef<Anthropic | null>(null);
   const userToastRef = useRef<any>(null);
 
-  // Track snippets for cleanup
-  const lipsyncSnippetsRef = useRef<string[]>([]);
-  const prosodicSnippetsRef = useRef<string[]>([]);
+  // Track emotion snippets for cleanup (lip sync and prosodic are now handled by TTS service)
   const emotionSnippetsRef = useRef<string[]>([]);
-  const wordIndexRef = useRef(0);
 
   // Conversation history
   const conversationHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
@@ -172,7 +168,7 @@ export default function AIChatApp({ animationManager, settings, toast }: AIChatA
     }
 
     // Create LipSync service
-    lipSyncRef.current = createLipSyncService(
+    lipSyncRef.current = new LipSyncService(
       {
         engine: 'webSpeech',
         onsetIntensity: 90,
@@ -184,235 +180,32 @@ export default function AIChatApp({ animationManager, settings, toast }: AIChatA
       {}
     );
 
-    // Create TTS service
+    // Create TTS service with English voice
+    // TTS service now coordinates LipSync and Prosodic agencies internally
     ttsRef.current = createTTSService(
       {
         engine: 'webSpeech',
         rate: 1.0,
         pitch: 1.0,
         volume: 1.0,
+
+        // Agency coordination - TTS now manages these
+        lipSyncService: lipSyncRef.current,
+        animationManager: animationManager,
+        prosodicEnabled: true,
       },
       {
         onStart: () => {
           console.log('[AIChat] TTS started');
-          wordIndexRef.current = 0;
-          lipsyncSnippetsRef.current = [];
-          prosodicSnippetsRef.current = [];
-          animationManager.play?.();
+          // TTS service now handles snippet cleanup and animation play
         },
         onEnd: () => {
           console.log('[AIChat] TTS ended');
-
-          // Remove all snippets
-          if (animationManager) {
-            lipsyncSnippetsRef.current.forEach(snippetName => {
-              animationManager.remove?.(snippetName);
-            });
-            lipsyncSnippetsRef.current = [];
-
-            prosodicSnippetsRef.current.forEach(snippetName => {
-              animationManager.remove?.(snippetName);
-            });
-            prosodicSnippetsRef.current = [];
-
-            // Neutral return snippet
-            const neutralSnippet = `neutral_${Date.now()}`;
-            const neutralCurves: Record<string, Array<{ time: number; intensity: number }>> = {};
-
-            for (let i = 0; i < 15; i++) {
-              neutralCurves[i.toString()] = [
-                { time: 0.0, intensity: 0 },
-                { time: 0.3, intensity: 0 },
-              ];
-            }
-
-            neutralCurves['26'] = [
-              { time: 0.0, intensity: 0 },
-              { time: 0.3, intensity: 0 },
-            ];
-
-            animationManager.schedule?.({
-              name: neutralSnippet,
-              curves: neutralCurves,
-              maxTime: 0.3,
-              loop: false,
-              snippetCategory: 'combined',
-              snippetPriority: 60,
-              snippetPlaybackRate: 1.0,
-              snippetIntensityScale: 1.0,
-            });
-
-            setTimeout(() => {
-              animationManager.remove?.(neutralSnippet);
-            }, 350);
-          }
+          // TTS service now handles all cleanup
         },
         onBoundary: ({ word }) => {
-          if (lipSyncRef.current && word && animationManager) {
-            const visemeTimeline = lipSyncRef.current.extractVisemeTimeline(word);
-            const combinedCurves: Record<string, Array<{ time: number; intensity: number }>> = {};
-            const lipsyncIntensity = 1.0;
-            const jawActivation = 1.5;
-
-            visemeTimeline.forEach((visemeEvent) => {
-              const arkitIndex = getARKitVisemeIndex(visemeEvent.visemeId);
-              const visemeId = arkitIndex.toString();
-              const timeInSec = visemeEvent.offsetMs / 1000;
-              const durationInSec = visemeEvent.durationMs / 1000;
-
-              const anticipation = durationInSec * 0.1;
-              const attack = durationInSec * 0.25;
-              const sustain = durationInSec * 0.45;
-
-              if (!combinedCurves[visemeId]) {
-                combinedCurves[visemeId] = [];
-              }
-
-              const lastKeyframe = combinedCurves[visemeId][combinedCurves[visemeId].length - 1];
-              const startIntensity = (lastKeyframe && lastKeyframe.time > timeInSec - 0.02)
-                ? lastKeyframe.intensity
-                : 0;
-
-              combinedCurves[visemeId].push(
-                { time: timeInSec, intensity: startIntensity },
-                { time: timeInSec + anticipation, intensity: 30 * lipsyncIntensity },
-                { time: timeInSec + attack, intensity: 95 * lipsyncIntensity },
-                { time: timeInSec + sustain, intensity: 100 * lipsyncIntensity },
-                { time: timeInSec + durationInSec, intensity: 0 }
-              );
-
-              const jawAmount = getJawAmountForViseme(visemeEvent.visemeId);
-              if (jawAmount > 0.05) {
-                if (!combinedCurves['26']) {
-                  combinedCurves['26'] = [];
-                }
-
-                const jawAnticipation = durationInSec * 0.15;
-                const jawAttack = durationInSec * 0.3;
-                const jawSustain = durationInSec * 0.4;
-
-                const lastJawKeyframe = combinedCurves['26'][combinedCurves['26'].length - 1];
-                const startJawIntensity = (lastJawKeyframe && lastJawKeyframe.time > timeInSec - 0.02)
-                  ? lastJawKeyframe.intensity
-                  : 0;
-
-                combinedCurves['26'].push(
-                  { time: timeInSec, intensity: startJawIntensity },
-                  { time: timeInSec + jawAnticipation, intensity: jawAmount * 20 * jawActivation },
-                  { time: timeInSec + jawAttack, intensity: jawAmount * 90 * jawActivation },
-                  { time: timeInSec + jawSustain, intensity: jawAmount * 100 * jawActivation },
-                  { time: timeInSec + durationInSec, intensity: 0 }
-                );
-              }
-            });
-
-            const lastVisemeEndTime = visemeTimeline.length > 0
-              ? Math.max(...visemeTimeline.map(v => (v.offsetMs + v.durationMs) / 1000))
-              : 0;
-            const maxTime = lastVisemeEndTime + 0.05;
-
-            const snippetName = `lipsync:${word.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-
-            animationManager.schedule?.({
-              name: snippetName,
-              curves: combinedCurves,
-              maxTime,
-              loop: false,
-              snippetCategory: 'combined',
-              snippetPriority: 50,
-              snippetPlaybackRate: 1.0,
-              snippetIntensityScale: 1.0,
-            });
-
-            lipsyncSnippetsRef.current.push(snippetName);
-          }
-
-          // === PROSODIC GESTURES ===
-          // Natural speech gestures (brow raises, head nods)
-          // Eye/head tracking is now handled by conversation service
-          if (animationManager) {
-            const wordMod = wordIndexRef.current % 6;
-
-            // Brow raise emphasis (every 6 words - word 0)
-            if (wordMod === 0) {
-              const gestureTime = Date.now();
-              const gestureName = `prosodic:emphasis_${gestureTime}`;
-              animationManager.schedule?.({
-                name: gestureName,
-                curves: {
-                  '1': [
-                    { time: 0.0, intensity: 0 },
-                    { time: 0.15, intensity: 35 },
-                    { time: 0.45, intensity: 45 },
-                    { time: 0.75, intensity: 0 },
-                  ],
-                  '2': [
-                    { time: 0.0, intensity: 0 },
-                    { time: 0.15, intensity: 25 },
-                    { time: 0.45, intensity: 35 },
-                    { time: 0.75, intensity: 0 },
-                  ],
-                },
-                maxTime: 0.75,
-                loop: false,
-                snippetCategory: 'prosodic',
-                snippetPriority: 30,
-                snippetPlaybackRate: 1.0,
-                snippetIntensityScale: 0.8,
-              });
-              prosodicSnippetsRef.current.push(gestureName);
-            }
-
-            // Head nod (every 6 words - word 3)
-            else if (wordMod === 3) {
-              const gestureTime = Date.now();
-              const gestureName = `prosodic:nod_${gestureTime}`;
-              animationManager.schedule?.({
-                name: gestureName,
-                curves: {
-                  '33': [
-                    { time: 0.0, intensity: 0 },
-                    { time: 0.15, intensity: 40 },
-                    { time: 0.4, intensity: 50 },
-                    { time: 0.75, intensity: 0 },
-                  ],
-                },
-                maxTime: 0.75,
-                loop: false,
-                snippetCategory: 'prosodic',
-                snippetPriority: 30,
-                snippetPlaybackRate: 1.0,
-                snippetIntensityScale: 0.9,
-              });
-              prosodicSnippetsRef.current.push(gestureName);
-            }
-
-            // Contemplative frown (every 6 words - word 5)
-            else if (wordMod === 5) {
-              const gestureTime = Date.now();
-              const gestureName = `prosodic:contemplate_${gestureTime}`;
-              animationManager.schedule?.({
-                name: gestureName,
-                curves: {
-                  '4': [
-                    { time: 0.0, intensity: 0 },
-                    { time: 0.2, intensity: 20 },
-                    { time: 0.6, intensity: 25 },
-                    { time: 0.9, intensity: 0 },
-                  ],
-                },
-                maxTime: 0.9,
-                loop: false,
-                snippetCategory: 'prosodic',
-                snippetPriority: 30,
-                snippetPlaybackRate: 1.0,
-                snippetIntensityScale: 0.7,
-              });
-              prosodicSnippetsRef.current.push(gestureName);
-            }
-          }
-
-          wordIndexRef.current++;
+          // TTS service now handles all lip sync and prosodic coordination
+          console.log(`[AIChat] Word: "${word}" (coordinated by TTS service)`);
         },
         onError: (error) => {
           console.error('[AIChat] TTS error:', error);

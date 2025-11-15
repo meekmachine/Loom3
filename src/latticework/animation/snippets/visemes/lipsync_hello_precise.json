@@ -1,0 +1,54 @@
+{
+  "name": "lipsync:hello_precise",
+  "description": "JALI-based lip-sync: 'hello' - Precise style (news anchor, clear articulation)",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "maxTime": 0.65,
+  "jaliReference": "Edwards et al., SIGGRAPH 2016 - Jaw And Lip Integration model",
+  "jaliParameters": {
+    "jawActivation": 1.7,
+    "lipsyncIntensity": 1.5,
+    "speechStyle": "precise",
+    "description": "Clear, deliberate articulation with pronounced jaw and lip movements"
+  },
+  "curves": {
+    "14": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.01, "intensity": 150},
+      {"time": 0.04, "intensity": 150},
+      {"time": 0.05, "intensity": 0}
+    ],
+    "5": [
+      {"time": 0.07, "intensity": 0},
+      {"time": 0.08, "intensity": 150},
+      {"time": 0.17, "intensity": 150},
+      {"time": 0.18, "intensity": 0}
+    ],
+    "12": [
+      {"time": 0.20, "intensity": 0},
+      {"time": 0.21, "intensity": 150},
+      {"time": 0.27, "intensity": 150},
+      {"time": 0.28, "intensity": 0}
+    ],
+    "4": [
+      {"time": 0.30, "intensity": 0},
+      {"time": 0.31, "intensity": 150},
+      {"time": 0.43, "intensity": 150},
+      {"time": 0.44, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 17},
+      {"time": 0.08, "intensity": 60},
+      {"time": 0.18, "intensity": 68},
+      {"time": 0.21, "intensity": 31},
+      {"time": 0.28, "intensity": 31},
+      {"time": 0.31, "intensity": 94},
+      {"time": 0.44, "intensity": 94},
+      {"time": 0.48, "intensity": 0}
+    ]
+  }
+}

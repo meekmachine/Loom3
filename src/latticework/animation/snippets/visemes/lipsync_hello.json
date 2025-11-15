@@ -1,0 +1,45 @@
+{
+  "name": "lipsync_hello",
+  "description": "Word: 'hello' - /HH EH L OW/",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "curves": {
+    "12": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 100},
+      {"time": 0.07, "intensity": 100},
+      {"time": 0.08, "intensity": 0}
+    ],
+    "4": [
+      {"time": 0.10, "intensity": 0},
+      {"time": 0.12, "intensity": 100},
+      {"time": 0.22, "intensity": 100},
+      {"time": 0.24, "intensity": 0}
+    ],
+    "14": [
+      {"time": 0.26, "intensity": 0},
+      {"time": 0.28, "intensity": 100},
+      {"time": 0.35, "intensity": 100},
+      {"time": 0.37, "intensity": 0}
+    ],
+    "8": [
+      {"time": 0.39, "intensity": 0},
+      {"time": 0.42, "intensity": 100},
+      {"time": 0.54, "intensity": 100},
+      {"time": 0.57, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.08, "intensity": 15},
+      {"time": 0.12, "intensity": 45},
+      {"time": 0.24, "intensity": 45},
+      {"time": 0.28, "intensity": 15},
+      {"time": 0.39, "intensity": 20},
+      {"time": 0.42, "intensity": 70},
+      {"time": 0.57, "intensity": 0}
+    ]
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "name": "lipsync:hello_world",
+  "description": "JALI-based lip-sync: 'hello world' - Natural conversational style",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "maxTime": 0.75,
+  "jaliReference": "Edwards et al., SIGGRAPH 2016 - Jaw And Lip Integration model",
+  "jaliParameters": {
+    "jawActivation": 1.2,
+    "lipsyncIntensity": 1.0,
+    "speechStyle": "natural",
+    "description": "Standard conversational speech combining viseme morphs (0-14) and jaw AU (26)"
+  },
+  "curves": {
+    "14": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.01, "intensity": 100},
+      {"time": 0.04, "intensity": 100},
+      {"time": 0.05, "intensity": 0}
+    ],
+    "5": [
+      {"time": 0.07, "intensity": 0},
+      {"time": 0.09, "intensity": 100},
+      {"time": 0.17, "intensity": 100},
+      {"time": 0.19, "intensity": 0}
+    ],
+    "12": [
+      {"time": 0.21, "intensity": 0},
+      {"time": 0.23, "intensity": 100},
+      {"time": 0.27, "intensity": 100},
+      {"time": 0.29, "intensity": 0}
+    ],
+    "4": [
+      {"time": 0.31, "intensity": 0},
+      {"time": 0.33, "intensity": 100},
+      {"time": 0.43, "intensity": 100},
+      {"time": 0.45, "intensity": 0}
+    ],
+    "1": [
+      {"time": 0.50, "intensity": 0},
+      {"time": 0.52, "intensity": 100},
+      {"time": 0.56, "intensity": 100},
+      {"time": 0.58, "intensity": 0}
+    ],
+    "7": [
+      {"time": 0.60, "intensity": 0},
+      {"time": 0.62, "intensity": 100},
+      {"time": 0.68, "intensity": 100},
+      {"time": 0.70, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.03, "intensity": 10},
+      {"time": 0.09, "intensity": 35},
+      {"time": 0.19, "intensity": 40},
+      {"time": 0.23, "intensity": 18},
+      {"time": 0.29, "intensity": 18},
+      {"time": 0.33, "intensity": 55},
+      {"time": 0.45, "intensity": 55},
+      {"time": 0.50, "intensity": 20},
+      {"time": 0.52, "intensity": 30},
+      {"time": 0.62, "intensity": 35},
+      {"time": 0.70, "intensity": 0}
+    ]
+  }
+}

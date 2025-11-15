@@ -271,6 +271,8 @@ export class EngineThree {
 
     if (compositeInfo) {
       // This AU affects composite bone rotations (jaw, head, eyes)
+      console.log(`[EngineThree] Composite AU ${id} = ${v.toFixed(2)} (axis: ${compositeInfo.axis}, nodes: ${compositeInfo.nodes.join(', ')})`);
+
       // Always apply morphs first
       this.applyBothSides(id, v);
 
@@ -290,13 +292,16 @@ export class EngineThree {
           const negValue = this.auValues[axisConfig.negative] ?? 0;
           const posValue = this.auValues[axisConfig.positive] ?? 0;
           axisValue = posValue - negValue;
+          console.log(`    ${nodeKey}.${compositeInfo.axis}: AU${axisConfig.negative}(${negValue.toFixed(2)}) - AU${axisConfig.positive}(${posValue.toFixed(2)}) = ${axisValue.toFixed(2)}`);
         } else if (axisConfig.aus.length > 1) {
           // Multiple AUs affect same axis (e.g., jaw drop has AU 25, 26, 27)
           // Use the maximum value among all AUs for this axis
           axisValue = Math.max(...axisConfig.aus.map(auId => this.auValues[auId] ?? 0));
+          console.log(`    ${nodeKey}.${compositeInfo.axis}: max of AUs ${axisConfig.aus.join(', ')} = ${axisValue.toFixed(2)}`);
         } else {
           // Single AU controls this axis
           axisValue = v;
+          console.log(`    ${nodeKey}.${compositeInfo.axis}: direct value = ${axisValue.toFixed(2)}`);
         }
 
         // Update the rotation state for this axis
@@ -598,13 +603,13 @@ export class EngineThree {
   }
 
   /** Apply composite head rotation/morphs for both axes + tilt/roll */
-  private applyHeadComposite(yaw: number, pitch: number, roll: number) {
+  public applyHeadComposite(yaw: number, pitch: number, roll: number = 0) {
     // Head turn should use ry (horizontal yaw), rx (vertical pitch), and rz (roll/tilt)
     this.applyCompositeMotion(31, 33, yaw, pitch, 54, undefined, { left: 55, right: 56 }, roll);
   }
 
   /** Apply composite eye rotation/morphs for both axes */
-  private applyEyeComposite(yaw: number, pitch: number) {
+  public applyEyeComposite(yaw: number, pitch: number) {
     // Eyes turn should use rz (horizontal yaw) and rx (vertical pitch)
     this.applyCompositeMotion(61, 63, yaw, pitch, 64);
   }
@@ -681,10 +686,15 @@ export class EngineThree {
   private applyCompositeRotation(nodeKey: 'JAW' | 'HEAD' | 'EYE_L' | 'EYE_R' | 'TONGUE') {
     const bones = this.bones;
     const entry = bones[nodeKey];
-    if (!entry || !this.model) return;
+    if (!entry || !this.model) {
+      if (!entry) console.warn(`[EngineThree] applyCompositeRotation: No bone entry for ${nodeKey}`);
+      return;
+    }
 
     const { obj, basePos, baseQuat } = entry;
     const rotState = this.boneRotations[nodeKey];
+
+    console.log(`[EngineThree] applyCompositeRotation(${nodeKey}) - rotState:`, rotState);
 
     // Find the composite rotation config for this node
     const config = COMPOSITE_ROTATIONS.find(c => c.node === nodeKey);
@@ -720,6 +730,7 @@ export class EngineThree {
       const binding = getBindingForAxis(config.yaw);
       if (binding?.maxDegrees) {
         const radians = deg2rad(binding.maxDegrees) * rotState.yaw * binding.scale;
+        console.log(`  → Yaw: ${rotState.yaw.toFixed(2)} * ${binding.maxDegrees}° * ${binding.scale} = ${(radians * 180 / Math.PI).toFixed(1)}°`);
         const deltaQ = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, radians);
         compositeQ.multiply(deltaQ);
       }
@@ -730,6 +741,7 @@ export class EngineThree {
       if (binding?.maxDegrees) {
         const radians = deg2rad(binding.maxDegrees) * rotState.pitch * binding.scale;
         const axis = config.pitch.axis === 'rx' ? X_AXIS : config.pitch.axis === 'ry' ? Y_AXIS : Z_AXIS;
+        console.log(`  → Pitch (${config.pitch.axis}): ${rotState.pitch.toFixed(2)} * ${binding.maxDegrees}° * ${binding.scale} = ${(radians * 180 / Math.PI).toFixed(1)}°`);
         const deltaQ = new THREE.Quaternion().setFromAxisAngle(axis, radians);
         compositeQ.multiply(deltaQ);
       }
@@ -739,6 +751,7 @@ export class EngineThree {
       const binding = getBindingForAxis(config.roll);
       if (binding?.maxDegrees) {
         const radians = deg2rad(binding.maxDegrees) * rotState.roll * binding.scale;
+        console.log(`  → Roll: ${rotState.roll.toFixed(2)} * ${binding.maxDegrees}° * ${binding.scale} = ${(radians * 180 / Math.PI).toFixed(1)}°`);
         const deltaQ = new THREE.Quaternion().setFromAxisAngle(Z_AXIS, radians);
         compositeQ.multiply(deltaQ);
       }
@@ -749,6 +762,7 @@ export class EngineThree {
     obj.quaternion.copy(compositeQ);
     obj.updateMatrixWorld(false);
     this.model.updateMatrixWorld(true);
+    console.log(`  → Applied composite rotation to ${nodeKey} bone`);
   }
 
   private applyBones = (id: number, v: number) => {

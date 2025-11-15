@@ -24,6 +24,8 @@ interface DockableAccordionItemProps {
  */
 // Track panel count for positioning
 let panelCount = 0;
+// Track highest z-index for bringing panels to front
+let highestZIndex = 100000;
 
 function DockableAccordionItem({
   title,
@@ -32,6 +34,7 @@ function DockableAccordionItem({
 }: DockableAccordionItemProps) {
   const [isDocked, setIsDocked] = useState(true);
   const [isExpanded, setIsExpanded] = useState(isDefaultExpanded);
+  const [zIndex, setZIndex] = useState(() => highestZIndex++);
 
   // Calculate initial position based on panel index
   const [panelIndex] = useState(() => panelCount++);
@@ -45,6 +48,11 @@ function DockableAccordionItem({
 
   const dragRef = useRef<HTMLDivElement>(null);
 
+  // Bring panel to front when clicked
+  const bringToFront = () => {
+    setZIndex(++highestZIndex);
+  };
+
   const handleStop = (_e: any, data: { x: number; y: number }) => {
     setPos({ x: data.x, y: data.y });
   };
@@ -52,14 +60,17 @@ function DockableAccordionItem({
   // If docked => standard Chakra Accordion usage
   if (isDocked) {
     return (
-      <AccordionItem border="none">
+      <AccordionItem border="none" borderBottom="1px solid" borderColor="gray.700">
         <h2>
           <AccordionButton
             onClick={() => setIsExpanded(!isExpanded)}
-            bg="gray.100"
-            _expanded={{ bg: 'gray.200' }}
+            bg="gray.750"
+            color="gray.50"
+            _hover={{ bg: 'gray.700' }}
+            _expanded={{ bg: 'gray.700', borderBottom: '2px solid', borderColor: 'brand.500' }}
+            py={3}
           >
-            <Box flex="1" textAlign="left">
+            <Box flex="1" textAlign="left" fontWeight="semibold">
               {title}
             </Box>
 
@@ -72,25 +83,28 @@ function DockableAccordionItem({
                 display="inline-flex"
                 alignItems="center"
                 justifyContent="center"
-                w="20px"
-                h="20px"
+                w="24px"
+                h="24px"
                 opacity={0}
                 visibility="hidden"
                 cursor="pointer"
+                color="brand.400"
+                transition="all 0.2s"
+                _hover={{ color: 'brand.300', transform: 'scale(1.1)' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsDocked(false);
                 }}
               >
-                <DragHandleIcon boxSize={3} />
+                <DragHandleIcon boxSize={4} />
               </Box>
 
-              <AccordionIcon />
+              <AccordionIcon color="gray.400" />
             </HStack>
           </AccordionButton>
         </h2>
         {isExpanded && (
-          <AccordionPanel pb={4}>
+          <AccordionPanel pb={4} pt={4} bg="gray.800">
             {children}
           </AccordionPanel>
         )}
@@ -106,44 +120,57 @@ function DockableAccordionItem({
         position={pos}
         onStop={handleStop}
         handle=".drag-handle"
+        onStart={bringToFront}
       >
         <Box
           ref={dragRef}
           position="fixed"
           top={0}
           left={0}
-          zIndex={99999}
+          zIndex={zIndex}
           w="340px"
           minW="280px"
           maxW="600px"
           minH="180px"
           maxH="70vh"
-          bg="white"
-          border="1px solid #ccc"
-          borderRadius="md"
-          boxShadow="2xl"
+          bg="gray.800"
+          border="2px solid"
+          borderColor="brand.500"
+          borderRadius="lg"
+          boxShadow="dark-lg"
           sx={{ resize: 'both', overflow: 'auto' }}
+          onClick={bringToFront}
+          transition="border-color 0.2s, box-shadow 0.2s"
+          _hover={{
+            borderColor: 'brand.400',
+            boxShadow: '0 0 20px rgba(23, 174, 230, 0.4)',
+          }}
         >
           <Box
             className="drag-handle"
-            bg="gray.200"
-            p={2}
+            bg="gray.700"
+            p={3}
             display="flex"
             justifyContent="space-between"
             alignItems="center"
-            borderTopRadius="md"
+            borderTopRadius="lg"
             cursor="move"
+            borderBottom="1px solid"
+            borderColor="gray.600"
           >
-            <Text fontWeight="bold">{title}</Text>
+            <Text fontWeight="bold" color="gray.50">{title}</Text>
             <IconButton
               size="xs"
               aria-label="Dock item"
               icon={<CloseIcon />}
               onClick={() => setIsDocked(true)}
+              colorScheme="gray"
+              variant="ghost"
+              _hover={{ bg: 'gray.600' }}
             />
           </Box>
 
-          <Box p={4}>
+          <Box p={4} color="gray.50">
             {children}
           </Box>
         </Box>

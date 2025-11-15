@@ -1,0 +1,54 @@
+{
+  "name": "lipsync:hello_theatrical",
+  "description": "JALI-based lip-sync: 'hello' - Theatrical style (stage performance, exaggerated)",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "maxTime": 0.50,
+  "jaliReference": "Edwards et al., SIGGRAPH 2016 - Jaw And Lip Integration model",
+  "jaliParameters": {
+    "jawActivation": 2.0,
+    "lipsyncIntensity": 1.9,
+    "speechStyle": "theatrical",
+    "description": "Maximum visibility articulation for stage or theatrical performance"
+  },
+  "curves": {
+    "14": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.005, "intensity": 190},
+      {"time": 0.04, "intensity": 190},
+      {"time": 0.045, "intensity": 0}
+    ],
+    "5": [
+      {"time": 0.06, "intensity": 0},
+      {"time": 0.065, "intensity": 190},
+      {"time": 0.17, "intensity": 190},
+      {"time": 0.175, "intensity": 0}
+    ],
+    "12": [
+      {"time": 0.19, "intensity": 0},
+      {"time": 0.195, "intensity": 190},
+      {"time": 0.27, "intensity": 190},
+      {"time": 0.275, "intensity": 0}
+    ],
+    "4": [
+      {"time": 0.29, "intensity": 0},
+      {"time": 0.295, "intensity": 190},
+      {"time": 0.43, "intensity": 190},
+      {"time": 0.435, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.01, "intensity": 34},
+      {"time": 0.065, "intensity": 120},
+      {"time": 0.175, "intensity": 136},
+      {"time": 0.195, "intensity": 62},
+      {"time": 0.275, "intensity": 62},
+      {"time": 0.295, "intensity": 188},
+      {"time": 0.435, "intensity": 188},
+      {"time": 0.48, "intensity": 0}
+    ]
+  }
+}

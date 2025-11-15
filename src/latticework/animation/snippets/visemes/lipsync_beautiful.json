@@ -1,0 +1,79 @@
+{
+  "name": "lipsync_beautiful",
+  "description": "Word: 'beautiful' - /B Y UW T AH F AH L/",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "curves": {
+    "11": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 100},
+      {"time": 0.03, "intensity": 100},
+      {"time": 0.05, "intensity": 0}
+    ],
+    "14": [
+      {"time": 0.07, "intensity": 0},
+      {"time": 0.09, "intensity": 100},
+      {"time": 0.13, "intensity": 100},
+      {"time": 0.15, "intensity": 0}
+    ],
+    "5": [
+      {"time": 0.17, "intensity": 0},
+      {"time": 0.19, "intensity": 100},
+      {"time": 0.29, "intensity": 100},
+      {"time": 0.31, "intensity": 0}
+    ],
+    "10": [
+      {"time": 0.33, "intensity": 0},
+      {"time": 0.35, "intensity": 100},
+      {"time": 0.36, "intensity": 100},
+      {"time": 0.38, "intensity": 0}
+    ],
+    "3": [
+      {"time": 0.40, "intensity": 0},
+      {"time": 0.42, "intensity": 100},
+      {"time": 0.48, "intensity": 100},
+      {"time": 0.50, "intensity": 0},
+      {"time": 0.60, "intensity": 0},
+      {"time": 0.62, "intensity": 100},
+      {"time": 0.68, "intensity": 100},
+      {"time": 0.70, "intensity": 0}
+    ],
+    "8": [
+      {"time": 0.52, "intensity": 0},
+      {"time": 0.54, "intensity": 100},
+      {"time": 0.57, "intensity": 100},
+      {"time": 0.59, "intensity": 0}
+    ],
+    "10": [
+      {"time": 0.72, "intensity": 0},
+      {"time": 0.74, "intensity": 100},
+      {"time": 0.78, "intensity": 100},
+      {"time": 0.80, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 0},
+      {"time": 0.09, "intensity": 30},
+      {"time": 0.13, "intensity": 30},
+      {"time": 0.17, "intensity": 12},
+      {"time": 0.19, "intensity": 40},
+      {"time": 0.29, "intensity": 40},
+      {"time": 0.35, "intensity": 15},
+      {"time": 0.36, "intensity": 15},
+      {"time": 0.40, "intensity": 24},
+      {"time": 0.42, "intensity": 80},
+      {"time": 0.48, "intensity": 80},
+      {"time": 0.54, "intensity": 15},
+      {"time": 0.57, "intensity": 15},
+      {"time": 0.60, "intensity": 24},
+      {"time": 0.62, "intensity": 80},
+      {"time": 0.68, "intensity": 80},
+      {"time": 0.74, "intensity": 15},
+      {"time": 0.78, "intensity": 15},
+      {"time": 0.80, "intensity": 0}
+    ]
+  }
+}

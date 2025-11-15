@@ -352,6 +352,24 @@ Shows:
 - ✅ AU curves appear in their respective AU sections
 - ✅ Curve editor correctly displays playback position for playing snippets
 
+## Animation Testing Infrastructure (November 14, 2025 - Part 4)
+
+### Sample Animation Library
+Created comprehensive library of sample lip sync animations for testing and refinement.
+
+**Files Created**:
+- [docs/sample-lipsync-animations.json](docs/sample-lipsync-animations.json) - 7 sample snippets
+- [src/utils/animationLoader.ts](src/utils/animationLoader.ts) - Loading utilities
+- [src/components/au/AnimationTester.tsx](src/components/au/AnimationTester.tsx) - UI component
+- [docs/ANIMATION_TESTING.md](docs/ANIMATION_TESTING.md) - Testing guide
+
+**Sample Snippets**:
+- Single words: hello, world, speech, amazing, anthropic, beautiful
+- Multi-word phrases: "hello world"
+- Each snippet uses `snippetCategory: "combined"` with all visemes + jaw coordinated
+
+**Usage**: Load & play snippets via Animation Tester UI, visualize curves with curve editor
+
 ## References
 
 - **SAPI Viseme Set**: https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ms720881(v=vs.85)

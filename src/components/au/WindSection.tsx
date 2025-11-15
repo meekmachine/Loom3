@@ -79,7 +79,7 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
     return (
       <DockableAccordionItem title="Wind Physics">
         <Box p={2}>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="gray.400">
             No hair bones detected in model
           </Text>
         </Box>
@@ -91,26 +91,27 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
     <DockableAccordionItem title="Wind Physics">
       <VStack spacing={4} align="stretch" p={2}>
         {/* Info */}
-        <Text fontSize="xs" color="gray.500">
+        <Text fontSize="xs" color="gray.300">
           {windEngine.getHairBoneCount()} hair bones detected
         </Text>
 
         {/* Enable/Disable */}
         <HStack justify="space-between">
-          <Text fontSize="sm" fontWeight="medium">Enable Wind</Text>
+          <Text fontSize="sm" fontWeight="medium" color="gray.50">Enable Wind</Text>
           <Switch
             isChecked={enabled}
             onChange={(e) => handleEnabledChange(e.target.checked)}
             isDisabled={disabled}
             size="sm"
+            colorScheme="brand"
           />
         </HStack>
 
         {/* Wind Strength */}
         <VStack align="stretch" spacing={1}>
           <HStack justify="space-between">
-            <Text fontSize="sm">Strength</Text>
-            <Text fontSize="xs" color="gray.500">{strength.toFixed(2)}</Text>
+            <Text fontSize="sm" color="gray.50">Strength</Text>
+            <Text fontSize="xs" color="gray.300">{strength.toFixed(2)}</Text>
           </HStack>
           <Slider
             value={strength}
@@ -119,9 +120,10 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
             max={1}
             step={0.01}
             isDisabled={disabled || !enabled}
+            colorScheme="brand"
           >
             <SliderTrack>
-              <SliderFilledTrack bg="teal.400" />
+              <SliderFilledTrack />
             </SliderTrack>
             <SliderThumb />
           </Slider>
@@ -130,8 +132,8 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
         {/* Wind Frequency */}
         <VStack align="stretch" spacing={1}>
           <HStack justify="space-between">
-            <Text fontSize="sm">Frequency (Hz)</Text>
-            <Text fontSize="xs" color="gray.500">{frequency.toFixed(2)}</Text>
+            <Text fontSize="sm" color="gray.50">Frequency (Hz)</Text>
+            <Text fontSize="xs" color="gray.300">{frequency.toFixed(2)}</Text>
           </HStack>
           <Slider
             value={frequency}
@@ -140,9 +142,10 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
             max={2}
             step={0.05}
             isDisabled={disabled || !enabled}
+            colorScheme="brand"
           >
             <SliderTrack>
-              <SliderFilledTrack bg="teal.400" />
+              <SliderFilledTrack />
             </SliderTrack>
             <SliderThumb />
           </Slider>
@@ -151,8 +154,8 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
         {/* Turbulence */}
         <VStack align="stretch" spacing={1}>
           <HStack justify="space-between">
-            <Text fontSize="sm">Turbulence</Text>
-            <Text fontSize="xs" color="gray.500">{turbulence.toFixed(2)}</Text>
+            <Text fontSize="sm" color="gray.50">Turbulence</Text>
+            <Text fontSize="xs" color="gray.300">{turbulence.toFixed(2)}</Text>
           </HStack>
           <Slider
             value={turbulence}
@@ -161,9 +164,10 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
             max={1}
             step={0.01}
             isDisabled={disabled || !enabled}
+            colorScheme="brand"
           >
             <SliderTrack>
-              <SliderFilledTrack bg="teal.400" />
+              <SliderFilledTrack />
             </SliderTrack>
             <SliderThumb />
           </Slider>
@@ -172,8 +176,8 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
         {/* Damping */}
         <VStack align="stretch" spacing={1}>
           <HStack justify="space-between">
-            <Text fontSize="sm">Damping</Text>
-            <Text fontSize="xs" color="gray.500">{damping.toFixed(2)}</Text>
+            <Text fontSize="sm" color="gray.50">Damping</Text>
+            <Text fontSize="xs" color="gray.300">{damping.toFixed(2)}</Text>
           </HStack>
           <Slider
             value={damping}
@@ -182,9 +186,10 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
             max={1}
             step={0.01}
             isDisabled={disabled || !enabled}
+            colorScheme="brand"
           >
             <SliderTrack>
-              <SliderFilledTrack bg="teal.400" />
+              <SliderFilledTrack />
             </SliderTrack>
             <SliderThumb />
           </Slider>
@@ -193,8 +198,8 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
         {/* Spring Stiffness */}
         <VStack align="stretch" spacing={1}>
           <HStack justify="space-between">
-            <Text fontSize="sm">Spring Stiffness</Text>
-            <Text fontSize="xs" color="gray.500">{springStiffness.toFixed(1)}</Text>
+            <Text fontSize="sm" color="gray.50">Spring Stiffness</Text>
+            <Text fontSize="xs" color="gray.300">{springStiffness.toFixed(1)}</Text>
           </HStack>
           <Slider
             value={springStiffness}
@@ -203,9 +208,10 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
             max={20}
             step={0.5}
             isDisabled={disabled || !enabled}
+            colorScheme="brand"
           >
             <SliderTrack>
-              <SliderFilledTrack bg="teal.400" />
+              <SliderFilledTrack />
             </SliderTrack>
             <SliderThumb />
           </Slider>
@@ -213,7 +219,7 @@ export default function WindSection({ windEngine, disabled = false }: WindSectio
 
         {/* Direction Presets */}
         <VStack align="stretch" spacing={2}>
-          <Text fontSize="sm" fontWeight="medium">Wind Direction</Text>
+          <Text fontSize="sm" fontWeight="medium" color="gray.50">Wind Direction</Text>
           <HStack wrap="wrap" spacing={2}>
             {directionPresets.map((preset) => (
               <Button

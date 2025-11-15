@@ -296,7 +296,7 @@ export default function PlaybackControls() {
   }
 
   return (
-    <Box p={3} borderWidth="1px" borderRadius="md" bg="gray.50">
+    <Box p={3} borderWidth="1px" borderRadius="md" borderColor="gray.600" bg="gray.800">
       {/* Load animation menus */}
       <HStack spacing={2} mb={4} wrap="wrap">
         <Menu>
@@ -329,7 +329,7 @@ export default function PlaybackControls() {
             as={Button}
             leftIcon={<FaFolderOpen />}
             rightIcon={<ChevronDownIcon />}
-            colorScheme="teal"
+            colorScheme="brand"
             size="sm"
           >
             Speaking
@@ -354,7 +354,7 @@ export default function PlaybackControls() {
             as={Button}
             leftIcon={<FaFolderOpen />}
             rightIcon={<ChevronDownIcon />}
-            colorScheme="cyan"
+            colorScheme="green"
             size="sm"
           >
             Viseme
@@ -405,11 +405,11 @@ export default function PlaybackControls() {
         </HStack>
 
         {/* Engine-level pause (pauses all transitions) */}
-        <HStack spacing={2} p={2} bg="gray.100" borderRadius="md">
-          <Text fontSize="xs" fontWeight="bold">Engine Transitions:</Text>
+        <HStack spacing={2} p={2} bg="gray.700" borderRadius="md">
+          <Text fontSize="xs" fontWeight="bold" color="gray.50">Engine Transitions:</Text>
           <Button
             size="xs"
-            colorScheme={enginePaused ? 'gray' : 'blue'}
+            colorScheme={enginePaused ? 'gray' : 'brand'}
             onClick={() => {
               if (enginePaused) {
                 engine?.resume?.();
@@ -423,7 +423,7 @@ export default function PlaybackControls() {
           >
             {enginePaused ? 'Resume' : 'Pause'}
           </Button>
-          <Text fontSize="xs" color="gray.600">
+          <Text fontSize="xs" color="gray.300">
             ({engine?.getActiveTransitionCount?.() || 0} active)
           </Text>
         </HStack>
@@ -437,6 +437,12 @@ export default function PlaybackControls() {
           placeholder="animation.json"
           value={jsonFilename}
           onChange={(e) => setJsonFilename(e.target.value)}
+          bg="gray.700"
+          borderColor="gray.600"
+          color="gray.50"
+          _placeholder={{ color: 'gray.400' }}
+          _hover={{ borderColor: 'gray.500' }}
+          _focus={{ borderColor: 'brand.500', boxShadow: '0 0 0 1px rgba(23, 174, 230, 0.3)' }}
         />
         <IconButton
           aria-label="Download JSON"
@@ -464,11 +470,11 @@ export default function PlaybackControls() {
       </HStack>
 
       {/* Loaded snippets */}
-      <Text fontWeight="bold" mb={2} fontSize="sm">
+      <Text fontWeight="bold" mb={2} fontSize="sm" color="gray.50">
         Loaded Animations:
       </Text>
       {snippets.length === 0 ? (
-        <Text fontSize="sm" color="gray.500">
+        <Text fontSize="sm" color="gray.400">
           No animations loaded.
         </Text>
       ) : (
@@ -478,13 +484,14 @@ export default function PlaybackControls() {
               <Box
                 key={sn.name || idx}
                 p={2}
-                bg="white"
+                bg="gray.750"
                 borderWidth="1px"
+                borderColor="gray.600"
                 borderRadius="md"
                 boxShadow="sm"
               >
                 <Flex align="center" justify="space-between">
-                  <Text fontWeight="semibold" fontSize="sm" color="blue.600">
+                  <Text fontWeight="semibold" fontSize="sm" color="brand.400">
                     {sn.name || `Snippet ${idx}`}
                     {sn.isPlaying ? ' (Playing)' : ' (Stopped)'}
                   </Text>
@@ -515,20 +522,21 @@ export default function PlaybackControls() {
                 </Flex>
 
                 <HStack spacing={2} mt={2} alignItems="center">
-                  <Text fontSize="xs">Loop:</Text>
+                  <Text fontSize="xs" color="gray.300">Loop:</Text>
                   <Switch
                     size="sm"
+                    colorScheme="brand"
                     isChecked={sn.loop}
                     onChange={() => handleLoopToggle(idx)}
                   />
                 </HStack>
 
-                <Text fontSize="xs" mt={1}>
+                <Text fontSize="xs" mt={1} color="gray.300">
                   Time: {sn.currentTime?.toFixed(2) || 0} / {(sn.duration || 0).toFixed(2)} s
                 </Text>
                 <Slider
                   aria-label="time"
-                  colorScheme="blue"
+                  colorScheme="brand"
                   min={0}
                   max={sn.duration || 1}
                   step={0.01}
@@ -545,7 +553,7 @@ export default function PlaybackControls() {
                   </SliderThumb>
                 </Slider>
 
-                <Text fontSize="xs">
+                <Text fontSize="xs" color="gray.300">
                   Playback Rate: {sn.snippetPlaybackRate?.toFixed(2) || 1}x
                 </Text>
                 <Slider
@@ -564,7 +572,7 @@ export default function PlaybackControls() {
                   <SliderThumb boxSize={3} />
                 </Slider>
 
-                <Text fontSize="xs">
+                <Text fontSize="xs" color="gray.300">
                   Intensity Scale: {sn.snippetIntensityScale?.toFixed(1) || 1}
                 </Text>
                 <Slider

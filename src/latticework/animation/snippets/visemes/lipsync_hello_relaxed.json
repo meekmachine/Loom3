@@ -1,0 +1,54 @@
+{
+  "name": "lipsync:hello_relaxed",
+  "description": "JALI-based lip-sync: 'hello' - Relaxed style (casual conversation)",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "maxTime": 0.65,
+  "jaliReference": "Edwards et al., SIGGRAPH 2016 - Jaw And Lip Integration model",
+  "jaliParameters": {
+    "jawActivation": 0.9,
+    "lipsyncIntensity": 0.9,
+    "speechStyle": "relaxed",
+    "description": "Comfortable, natural speech with relaxed jaw and gentle lip movements"
+  },
+  "curves": {
+    "14": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.01, "intensity": 90},
+      {"time": 0.04, "intensity": 90},
+      {"time": 0.05, "intensity": 0}
+    ],
+    "5": [
+      {"time": 0.07, "intensity": 0},
+      {"time": 0.09, "intensity": 90},
+      {"time": 0.17, "intensity": 90},
+      {"time": 0.19, "intensity": 0}
+    ],
+    "12": [
+      {"time": 0.21, "intensity": 0},
+      {"time": 0.23, "intensity": 90},
+      {"time": 0.27, "intensity": 90},
+      {"time": 0.29, "intensity": 0}
+    ],
+    "4": [
+      {"time": 0.31, "intensity": 0},
+      {"time": 0.33, "intensity": 90},
+      {"time": 0.43, "intensity": 90},
+      {"time": 0.45, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.03, "intensity": 9},
+      {"time": 0.09, "intensity": 32},
+      {"time": 0.19, "intensity": 36},
+      {"time": 0.23, "intensity": 16},
+      {"time": 0.29, "intensity": 16},
+      {"time": 0.33, "intensity": 50},
+      {"time": 0.45, "intensity": 50},
+      {"time": 0.50, "intensity": 0}
+    ]
+  }
+}

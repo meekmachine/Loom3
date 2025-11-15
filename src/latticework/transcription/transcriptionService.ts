@@ -212,9 +212,10 @@ export class TranscriptionService {
   /**
    * Start listening
    */
-  public startListening(): void {
+  public async startListening(): Promise<void> {
     if (!this.recognition) {
       console.error('[TranscriptionService] Recognition not initialized');
+      this.callbacks.onError?.(new Error('Recognition not initialized'));
       return;
     }
 
@@ -223,13 +224,27 @@ export class TranscriptionService {
       return;
     }
 
+    // Request microphone permission first
+    try {
+      console.log('[TranscriptionService] Requesting microphone permission...');
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('[TranscriptionService] Microphone permission granted');
+    } catch (err) {
+      console.error('[TranscriptionService] Microphone permission denied:', err);
+      this.setState({ status: 'error', error: 'Microphone permission denied' });
+      this.callbacks.onError?.(new Error('Microphone permission denied'));
+      return;
+    }
+
     this.isManualStop = false;
 
     try {
+      console.log('[TranscriptionService] Starting speech recognition...');
       this.recognition.start();
     } catch (err) {
       console.error('[TranscriptionService] Failed to start:', err);
       this.setState({ status: 'error', error: 'Failed to start recognition' });
+      this.callbacks.onError?.(err as Error);
     }
   }
 

@@ -58,7 +58,11 @@ export default function VisemeSection({
     const name = prompt(`Enter name for ${visemeKey} (viseme ${visemeIndex}) animation:`, `${visemeKey.toLowerCase()}_${Date.now()}`);
     if (!name) return;
 
+    // Get current viseme intensity from state (0-1 range), convert to 0-100 for animation curves
+    const currentIntensity = (visemeStates[visemeKey] ?? 0) * 100;
+
     // Create a default animation with a simple rise-and-fall curve
+    // Start and end from current slider position
     const snippet = {
       name,
       snippetCategory: 'visemeSnippet',
@@ -68,10 +72,10 @@ export default function VisemeSection({
       loop: false,
       curves: {
         [visemeIndex]: [
-          { time: 0.0, intensity: 0 },
+          { time: 0.0, intensity: currentIntensity },
           { time: 0.3, intensity: 90 },
           { time: 0.7, intensity: 90 },
-          { time: 1.0, intensity: 0 }
+          { time: 1.0, intensity: currentIntensity }
         ]
       }
     };
@@ -130,15 +134,15 @@ export default function VisemeSection({
             // If no curves, show placeholder with add button
             if (snippetCurves.length === 0) {
               return (
-                <Box key={key} w="100%" p={3} bg="gray.50" borderRadius="md" border="1px dashed" borderColor="gray.300">
+                <Box key={key} w="100%" p={3} bg="gray.700" borderRadius="md" border="1px dashed" borderColor="gray.600">
                   <HStack justify="space-between">
-                    <Text fontSize="sm" color="gray.600">
+                    <Text fontSize="sm" color="gray.300">
                       {key} (index {index})
                     </Text>
                     <Button
                       size="xs"
                       leftIcon={<AddIcon />}
-                      colorScheme="teal"
+                      colorScheme="brand"
                       variant="outline"
                       onClick={() => createNewVisemeAnimation(index, key)}
                     >

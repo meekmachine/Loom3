@@ -20,6 +20,7 @@ import AUSection from './au/AUSection';
 import VisemeSection from './au/VisemeSection';
 import WindSection from './au/WindSection';
 import TTSSection from './au/TTSSection';
+import EyeHeadTrackingSection from './au/EyeHeadTrackingSection';
 import DockableAccordionItem from './au/DockableAccordionItem';
 import PlaybackControls from './PlaybackControls';
 import { useThreeState } from '../context/threeContext';
@@ -130,13 +131,19 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
           };
 
           // Check snippet category to determine if it's AU or viseme
-          if (snippet.snippetCategory === 'visemeSnippet') {
+          // Visemes use indices 0-14, AUs use indices >= 15
+          const curveIdNum = parseInt(curveId);
+          const isVisemeIndex = !isNaN(curveIdNum) && curveIdNum >= 0 && curveIdNum <= 14;
+
+          if (snippet.snippetCategory === 'visemeSnippet' || isVisemeIndex) {
             if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
             newVisemeCurves[curveId].push(curveData);
           } else if (/^\d+$/.test(curveId)) {
+            // Numeric IDs >= 15 are AUs
             if (!newAuCurves[curveId]) newAuCurves[curveId] = [];
             newAuCurves[curveId].push(curveData);
           } else {
+            // Non-numeric IDs (like viseme names) go to visemes
             if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
             newVisemeCurves[curveId].push(curveData);
           }
@@ -221,8 +228,12 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
         top="1rem"
         left="1rem"
         zIndex="overlay"
-        colorScheme="teal"
+        colorScheme="brand"
         aria-label="Menu"
+        size="lg"
+        boxShadow="lg"
+        _hover={{ transform: 'scale(1.05)', boxShadow: 'xl' }}
+        transition="all 0.2s"
       />
 
       <Drawer
@@ -231,32 +242,32 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
         onClose={onToggle}
         size="md"
       >
-        <DrawerContent zIndex={9999}>
-          <DrawerCloseButton />
-          <DrawerHeader borderBottomWidth="1px">
+        <DrawerContent zIndex={9999} bg="gray.850">
+          <DrawerCloseButton color="gray.400" _hover={{ color: 'gray.200', bg: 'gray.700' }} />
+          <DrawerHeader borderBottomWidth="1px" borderColor="gray.700" bg="gray.800" color="gray.50" fontWeight="bold">
             Action Units
           </DrawerHeader>
 
           {/* Controls Panel */}
-          <Box p={4} borderBottomWidth="1px">
+          <Box p={4} borderBottomWidth="1px" borderColor="gray.700" bg="gray.800">
             <VStack spacing={3} align="stretch">
-              <Button size="sm" onClick={setFaceToNeutral} colorScheme="red">
+              <Button size="sm" onClick={setFaceToNeutral} colorScheme="red" fontWeight="semibold">
                 Reset to Neutral
               </Button>
 
               <HStack justify="space-between">
-                <Text fontSize="sm">Use curve editor</Text>
+                <Text fontSize="sm" color="gray.300">Use curve editor</Text>
                 <Switch
                   isChecked={useCurveEditor}
                   onChange={(e) => setUseCurveEditor(e.target.checked)}
                   size="sm"
-                  colorScheme="teal"
+                  colorScheme="brand"
                 />
               </HStack>
 
               {useCurveEditor && (
                 <HStack justify="space-between">
-                  <Text fontSize="sm">Show only playing</Text>
+                  <Text fontSize="sm" color="gray.300">Show only playing</Text>
                   <Switch
                     isChecked={showOnlyPlayingSnippets}
                     onChange={(e) => setShowOnlyPlayingSnippets(e.target.checked)}
@@ -267,21 +278,24 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
               )}
 
               <HStack justify="space-between">
-                <Text fontSize="sm">Show unused sliders</Text>
+                <Text fontSize="sm" color="gray.300">Show unused sliders</Text>
                 <Switch
                   isChecked={showUnusedSliders}
                   onChange={(e) => setShowUnusedSliders(e.target.checked)}
                   size="sm"
+                  colorScheme="brand"
                 />
               </HStack>
 
               <HStack justify="space-between">
-                <Text fontSize="sm">Group by</Text>
+                <Text fontSize="sm" color="gray.300">Group by</Text>
                 <Button
                   size="xs"
                   onClick={() => setSegmentationMode(prev =>
                     prev === 'facePart' ? 'faceArea' : 'facePart'
                   )}
+                  colorScheme="brand"
+                  variant="outline"
                 >
                   {segmentationMode === 'facePart' ? 'Face Part' : 'Face Area'}
                 </Button>
@@ -289,7 +303,7 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
             </VStack>
           </Box>
 
-          <DrawerBody>
+          <DrawerBody bg="gray.850">
             <Accordion allowMultiple>
               {/* Text-to-Speech Section */}
               <TTSSection
@@ -301,6 +315,12 @@ export default function SliderDrawer({ isOpen, onToggle, disabled = false }: Sli
               <DockableAccordionItem title="Playback Controls">
                 <PlaybackControls />
               </DockableAccordionItem>
+
+              {/* Eye and Head Tracking Section */}
+              <EyeHeadTrackingSection
+                engine={engine}
+                disabled={disabled}
+              />
 
               {/* Wind Physics Section */}
               <WindSection

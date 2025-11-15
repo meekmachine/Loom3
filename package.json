@@ -13,11 +13,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.69.0",
     "@chakra-ui/icons": "^2.2.4",
     "@chakra-ui/react": "^2.8.2",
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
+    "face-api.js": "^0.22.2",
     "framer-motion": "^11.2.13",
+    "livekit-client": "^2.8.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-draggable": "^4.5.0",

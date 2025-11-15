@@ -2,13 +2,19 @@
 
 Lip-synchronization service for Latticework with phoneme extraction and viseme animation.
 
+Based on the JALI (Jaw And Lip Integration) model from "JALI: An Animator-Centric Viseme Model for Expressive Lip Synchronization" (Edwards et al., SIGGRAPH 2016). JALI demonstrates that visual speech is primarily controlled by two anatomical dimensions: **jaw articulation** and **lip shape**, which can be independently parameterized to create natural, expressive lip-sync.
+
+**Reference**: Edwards, P., Landreth, C., Fiume, E., & Singh, K. (2016). JALI: An animator-centric viseme model for expressive lip synchronization. *ACM Transactions on Graphics*, 35(4). https://doi.org/10.1145/2897824.2925984
+
 ## Features
 
 - **Dual Engine Support**: WebSpeech API and SAPI integration
 - **Phoneme Extraction**: Automatic phoneme detection from text
-- **Viseme Mapping**: 22-viseme Microsoft SAPI system (IDs 0-21)
+- **Viseme Mapping**: 22-viseme Microsoft SAPI system (IDs 0-21) → ARKit 15-viseme set
+- **JALI-Based Control**: Independent jaw activation and lip intensity parameters
+- **Speech Style Variations**: Configurable articulation effort (relaxed, normal, precise, exaggerated)
 - **Timeline Animation**: Precise viseme timing with onset/hold/release curves
-- **Configurable Parameters**: Intensity, hold duration, speech rate control
+- **Configurable Parameters**: Jaw activation, lip intensity, hold duration, speech rate control
 - **No External Dependencies**: Built-in phoneme dictionary and extraction
 
 ## Installation
@@ -73,6 +79,47 @@ lipSync.stop();
 lipSync.dispose();
 ```
 
+## JALI-Based Speech Styles
+
+Following the JALI model, speech can be parameterized along two independent dimensions:
+
+### 1. Jaw Activation (`jawActivation`)
+Controls the degree of jaw opening during speech. Higher values = more pronounced jaw movement.
+
+| Style | Jaw Activation | Description |
+|-------|---------------|-------------|
+| **Mumbled** | 0.3 - 0.6 | Minimal jaw movement, lazy articulation |
+| **Relaxed** | 0.8 - 1.0 | Natural, comfortable speech |
+| **Normal** | 1.0 - 1.5 | Standard conversational speech (default: 1.5) |
+| **Precise** | 1.5 - 1.8 | Clear, deliberate articulation |
+| **Exaggerated** | 1.8 - 2.0 | Theatrical, over-emphasized movement |
+
+### 2. Lip Intensity (`lipsyncIntensity`)
+Controls the strength of lip shaping for visemes. Higher values = more pronounced lip movements.
+
+| Style | Lip Intensity | Description |
+|-------|--------------|-------------|
+| **Subtle** | 0.4 - 0.7 | Understated lip movements |
+| **Natural** | 0.8 - 1.2 | Normal conversational lip activity (default: 1.0) |
+| **Expressive** | 1.3 - 1.7 | Animated, lively lip shaping |
+| **Theatrical** | 1.8 - 2.0 | Stage performance, maximum visibility |
+
+### Example Combinations
+
+```typescript
+// Casual conversation (relaxed jaw, natural lips)
+const casual = { jawActivation: 0.9, lipsyncIntensity: 1.0 };
+
+// News anchor (precise jaw, expressive lips)
+const broadcaster = { jawActivation: 1.6, lipsyncIntensity: 1.4 };
+
+// Tired/mumbling (minimal jaw, subtle lips)
+const tired = { jawActivation: 0.5, lipsyncIntensity: 0.6 };
+
+// Stage performance (exaggerated jaw, theatrical lips)
+const theatrical = { jawActivation: 2.0, lipsyncIntensity: 1.9 };
+```
+
 ## API Reference
 
 ### `createLipSyncService(config?, callbacks?)`
@@ -86,6 +133,8 @@ Creates a new LipSync service instance.
   - `onsetIntensity?: number` - Initial viseme intensity, 0-100 (default: `90`)
   - `holdMs?: number` - Viseme hold duration in ms (default: `140`)
   - `speechRate?: number` - Speech rate multiplier, 0.1-10.0 (default: `1.0`)
+  - `jawActivation?: number` - Jaw movement multiplier, 0-2.0 (default: `1.0`)
+  - `lipsyncIntensity?: number` - Lip shaping multiplier, 0-2.0 (default: `1.0`)
 
 - `callbacks` - Event callbacks
   - `onVisemeStart?: (visemeId: VisemeID, intensity: number) => void` - Viseme onset
@@ -309,33 +358,72 @@ await tts.speak('Hello world!');
 
 ## Animation Snippet Format
 
-SAPI mode generates animation snippets with curves:
+### Combined JALI Snippets (Recommended)
 
-```typescript
+Following the JALI model, snippets combine viseme morphs (indices 0-14) and jaw AU (26) in a single animation:
+
+```json
 {
-  name: 'lipsync_1699999999',
-  curves: {
-    0: [{ time: 0, intensity: 0 }, { time: 5, intensity: 0 }],
-    21: [
-      { time: 0, intensity: 0 },
-      { time: 0.01, intensity: 90 },  // Onset
-      { time: 0.09, intensity: 90 },  // Hold (90%)
-      { time: 0.1, intensity: 0 },    // Release (10%)
-    ],
-    // ... curves for visemes 1-20
+  "name": "lipsync:hello",
+  "description": "JALI-based lip-sync: 'hello' - Natural style",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "maxTime": 0.65,
+  "jaliParameters": {
+    "jawActivation": 1.2,
+    "lipsyncIntensity": 1.0,
+    "speechStyle": "natural"
   },
-  maxTime: 5.0,
-  loop: false,
-  snippetPlaybackRate: 1.0,
-  snippetIntensityScale: 1.0
+  "curves": {
+    "12": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 100},
+      {"time": 0.07, "intensity": 0}
+    ],
+    "1": [
+      {"time": 0.09, "intensity": 0},
+      {"time": 0.11, "intensity": 100},
+      {"time": 0.19, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 35},
+      {"time": 0.11, "intensity": 45},
+      {"time": 0.19, "intensity": 0}
+    ]
+  }
 }
 ```
 
-Each viseme curve has 4 keyframes:
-1. **Pre-onset**: intensity = 0
-2. **Onset**: intensity jumps to `onsetIntensity` (default 90)
-3. **Hold**: sustains at `onsetIntensity` for 90% of duration
-4. **Release**: returns to 0 over final 10%
+### Curve Structure (JALI Model)
+
+#### Viseme Curves (indices 0-14)
+Map to ARKit viseme morphs via VISEME_KEYS array:
+- `0` = 'EE', `1` = 'Er', `2` = 'IH', `3` = 'Ah', `4` = 'Oh', `5` = 'W_OO'
+- `6` = 'S_Z', `7` = 'Ch_J', `8` = 'F_V', `9` = 'TH', `10` = 'T_L_D_N'
+- `11` = 'B_M_P', `12` = 'K_G_H_NG', `13` = 'AE', `14` = 'R'
+
+**Standard viseme keyframe pattern**:
+1. **Pre-onset** (time: t): intensity = 0
+2. **Anticipation** (time: t + 10%): intensity = 30 * lipsyncIntensity
+3. **Peak** (time: t + 25%): intensity = 95-100 * lipsyncIntensity
+4. **Release** (time: t + duration): intensity = 0
+
+#### Jaw Curve (AU 26)
+Controls jaw bone rotation (AU 26) coordinated with visemes:
+- **Amplitude** scaled by phonetic jaw opening (0.0-1.0) × jawActivation
+- **Timing** slightly slower than lips (15-30% attack vs 10-25%)
+- **Smooth transitions** between adjacent sounds
+
+**Jaw opening by phoneme class**:
+- Vowels (wide): 0.6-1.0 × jawActivation (e.g., "ah", "aa")
+- Vowels (mid): 0.4-0.7 × jawActivation (e.g., "eh", "oh")
+- Vowels (close): 0.2-0.4 × jawActivation (e.g., "ee", "oo")
+- Consonants: 0.0-0.2 × jawActivation (most have minimal jaw movement)
+- Silence: 0.0
 
 ## Performance Considerations
 

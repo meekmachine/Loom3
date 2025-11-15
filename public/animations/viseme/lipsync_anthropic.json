@@ -1,0 +1,78 @@
+{
+  "name": "lipsync_anthropic",
+  "description": "Word: 'anthropic' - /AE N TH R AH P IH K/",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "curves": {
+    "1": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 30},
+      {"time": 0.06, "intensity": 95},
+      {"time": 0.12, "intensity": 100},
+      {"time": 0.14, "intensity": 15},
+      {"time": 0.42, "intensity": 0},
+      {"time": 0.44, "intensity": 30},
+      {"time": 0.47, "intensity": 95},
+      {"time": 0.52, "intensity": 100},
+      {"time": 0.54, "intensity": 0}
+    ],
+    "19": [
+      {"time": 0.14, "intensity": 0},
+      {"time": 0.15, "intensity": 30},
+      {"time": 0.17, "intensity": 95},
+      {"time": 0.20, "intensity": 100},
+      {"time": 0.22, "intensity": 0}
+    ],
+    "17": [
+      {"time": 0.22, "intensity": 0},
+      {"time": 0.24, "intensity": 30},
+      {"time": 0.26, "intensity": 95},
+      {"time": 0.29, "intensity": 100},
+      {"time": 0.31, "intensity": 0}
+    ],
+    "13": [
+      {"time": 0.31, "intensity": 0},
+      {"time": 0.33, "intensity": 30},
+      {"time": 0.36, "intensity": 95},
+      {"time": 0.40, "intensity": 100},
+      {"time": 0.42, "intensity": 0}
+    ],
+    "21": [
+      {"time": 0.54, "intensity": 0},
+      {"time": 0.55, "intensity": 30},
+      {"time": 0.57, "intensity": 95},
+      {"time": 0.59, "intensity": 100},
+      {"time": 0.61, "intensity": 0}
+    ],
+    "6": [
+      {"time": 0.61, "intensity": 0},
+      {"time": 0.63, "intensity": 30},
+      {"time": 0.66, "intensity": 95},
+      {"time": 0.71, "intensity": 100},
+      {"time": 0.73, "intensity": 0}
+    ],
+    "20": [
+      {"time": 0.73, "intensity": 0},
+      {"time": 0.75, "intensity": 30},
+      {"time": 0.77, "intensity": 95},
+      {"time": 0.79, "intensity": 100},
+      {"time": 0.81, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.04, "intensity": 25},
+      {"time": 0.12, "intensity": 60},
+      {"time": 0.20, "intensity": 20},
+      {"time": 0.29, "intensity": 25},
+      {"time": 0.40, "intensity": 35},
+      {"time": 0.52, "intensity": 55},
+      {"time": 0.59, "intensity": 0},
+      {"time": 0.66, "intensity": 30},
+      {"time": 0.79, "intensity": 35},
+      {"time": 0.81, "intensity": 0}
+    ]
+  }
+}

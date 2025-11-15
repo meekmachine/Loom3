@@ -72,7 +72,11 @@ export default function AUSection({
     const name = prompt(`Enter name for ${auName} (AU ${auId}) animation:`, `${auName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`);
     if (!name) return;
 
+    // Get current AU intensity from state (0-1 range), convert to 0-100 for animation curves
+    const currentIntensity = (auStates[auId] ?? 0) * 100;
+
     // Create a default animation with a simple rise-and-fall curve
+    // Start from current slider position
     const snippet = {
       name,
       snippetCategory: 'auSnippet',
@@ -82,10 +86,10 @@ export default function AUSection({
       loop: false,
       curves: {
         [auId]: [
-          { time: 0.0, intensity: 0 },
+          { time: 0.0, intensity: currentIntensity },
           { time: 0.5, intensity: 70 },
           { time: 1.5, intensity: 70 },
-          { time: 2.0, intensity: 0 }
+          { time: 2.0, intensity: currentIntensity }
         ]
       }
     };
@@ -117,15 +121,15 @@ export default function AUSection({
             // If no curves, show placeholder with add button
             if (snippetCurves.length === 0) {
               return (
-                <Box key={au.id} w="100%" p={3} bg="gray.50" borderRadius="md" border="1px dashed" borderColor="gray.300">
+                <Box key={au.id} w="100%" p={3} bg="gray.700" borderRadius="md" border="1px dashed" borderColor="gray.600">
                   <HStack justify="space-between">
-                    <Text fontSize="sm" color="gray.600">
+                    <Text fontSize="sm" color="gray.300">
                       {au.name} (AU {au.id})
                     </Text>
                     <Button
                       size="xs"
                       leftIcon={<AddIcon />}
-                      colorScheme="teal"
+                      colorScheme="brand"
                       variant="outline"
                       onClick={() => createNewAnimation(au.id, au.name)}
                     >

@@ -110,7 +110,7 @@ const AUSlider: React.FC<AUSliderProps> = ({
   return (
     <VStack width="100%" align="stretch" spacing={2}>
       <Box>
-        <Text mb="2" display="inline" fontSize="sm">
+        <Text mb="2" display="inline" fontSize="sm" color="gray.50">
           {`${au} - ${name}`}
           {muscularBasis && (
             <Tooltip
@@ -130,6 +130,7 @@ const AUSlider: React.FC<AUSliderProps> = ({
                 as="span"
                 fontSize="xs"
                 ml={2}
+                color="brand.300"
                 onMouseEnter={() => setShowImageTooltip(true)}
                 onMouseLeave={() => setShowImageTooltip(false)}
                 style={{ textDecoration: "underline", cursor: "pointer" }}
@@ -169,10 +170,10 @@ const AUSlider: React.FC<AUSliderProps> = ({
 
       {/* Morph ↔ Bone blend slider (only for mixed AUs with bone bindings) */}
       {isMixedAU && engine && (
-        <Box pt={2} borderTop="1px solid rgba(255,255,255,0.12)">
+        <Box pt={2} borderTop="1px solid" borderColor="gray.600">
           <HStack mb={1} justify="space-between">
-            <Text fontSize="xs" opacity={0.8}>Blend (Morph ↔ Bone)</Text>
-            <Text fontSize="xs" opacity={0.6}>
+            <Text fontSize="xs" color="gray.300">Blend (Morph ↔ Bone)</Text>
+            <Text fontSize="xs" color="gray.400">
               {getMix().toFixed(2)}
             </Text>
           </HStack>

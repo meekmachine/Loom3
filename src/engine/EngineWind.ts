@@ -26,6 +26,8 @@ const HAIR_BONE_PATTERNS = [
   /Hair_\d+/i,  // e.g., Hair_01, Hair_02
   /HairBone/i,
   /Bone.*Hair/i,
+  // Specific hair morph/bone names
+  /Side_part_wavy/i,
 ];
 
 interface HairBone {
@@ -111,6 +113,24 @@ export class EngineWind {
       }
     });
 
+    // Also check for bones in skinned meshes that match hair patterns
+    model.traverse((obj) => {
+      if (obj instanceof THREE.SkinnedMesh) {
+        const isHairMesh = HAIR_BONE_PATTERNS.some(pattern => pattern.test(obj.name));
+        if (isHairMesh && obj.skeleton && obj.skeleton.bones) {
+          console.log(`[EngineWind] Found hair mesh "${obj.name}" with ${obj.skeleton.bones.length} bones in skeleton`);
+          // Only add bones that match hair patterns (not the entire skeleton)
+          for (const bone of obj.skeleton.bones) {
+            const isBoneHair = HAIR_BONE_PATTERNS.some(pattern => pattern.test(bone.name));
+            if (isBoneHair && !hairBones.includes(bone)) {
+              console.log(`[EngineWind]   → Adding hair bone from skeleton: ${bone.name}`);
+              hairBones.push(bone);
+            }
+          }
+        }
+      }
+    });
+
     // Debug: Log all bones found
     console.log(`[EngineWind] Total bones in model: ${allBones.length}`);
     console.log(`[EngineWind] All bone names:`, allBones.map(b => b.name).join(', '));
@@ -155,6 +175,7 @@ export class EngineWind {
         const isHairMesh = HAIR_BONE_PATTERNS.some(pattern => pattern.test(obj.name));
 
         if (isHairMesh) {
+          console.log(`[EngineWind] MATCHED hair mesh: "${obj.name}" (SkinnedMesh: ${obj instanceof THREE.SkinnedMesh})`);
           hairMeshes.push(obj);
         }
       }

@@ -25,5 +25,16 @@ export default defineConfig(({ mode }) => ({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  optimizeDeps: {
+    exclude: [
+      '@tensorflow/tfjs',
+      '@tensorflow/tfjs-core',
+      '@tensorflow/tfjs-converter',
+      '@tensorflow/tfjs-backend-cpu',
+      '@tensorflow/tfjs-backend-webgl',
+      '@tensorflow-models/blazeface',
+      '@tensorflow-models/facemesh',
+    ],
+  },
   server: { open: true },
 }));

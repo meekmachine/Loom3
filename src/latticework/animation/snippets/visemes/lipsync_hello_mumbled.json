@@ -1,0 +1,54 @@
+{
+  "name": "lipsync:hello_mumbled",
+  "description": "JALI-based lip-sync: 'hello' - Mumbled style (tired, lazy articulation)",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "maxTime": 0.65,
+  "jaliReference": "Edwards et al., SIGGRAPH 2016 - Jaw And Lip Integration model",
+  "jaliParameters": {
+    "jawActivation": 0.4,
+    "lipsyncIntensity": 0.5,
+    "speechStyle": "mumbled",
+    "description": "Minimal effort speech with barely open jaw and subtle lip movements"
+  },
+  "curves": {
+    "14": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 50},
+      {"time": 0.06, "intensity": 50},
+      {"time": 0.08, "intensity": 0}
+    ],
+    "5": [
+      {"time": 0.11, "intensity": 0},
+      {"time": 0.13, "intensity": 50},
+      {"time": 0.21, "intensity": 50},
+      {"time": 0.23, "intensity": 0}
+    ],
+    "12": [
+      {"time": 0.26, "intensity": 0},
+      {"time": 0.28, "intensity": 50},
+      {"time": 0.34, "intensity": 50},
+      {"time": 0.36, "intensity": 0}
+    ],
+    "4": [
+      {"time": 0.39, "intensity": 0},
+      {"time": 0.42, "intensity": 50},
+      {"time": 0.54, "intensity": 50},
+      {"time": 0.56, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.04, "intensity": 4},
+      {"time": 0.13, "intensity": 14},
+      {"time": 0.23, "intensity": 14},
+      {"time": 0.28, "intensity": 6},
+      {"time": 0.36, "intensity": 6},
+      {"time": 0.42, "intensity": 20},
+      {"time": 0.56, "intensity": 20},
+      {"time": 0.60, "intensity": 0}
+    ]
+  }
+}

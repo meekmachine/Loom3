@@ -1,0 +1,47 @@
+{
+  "name": "lipsync_speech",
+  "description": "Word: 'speech' - /S P IY CH/",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "curves": {
+    "6": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 100},
+      {"time": 0.05, "intensity": 100},
+      {"time": 0.07, "intensity": 0}
+    ],
+    "11": [
+      {"time": 0.09, "intensity": 0},
+      {"time": 0.11, "intensity": 100},
+      {"time": 0.12, "intensity": 100},
+      {"time": 0.14, "intensity": 0}
+    ],
+    "0": [
+      {"time": 0.16, "intensity": 0},
+      {"time": 0.18, "intensity": 100},
+      {"time": 0.28, "intensity": 100},
+      {"time": 0.30, "intensity": 0}
+    ],
+    "7": [
+      {"time": 0.32, "intensity": 0},
+      {"time": 0.34, "intensity": 100},
+      {"time": 0.37, "intensity": 100},
+      {"time": 0.39, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 10},
+      {"time": 0.05, "intensity": 10},
+      {"time": 0.11, "intensity": 0},
+      {"time": 0.16, "intensity": 6},
+      {"time": 0.18, "intensity": 20},
+      {"time": 0.28, "intensity": 20},
+      {"time": 0.34, "intensity": 20},
+      {"time": 0.37, "intensity": 20},
+      {"time": 0.39, "intensity": 0}
+    ]
+  }
+}

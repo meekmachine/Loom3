@@ -1,15 +1,19 @@
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import CharacterGLBScene from './scenes/CharacterGLBScene';
 import SliderDrawer from './components/SliderDrawer';
+import ModulesMenu from './components/ModulesMenu';
 import Preloader from './components/Preloader';
 import { useThreeState } from './context/threeContext';
+import { ModulesProvider, useModulesContext } from './context/ModulesContext';
+import { createEyeHeadTrackingService } from './latticework/eyeHeadTracking/eyeHeadTrackingService';
 import './styles.css';
 import { Text } from '@chakra-ui/react';
 
 import { AU_TO_MORPHS } from './engine/arkit/shapeDict';
 
-export default function App() {
+function AppContent() {
   const { engine, anim, setWindEngine } = useThreeState();
+  const { setEyeHeadTrackingService } = useModulesContext();
 
   const [auditSummary, setAuditSummary] = useState<{ morphCount:number; totalAUs:number; fullCovered:number; partial:number; zero:number } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -79,6 +83,36 @@ export default function App() {
     setLoadingProgress(progress);
   }, []);
 
+  // Initialize eye/head tracking service on app startup
+  useEffect(() => {
+    if (!engine) {
+      console.log('[App] Waiting for engine...');
+      return;
+    }
+
+    console.log('[App] Creating standalone eye/head tracking service with engine:', engine);
+    const service = createEyeHeadTrackingService({
+      eyeTrackingEnabled: true,
+      headTrackingEnabled: true,
+      headFollowEyes: true,
+      engine: engine,
+    });
+
+    service.start();
+    setEyeHeadTrackingService(service);
+    console.log('[App] ✓ Eye/head tracking service initialized and registered');
+
+    // Test mouse tracking immediately
+    service.setMode('mouse');
+    console.log('[App] ✓ Mouse tracking enabled by default');
+
+    return () => {
+      console.log('[App] Cleaning up eye/head tracking service');
+      service.dispose();
+      setEyeHeadTrackingService(null);
+    };
+  }, [engine, setEyeHeadTrackingService]);
+
   // Camera override memoized
   const cameraOverride = useMemo(() => ({
     position: [1.851, 5.597, 6.365] as [number, number, number],
@@ -110,6 +144,15 @@ export default function App() {
         onToggle={() => setDrawerOpen(!drawerOpen)}
         disabled={isLoading}
       />
+      <ModulesMenu animationManager={anim} />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ModulesProvider>
+      <AppContent />
+    </ModulesProvider>
   );
 }

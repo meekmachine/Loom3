@@ -1,20 +1,20 @@
 /**
- * Prosodic Expression Agency - Public API
- * Prosodic gesture animations for speech (brow raises, head nods)
+ * Prosodic Expression Agency
+ * Exports machine, scheduler, service, and types
  */
 
-// Main service
-export { ProsodicService, createProsodicService } from './prosodicService';
-
-// Types
+export { prosodicMachine } from './prosodicMachine';
+export { ProsodicScheduler } from './prosodicScheduler';
+export { createProsodicService, ProsodicService } from './prosodicService';
+export type { ProsodicServiceAPI } from './prosodicService';
+export type { ProsodicSnippet } from './prosodicMachine';
 export type {
-  AnimationSnippet,
-  AnimationCurve,
-  ProsodicChannel,
   ProsodicConfig,
   ProsodicState,
   ProsodicCallbacks,
+  ProsodicChannel,
+  AnimationSnippet,
+  AnimationCurve,
   FadeStep,
 } from './types';
-
-export { DEFAULT_ANIMATION_KEYS, DEFAULT_PROSODIC_CONFIG } from './types';
+export { DEFAULT_PROSODIC_CONFIG, DEFAULT_ANIMATION_KEYS } from './types';

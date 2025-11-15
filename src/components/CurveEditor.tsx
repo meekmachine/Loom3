@@ -204,8 +204,8 @@ export const CurveEditor: React.FC<CurveEditorProps> = ({
       {label && (
         <HStack mb={1} spacing={2} justify="space-between" w="100%">
           <HStack spacing={2}>
-            <Text fontWeight="bold" fontSize="md">{label}</Text>
-            <Text fontSize="xs" color="gray.400" opacity={0.7}>AU {auId}</Text>
+            <Text fontWeight="bold" fontSize="md" color="gray.50">{label}</Text>
+            <Text fontSize="xs" color="gray.400">AU {auId}</Text>
           </HStack>
           {isPlaying && (
             <HStack spacing={1}>

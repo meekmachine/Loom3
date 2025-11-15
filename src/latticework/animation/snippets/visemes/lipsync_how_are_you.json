@@ -1,0 +1,64 @@
+{
+  "name": "lipsync_how_are_you",
+  "description": "Phrase: 'how are you' - /HH AW  AA R  Y UW/",
+  "snippetCategory": "combined",
+  "snippetPriority": 50,
+  "snippetPlaybackRate": 1.0,
+  "snippetIntensityScale": 1.0,
+  "loop": false,
+  "curves": {
+    "12": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 100},
+      {"time": 0.05, "intensity": 100},
+      {"time": 0.07, "intensity": 0}
+    ],
+    "4": [
+      {"time": 0.09, "intensity": 0},
+      {"time": 0.11, "intensity": 100},
+      {"time": 0.21, "intensity": 100},
+      {"time": 0.23, "intensity": 0}
+    ],
+    "3": [
+      {"time": 0.25, "intensity": 0},
+      {"time": 0.27, "intensity": 100},
+      {"time": 0.33, "intensity": 100},
+      {"time": 0.35, "intensity": 0}
+    ],
+    "14": [
+      {"time": 0.37, "intensity": 0},
+      {"time": 0.39, "intensity": 100},
+      {"time": 0.43, "intensity": 100},
+      {"time": 0.45, "intensity": 0},
+      {"time": 0.47, "intensity": 0},
+      {"time": 0.49, "intensity": 100},
+      {"time": 0.53, "intensity": 100},
+      {"time": 0.55, "intensity": 0}
+    ],
+    "5": [
+      {"time": 0.57, "intensity": 0},
+      {"time": 0.59, "intensity": 100},
+      {"time": 0.69, "intensity": 100},
+      {"time": 0.71, "intensity": 0}
+    ],
+    "26": [
+      {"time": 0.00, "intensity": 0},
+      {"time": 0.02, "intensity": 10.5},
+      {"time": 0.05, "intensity": 35},
+      {"time": 0.09, "intensity": 21},
+      {"time": 0.11, "intensity": 70},
+      {"time": 0.21, "intensity": 70},
+      {"time": 0.25, "intensity": 24},
+      {"time": 0.27, "intensity": 80},
+      {"time": 0.33, "intensity": 80},
+      {"time": 0.39, "intensity": 30},
+      {"time": 0.43, "intensity": 30},
+      {"time": 0.49, "intensity": 30},
+      {"time": 0.53, "intensity": 30},
+      {"time": 0.57, "intensity": 12},
+      {"time": 0.59, "intensity": 40},
+      {"time": 0.69, "intensity": 40},
+      {"time": 0.71, "intensity": 0}
+    ]
+  }
+}

@@ -87,13 +87,13 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
     <VStack width="100%" align="stretch" spacing={2}>
       <Box>
         <HStack justify="space-between" mb={2}>
-          <Text fontSize="xs" opacity={0.7}>
+          <Text fontSize="xs" color="gray.300">
             {negativeAU.name}
           </Text>
-          <Text fontSize="xs" fontWeight="semibold">
+          <Text fontSize="xs" fontWeight="semibold" color="gray.50">
             {value.toFixed(2)}
           </Text>
-          <Text fontSize="xs" opacity={0.7}>
+          <Text fontSize="xs" color="gray.300">
             {positiveAU.name}
           </Text>
         </HStack>
@@ -126,10 +126,10 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
 
       {/* Morph ↔ Bone blend slider */}
       {showBlendSlider && engine && (
-        <Box pt={2} borderTop="1px solid rgba(255,255,255,0.12)">
+        <Box pt={2} borderTop="1px solid" borderColor="gray.600">
           <HStack mb={1} justify="space-between">
-            <Text fontSize="xs" opacity={0.8}>Blend (Morph ↔ Bone)</Text>
-            <Text fontSize="xs" opacity={0.6}>
+            <Text fontSize="xs" color="gray.300">Blend (Morph ↔ Bone)</Text>
+            <Text fontSize="xs" color="gray.400">
               {getMix().toFixed(2)}
             </Text>
           </HStack>

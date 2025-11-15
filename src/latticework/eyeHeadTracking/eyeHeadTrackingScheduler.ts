@@ -49,13 +49,12 @@ export class EyeHeadTrackingScheduler {
   // Current gaze state
   private currentGaze: GazeTarget = { x: 0, y: 0, z: 0 };
 
-  // Scheduled snippet names (for cleanup)
+  // Track scheduled snippet names for removal
   private scheduledNames = {
-    eyeYaw: null as string | null,
-    eyePitch: null as string | null,
-    headYaw: null as string | null,
-    headPitch: null as string | null,
-    headRoll: null as string | null,
+    eyeYaw: 'eyeHeadTracking/eyeYaw',
+    eyePitch: 'eyeHeadTracking/eyePitch',
+    headYaw: 'eyeHeadTracking/headYaw',
+    headPitch: 'eyeHeadTracking/headPitch',
   };
 
   constructor(machine: any, host: EyeHeadHostCaps, transitionConfig?: Partial<GazeTransitionConfig>) {
@@ -65,6 +64,8 @@ export class EyeHeadTrackingScheduler {
       ...DEFAULT_TRANSITION_CONFIG,
       ...transitionConfig,
     };
+
+    console.log('[Scheduler] ✓ Eye/head tracking scheduler initialized');
   }
 
   /**
@@ -78,7 +79,8 @@ export class EyeHeadTrackingScheduler {
   }
 
   /**
-   * Schedule a smooth gaze transition to a new target
+   * Update gaze target by removing old snippets and scheduling new ones
+   * Uses remove/reschedule pattern (like Prosodic agency) to work with animation service's value semantics
    */
   public scheduleGazeTransition(
     target: GazeTarget,
@@ -97,221 +99,134 @@ export class EyeHeadTrackingScheduler {
     } = options || {};
 
     const { x: targetX, y: targetY } = target;
-    const { x: currentX, y: currentY } = this.currentGaze;
+    const { eyeIntensity, headIntensity, eyePriority, headPriority } = this.transitionConfig;
 
-    // Calculate deltas
-    const deltaX = targetX - currentX;
-    const deltaY = targetY - currentY;
-
-    // Skip if no movement needed (threshold: 0.01 = 1% of range)
-    if (Math.abs(deltaX) < 0.01 && Math.abs(deltaY) < 0.01) {
-      return;
-    }
-
-    // Generate easing curve
-    const easing = EASING_FUNCTIONS[this.transitionConfig.easing];
-    const steps = Math.max(5, Math.floor(duration / 50)); // At least 5 steps, ~50ms per step
-
-    // Schedule eye movements
+    // Schedule eye snippets using remove/reschedule pattern
     if (eyeEnabled) {
-      this.scheduleEyeTransition(currentX, currentY, deltaX, deltaY, duration, steps, easing);
+      // Eye yaw: AU 61 (left) / AU 62 (right)
+      // Negative X = look left (AU 61), Positive X = look right (AU 62)
+      const eyeYawValue = targetX * eyeIntensity;
+      const eyeYawCurves: Record<string, Array<{time: number; intensity: number}>> = {};
+
+      if (eyeYawValue < 0) {
+        // Looking left: set AU 61, clear AU 62
+        eyeYawCurves['61'] = [{ time: 0, intensity: Math.abs(eyeYawValue) }];
+        eyeYawCurves['62'] = [{ time: 0, intensity: 0 }];
+      } else {
+        // Looking right: clear AU 61, set AU 62
+        eyeYawCurves['61'] = [{ time: 0, intensity: 0 }];
+        eyeYawCurves['62'] = [{ time: 0, intensity: eyeYawValue }];
+      }
+
+      this.host.removeSnippet(this.scheduledNames.eyeYaw);
+      this.host.scheduleSnippet({
+        name: this.scheduledNames.eyeYaw,
+        curves: eyeYawCurves,
+        loop: false,
+        snippetCategory: 'eyeHeadTracking',
+        snippetPriority: eyePriority,
+        snippetIntensityScale: 1.0,
+      });
+
+      // Eye pitch: AU 64 (down) / AU 63 (up)
+      // Negative Y = look down (AU 64), Positive Y = look up (AU 63)
+      const eyePitchValue = targetY * eyeIntensity;
+      const eyePitchCurves: Record<string, Array<{time: number; intensity: number}>> = {};
+
+      if (eyePitchValue < 0) {
+        // Looking down: set AU 64, clear AU 63
+        eyePitchCurves['64'] = [{ time: 0, intensity: Math.abs(eyePitchValue) }];
+        eyePitchCurves['63'] = [{ time: 0, intensity: 0 }];
+      } else {
+        // Looking up: clear AU 64, set AU 63
+        eyePitchCurves['64'] = [{ time: 0, intensity: 0 }];
+        eyePitchCurves['63'] = [{ time: 0, intensity: eyePitchValue }];
+      }
+
+      this.host.removeSnippet(this.scheduledNames.eyePitch);
+      this.host.scheduleSnippet({
+        name: this.scheduledNames.eyePitch,
+        curves: eyePitchCurves,
+        loop: false,
+        snippetCategory: 'eyeHeadTracking',
+        snippetPriority: eyePriority,
+        snippetIntensityScale: 1.0,
+      });
+
+      console.log(`[Scheduler] ✓ Scheduled eye gaze: yaw=${eyeYawValue.toFixed(2)}, pitch=${eyePitchValue.toFixed(2)}`);
     }
 
-    // Schedule head movements (with optional follow delay)
+    // Schedule head snippets using remove/reschedule pattern
     if (headEnabled && headFollowEyes) {
-      this.scheduleHeadTransition(currentX, currentY, deltaX, deltaY, duration, steps, easing);
+      // Head yaw: AU 31 (left) / AU 32 (right)
+      // Negative X = turn left (AU 31), Positive X = turn right (AU 32)
+      const headYawValue = targetX * headIntensity;
+      const headYawCurves: Record<string, Array<{time: number; intensity: number}>> = {};
+
+      if (headYawValue < 0) {
+        // Turning left: set AU 31, clear AU 32
+        headYawCurves['31'] = [{ time: 0, intensity: Math.abs(headYawValue) }];
+        headYawCurves['32'] = [{ time: 0, intensity: 0 }];
+      } else {
+        // Turning right: clear AU 31, set AU 32
+        headYawCurves['31'] = [{ time: 0, intensity: 0 }];
+        headYawCurves['32'] = [{ time: 0, intensity: headYawValue }];
+      }
+
+      this.host.removeSnippet(this.scheduledNames.headYaw);
+      this.host.scheduleSnippet({
+        name: this.scheduledNames.headYaw,
+        curves: headYawCurves,
+        loop: false,
+        snippetCategory: 'eyeHeadTracking',
+        snippetPriority: headPriority,
+        snippetIntensityScale: 1.0,
+      });
+
+      // Head pitch: AU 54 (down) / AU 33 (up)
+      // Negative Y = tilt down (AU 54), Positive Y = tilt up (AU 33)
+      const headPitchValue = targetY * headIntensity;
+      const headPitchCurves: Record<string, Array<{time: number; intensity: number}>> = {};
+
+      if (headPitchValue < 0) {
+        // Tilting down: set AU 54, clear AU 33
+        headPitchCurves['54'] = [{ time: 0, intensity: Math.abs(headPitchValue) }];
+        headPitchCurves['33'] = [{ time: 0, intensity: 0 }];
+      } else {
+        // Tilting up: clear AU 54, set AU 33
+        headPitchCurves['54'] = [{ time: 0, intensity: 0 }];
+        headPitchCurves['33'] = [{ time: 0, intensity: headPitchValue }];
+      }
+
+      this.host.removeSnippet(this.scheduledNames.headPitch);
+      this.host.scheduleSnippet({
+        name: this.scheduledNames.headPitch,
+        curves: headPitchCurves,
+        loop: false,
+        snippetCategory: 'eyeHeadTracking',
+        snippetPriority: headPriority,
+        snippetIntensityScale: 1.0,
+      });
+
+      console.log(`[Scheduler] ✓ Scheduled head gaze: yaw=${headYawValue.toFixed(2)}, pitch=${headPitchValue.toFixed(2)}`);
     }
 
     // Update current gaze state
     this.currentGaze = { x: targetX, y: targetY, z: target.z || 0 };
   }
 
-  /**
-   * Schedule smooth eye movement curves
-   */
-  private scheduleEyeTransition(
-    startX: number,
-    startY: number,
-    deltaX: number,
-    deltaY: number,
-    duration: number,
-    steps: number,
-    easing: (t: number) => number
-  ): void {
-    const { eyeIntensity, eyePriority } = this.transitionConfig;
-
-    // Remove previous eye snippets
-    if (this.scheduledNames.eyeYaw) {
-      this.host.removeSnippet(this.scheduledNames.eyeYaw);
-    }
-    if (this.scheduledNames.eyePitch) {
-      this.host.removeSnippet(this.scheduledNames.eyePitch);
-    }
-
-    // Generate yaw curve (horizontal eye movement)
-    if (Math.abs(deltaX) > 0.01) {
-      const yawCurves = this.generateContinuumCurves(
-        'AU_61', // Eye yaw continuum (61=left, 62=right)
-        startX * eyeIntensity,
-        deltaX * eyeIntensity,
-        duration,
-        steps,
-        easing
-      );
-
-      const yawSnippet = {
-        name: `eyeHeadTracking/eyeYaw_${Date.now()}`,
-        curves: yawCurves,
-        loop: false,
-        snippetCategory: 'eyeHeadTracking',
-        snippetPriority: eyePriority,
-        duration,
-      };
-
-      this.scheduledNames.eyeYaw = this.host.scheduleSnippet(yawSnippet);
-    }
-
-    // Generate pitch curve (vertical eye movement)
-    if (Math.abs(deltaY) > 0.01) {
-      const pitchCurves = this.generateContinuumCurves(
-        'AU_63', // Eye pitch continuum (63=up, 64=down)
-        startY * eyeIntensity,
-        deltaY * eyeIntensity,
-        duration,
-        steps,
-        easing
-      );
-
-      const pitchSnippet = {
-        name: `eyeHeadTracking/eyePitch_${Date.now()}`,
-        curves: pitchCurves,
-        loop: false,
-        snippetCategory: 'eyeHeadTracking',
-        snippetPriority: eyePriority,
-        duration,
-      };
-
-      this.scheduledNames.eyePitch = this.host.scheduleSnippet(pitchSnippet);
-    }
-  }
 
   /**
-   * Schedule smooth head movement curves
-   */
-  private scheduleHeadTransition(
-    startX: number,
-    startY: number,
-    deltaX: number,
-    deltaY: number,
-    duration: number,
-    steps: number,
-    easing: (t: number) => number
-  ): void {
-    const { headIntensity, headPriority } = this.transitionConfig;
-
-    // Remove previous head snippets
-    if (this.scheduledNames.headYaw) {
-      this.host.removeSnippet(this.scheduledNames.headYaw);
-    }
-    if (this.scheduledNames.headPitch) {
-      this.host.removeSnippet(this.scheduledNames.headPitch);
-    }
-
-    // Generate yaw curve (horizontal head turn)
-    if (Math.abs(deltaX) > 0.01) {
-      const yawCurves = this.generateContinuumCurves(
-        'AU_31', // Head yaw continuum (31=left, 32=right)
-        startX * headIntensity,
-        deltaX * headIntensity,
-        duration,
-        steps,
-        easing
-      );
-
-      const yawSnippet = {
-        name: `eyeHeadTracking/headYaw_${Date.now()}`,
-        curves: yawCurves,
-        loop: false,
-        snippetCategory: 'eyeHeadTracking',
-        snippetPriority: headPriority,
-        duration,
-      };
-
-      this.scheduledNames.headYaw = this.host.scheduleSnippet(yawSnippet);
-    }
-
-    // Generate pitch curve (vertical head tilt)
-    if (Math.abs(deltaY) > 0.01) {
-      const pitchCurves = this.generateContinuumCurves(
-        'AU_33', // Head pitch continuum (33=up, 54=down)
-        startY * headIntensity,
-        deltaY * headIntensity,
-        duration,
-        steps,
-        easing
-      );
-
-      const pitchSnippet = {
-        name: `eyeHeadTracking/headPitch_${Date.now()}`,
-        curves: pitchCurves,
-        loop: false,
-        snippetCategory: 'eyeHeadTracking',
-        snippetPriority: headPriority,
-        duration,
-      };
-
-      this.scheduledNames.headPitch = this.host.scheduleSnippet(pitchSnippet);
-    }
-  }
-
-  /**
-   * Generate smooth animation curves for a continuum AU
-   * Continuum AUs use a single value from -1 to +1 (e.g., AU_61 for eye yaw)
-   */
-  private generateContinuumCurves(
-    auKey: string,
-    startValue: number,
-    delta: number,
-    duration: number,
-    steps: number,
-    easing: (t: number) => number
-  ): Record<string, Array<[number, number]>> {
-    const curve: Array<[number, number]> = [];
-
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps; // 0 to 1
-      const easedT = easing(t);
-      const time = t * duration;
-      const value = startValue + (delta * easedT);
-
-      // Clamp to -1...+1 range for continuum AUs
-      const clampedValue = Math.max(-1, Math.min(1, value));
-
-      curve.push([time, clampedValue]);
-    }
-
-    return { [auKey]: curve };
-  }
-
-  /**
-   * Stop all scheduled eye/head movements
+   * Stop and remove all tracking snippets
    */
   public stop(): void {
-    // Remove all scheduled snippets
-    Object.values(this.scheduledNames).forEach(name => {
-      if (name) {
-        this.host.removeSnippet(name);
-      }
-    });
+    // Remove all tracking snippets
+    this.host.removeSnippet(this.scheduledNames.eyeYaw);
+    this.host.removeSnippet(this.scheduledNames.eyePitch);
+    this.host.removeSnippet(this.scheduledNames.headYaw);
+    this.host.removeSnippet(this.scheduledNames.headPitch);
 
-    // Reset scheduled names
-    this.scheduledNames = {
-      eyeYaw: null,
-      eyePitch: null,
-      headYaw: null,
-      headPitch: null,
-      headRoll: null,
-    };
+    console.log('[Scheduler] Removed all gaze tracking snippets');
   }
 
   /**

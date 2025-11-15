@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF, Environment, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { EngineWind } from '../engine/EngineWind';
+import { useFiberState } from '../context/fiberContext';
 
 type CharacterReady = {
   scene: THREE.Scene;
@@ -42,6 +43,7 @@ function CharacterModel({
   const [isReady, setIsReady] = useState(false);
 
   const { scene: threeScene } = useThree();
+  const { engine, anim } = useFiberState();
 
   // Load the GLB file using drei's useGLTF hook
   const { scene: loadedScene } = useGLTF(src, true, true, (loader) => {
@@ -107,7 +109,7 @@ function CharacterModel({
     setIsReady(true);
   }, [loadedScene, threeScene, onReady, isReady, onProgress]);
 
-  // Auto-rotate animation
+  // Auto-rotate animation and engine updates
   useFrame((state, delta) => {
     if (autoRotate && groupRef.current) {
       groupRef.current.rotation.y += delta * 0.3;
@@ -116,6 +118,20 @@ function CharacterModel({
     // Update wind engine
     if (windEngineRef.current) {
       windEngineRef.current.update(delta);
+    }
+
+    // Update EngineFour (transitions)
+    if (engine) {
+      engine.update(delta);
+    }
+
+    // Update animation service (snippets)
+    if (anim) {
+      try {
+        anim.step?.(delta);
+      } catch (e) {
+        console.error('[CharacterFiberScene] Animation step error:', e);
+      }
     }
   });
 

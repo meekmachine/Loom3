@@ -315,6 +315,29 @@ export class TranscriptionService {
   }
 
   /**
+   * Notify that agent is speaking (for echo filtering)
+   */
+  public notifyAgentSpeech(text: string): void {
+    // Store agent script for filtering
+    this.agentWordSet.clear();
+    const words = this.tokenizer(text);
+    words.forEach((word) => this.agentWordSet.add(word));
+    this.agentScriptStr = text.toLowerCase();
+    this.agentSpeakingActive = true;
+  }
+
+  /**
+   * Notify that agent has finished speaking
+   */
+  public notifyAgentSpeechEnd(): void {
+    // Clear agent speech filtering
+    this.agentSpeakingActive = false;
+    this.agentWordSet.clear();
+    this.agentScriptStr = '';
+    this.currentAgentWord = '';
+  }
+
+  /**
    * Subscribe to boundary events
    */
   public onBoundary(listener: (event: BoundaryEvent) => void): () => void {

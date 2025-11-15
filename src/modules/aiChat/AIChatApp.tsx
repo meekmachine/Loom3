@@ -131,6 +131,8 @@ export default function AIChatApp({ animationManager, settings, toast }: AIChatA
 
   // Track emotion snippets for cleanup (lip sync and prosodic are now handled by TTS service)
   const emotionSnippetsRef = useRef<string[]>([]);
+  const lipsyncSnippetsRef = useRef<string[]>([]);
+  const prosodicSnippetsRef = useRef<string[]>([]);
 
   // Conversation history
   const conversationHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);

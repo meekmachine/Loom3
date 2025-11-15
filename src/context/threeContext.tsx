@@ -23,11 +23,11 @@ const ThreeCtx = createContext<ThreeContextValue | null>(null);
 
 export const ThreeProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   // Singletons per provider instance
-  const engineRef = useRef<EngineThree>();
-  const clockRef = useRef<THREE.Clock>();
+  const engineRef = useRef<EngineThree | undefined>(undefined);
+  const clockRef = useRef<THREE.Clock | undefined>(undefined);
   const listenersRef = useRef(new Set<(dt: number) => void>());
   const rafIdRef = useRef<number | null>(null);
-  const animRef = useRef<ReturnType<typeof createAnimationService>>();
+  const animRef = useRef<ReturnType<typeof createAnimationService> | undefined>(undefined);
   const [animReady, setAnimReady] = useState(false);
   const [windEngine, setWindEngine] = useState<EngineWind | null>(null);
 

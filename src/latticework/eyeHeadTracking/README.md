@@ -155,9 +155,8 @@ import { createEyeHeadTrackingService } from '@/latticework/eyeHeadTracking';
 // Create services
 const prosodic = createProsodicService();
 const eyeHeadTracking = createEyeHeadTrackingService({
-  eyeTrackingEnabled: true,
-  headTrackingEnabled: true,
   headFollowEyes: true,
+  mouthSyncEnabled: true,
 });
 
 const tts = createTTSService(config, {
@@ -213,6 +212,10 @@ interface EyeHeadTrackingConfig {
   headSpeed?: number;              // 0.1-1.0
   headPriority?: number;
 
+  // Coordination
+  mouthSyncEnabled?: boolean;
+  lookAtSpeaker?: boolean;
+
   // Idle behavior
   idleVariation?: boolean;
   idleVariationInterval?: number;  // milliseconds
@@ -253,63 +256,11 @@ interface EyeHeadTrackingCallbacks {
 - Submachines run independently for optimal performance
 - State changes are batched to minimize re-renders
 
-## Webcam Face Tracking
-
-The Eye and Head Tracking Agency includes optional webcam-based face tracking that allows the character to follow the user's face position in real-time.
-
-### Implementation Details
-
-Face tracking uses **TensorFlow.js BlazeFace** model loaded from CDN to avoid Vite bundling issues:
-
-```html
-<!-- In index.html -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.js"></script>
-```
-
-The webcam tracking hook (`useWebcamEyeTracking.ts`) uses the global `blazeface` object:
-
-```typescript
-// Use global blazeface from CDN
-declare const blazeface: any;
-
-const model = await blazeface.load();
-const predictions = await model.estimateFaces(videoElement, false);
-```
-
-### Why CDN Instead of npm?
-
-TensorFlow.js 4.x has known bundling issues with Vite due to internal module paths that don't exist:
-- `@tensorflow/tfjs-core/dist/ops/ops_for_converter` - This path is referenced but doesn't exist in the package
-- Multiple export mismatches between different TensorFlow.js subpackages
-- Over 100+ bundling errors when trying to use npm packages directly
-
-**Solution**: Load TensorFlow.js and BlazeFace from CDN in the HTML, bypassing Vite's bundler entirely.
-
-### Webcam Tracking Features
-
-- **6 facial keypoints** from BlazeFace: left eye, right eye, nose, mouth, left ear, right ear
-- **Real-time gaze calculation** by averaging eye positions
-- **Smooth tracking** with exponential moving average (0.7 smoothing factor)
-- **Visual feedback** with canvas overlay showing detected keypoints
-- **Mirror mode** video is horizontally flipped for natural user experience
-- **Fallback support** for browsers without webcam access
-
-### UI Integration
-
-The `EyeHeadTrackingSection` component provides three tracking modes:
-
-1. **Manual Control** - Sliders for direct gaze control
-2. **Track Mouse** - Character follows cursor position
-3. **Track Webcam** - Character follows user's face (requires camera permission)
-
-All modes integrate seamlessly with the EyeHeadTrackingService for consistent behavior.
-
 ## Future Enhancements
 
+- Face/object tracking integration
 - Vergence (eye convergence for depth)
 - Microsaccades during fixation
 - Vestibulo-ocular reflex (VOR) simulation
 - Attention-based gaze selection
 - Emotional modulation of gaze patterns
-- Alternative face tracking models (MediaPipe FaceMesh for more detail)

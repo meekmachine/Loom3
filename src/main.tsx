@@ -142,7 +142,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <ChakraProvider theme={theme}>
       {/*
         Initialize global contexts here.
-        For now, ThreeProvider can start with an empty object and be filled inside App.
+        ThreeProvider wraps the app and provides engine, anim, and other services.
       */}
       <ThreeProvider >
         <App />

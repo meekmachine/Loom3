@@ -3,7 +3,10 @@
  * Loads and tests sample lip sync animation snippets
  */
 
-import type { AnimationServiceAPI } from '../latticework/animation/types';
+import type { createAnimationService } from '../latticework/animation/animationService';
+
+// Type for the animation service API
+type AnimationServiceAPI = ReturnType<typeof createAnimationService>;
 
 export interface AnimationSnippet {
   name: string;

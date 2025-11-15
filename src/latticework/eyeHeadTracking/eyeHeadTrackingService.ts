@@ -1,15 +1,12 @@
 /**
  * Eye and Head Tracking Service
- * Coordinates eye and head movements using smooth animation curves
- * Follows Society of Mind pattern: Service → Machine → Scheduler → Animation Service
- *
- * IMPORTANT: Does NOT manipulate AUs directly - schedules smooth curves through animation service
+ * Coordinates eye and head movements that follow mouth animations
+ * Integrates two submachines (eye and head) with the animation scheduler
  */
 
 import { createActor } from 'xstate';
 import { eyeTrackingMachine } from './eyeTrackingMachine';
 import { headTrackingMachine } from './headTrackingMachine';
-import { EyeHeadTrackingScheduler } from './eyeHeadTrackingScheduler';
 import type {
   EyeHeadTrackingConfig,
   EyeHeadTrackingState,
@@ -27,9 +24,6 @@ export class EyeHeadTrackingService {
   // Submachine actors
   private eyeMachine: any;
   private headMachine: any;
-
-  // Scheduler - handles smooth curve generation and scheduling
-  private scheduler: EyeHeadTrackingScheduler | null = null;
 
   // Animation snippets
   private eyeSnippets: Map<string, AnimationSnippet> = new Map();
@@ -51,7 +45,7 @@ export class EyeHeadTrackingService {
     this.config = {
       ...DEFAULT_EYE_HEAD_CONFIG,
       ...config,
-    } as Required<EyeHeadTrackingConfig>;
+    };
 
     this.callbacks = callbacks;
 
@@ -92,30 +86,6 @@ export class EyeHeadTrackingService {
     this.headMachine.subscribe((snapshot: any) => {
       this.onHeadStateChange(snapshot);
     });
-
-    // Initialize scheduler (if animation manager provided)
-    if (this.config.animationManager) {
-      const host = {
-        scheduleSnippet: (snippet: any) => {
-          return this.config.animationManager.schedule(snippet.name, snippet);
-        },
-        removeSnippet: (name: string) => {
-          this.config.animationManager.removeSnippet(name);
-        },
-      };
-
-      this.scheduler = new EyeHeadTrackingScheduler(this.eyeMachine, host, {
-        eyeIntensity: this.config.eyeIntensity,
-        headIntensity: this.config.headIntensity,
-        eyePriority: this.config.eyePriority,
-        headPriority: this.config.headPriority,
-      });
-
-      console.log('[EyeHeadTracking] ✓ Scheduler initialized with animation manager');
-    } else {
-      console.warn('[EyeHeadTracking] No animation manager provided - scheduler not initialized');
-      console.warn('[EyeHeadTracking] Gaze tracking will not work without animation manager');
-    }
   }
 
   /**
@@ -259,28 +229,6 @@ export class EyeHeadTrackingService {
         },
       });
     }
-
-    // Update scheduler configuration
-    if (this.scheduler) {
-      const schedulerConfig: any = {};
-
-      if (config.eyeIntensity !== undefined) {
-        schedulerConfig.eyeIntensity = config.eyeIntensity;
-      }
-      if (config.headIntensity !== undefined) {
-        schedulerConfig.headIntensity = config.headIntensity;
-      }
-      if (config.eyePriority !== undefined) {
-        schedulerConfig.eyePriority = config.eyePriority;
-      }
-      if (config.headPriority !== undefined) {
-        schedulerConfig.headPriority = config.headPriority;
-      }
-
-      if (Object.keys(schedulerConfig).length > 0) {
-        this.scheduler.updateConfig(schedulerConfig);
-      }
-    }
   }
 
   /**
@@ -394,27 +342,36 @@ export class EyeHeadTrackingService {
   }
 
   /**
-   * Apply gaze to character by scheduling smooth animation curves
-   * Uses scheduler to create eased transitions instead of direct AU manipulation
+   * Apply gaze to character using animationManager
+   * Converts normalized gaze coordinates to AU values
    */
   private applyGazeToCharacter(target: GazeTarget): void {
-    if (!this.scheduler) {
-      console.warn('[EyeHeadTracking] No scheduler available - cannot apply gaze');
+    if (!this.config.engine) {
+      console.warn('[EyeHeadTracking] No engine available - cannot apply gaze');
       return;
     }
 
     const { x, y } = target;
+    const eyeIntensity = this.config.eyeIntensity ?? 1.0;
+    const headIntensity = this.config.headIntensity ?? 0.5;
 
-    console.log(`[EyeHeadTracking] Scheduling smooth gaze transition to (${x.toFixed(2)}, ${y.toFixed(2)})`);
+    console.log(`[EyeHeadTracking] Applying gaze (${x.toFixed(2)}, ${y.toFixed(2)}) - Eye: ${eyeIntensity}, Head: ${headIntensity}`);
 
-    // Schedule smooth transition through scheduler
-    // Scheduler will generate eased curves and schedule them through animation service
-    this.scheduler.scheduleGazeTransition(target, {
-      eyeEnabled: this.config.eyeTrackingEnabled,
-      headEnabled: this.config.headTrackingEnabled,
-      headFollowEyes: this.config.headFollowEyes,
-      duration: this.trackingMode === 'mouse' ? 150 : 200, // Faster for mouse tracking
-    });
+    // Apply eye gaze using composite method (continuum values -1 to +1)
+    if (this.config.eyeTrackingEnabled) {
+      const eyeYaw = x * eyeIntensity;   // -1 (left) to +1 (right)
+      const eyePitch = y * eyeIntensity; // -1 (down) to +1 (up)
+      console.log(`  → Eyes: yaw=${eyeYaw.toFixed(2)}, pitch=${eyePitch.toFixed(2)}`);
+      this.config.engine.applyEyeComposite(eyeYaw, eyePitch);
+    }
+
+    // Apply head movement using composite method (continuum values -1 to +1)
+    if (this.config.headTrackingEnabled && this.config.headFollowEyes) {
+      const headYaw = x * headIntensity;   // Same as eyes: -1 (left) to +1 (right)
+      const headPitch = y * headIntensity; // -1 (down) to +1 (up)
+      console.log(`  → Head: yaw=${headYaw.toFixed(2)}, pitch=${headPitch.toFixed(2)}, roll=0`);
+      this.config.engine.applyHeadComposite(headYaw, headPitch, 0);
+    }
   }
 
   /**
@@ -512,12 +469,6 @@ export class EyeHeadTrackingService {
     this.stop();
     this.clearTimers();
     this.cleanupMode();
-
-    // Dispose scheduler
-    if (this.scheduler) {
-      this.scheduler.dispose();
-      this.scheduler = null;
-    }
 
     try {
       this.eyeMachine?.stop?.();

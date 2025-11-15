@@ -47,7 +47,7 @@ export type ConversationFlow = Generator<string | Promise<string>, string | void
 
 export interface ConversationServiceAPI {
   /** Start the conversation */
-  start: () => void;
+  start: (flowGenerator: () => ConversationFlow) => void;
   /** Stop the conversation */
   stop: () => void;
   /** Get current state */

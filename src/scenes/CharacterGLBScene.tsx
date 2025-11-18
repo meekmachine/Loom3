@@ -7,12 +7,14 @@ import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { EngineWind } from '../engine/EngineWind';
+import { HairService } from '../latticework/hair/hairService';
 
 export type CharacterReady = {
   scene: THREE.Scene;
   model: THREE.Object3D;
   meshes: THREE.Mesh[]; // meshes with morph targets (for facslib)
   windEngine?: EngineWind; // wind physics engine for hair
+  hairService?: HairService; // hair customization service
 };
 
 type CameraOverride = {
@@ -123,6 +125,7 @@ export default function CharacterGLBScene({
 
     let model: THREE.Object3D | null = null;
     let windEngine: EngineWind | null = null;
+    let hairService: HairService | null = null;
     let raf = 0;
     let loadingTextMesh: THREE.Mesh | null = null;
     let mousePos = { x: 0, y: 0 };
@@ -211,6 +214,32 @@ export default function CharacterGLBScene({
         model = gltf.scene;
         scene.add(model);
 
+        // ============================================
+        // HAIR DETECTION & SERVICE INITIALIZATION
+        // ============================================
+        // Automatically detect hair and eyebrow objects in the loaded model
+        // Searches for objects with names containing: hair, bushy, side_part, eyebrow
+        const hairObjects: THREE.Object3D[] = [];
+
+        model.traverse((obj) => {
+          const nameLower = obj.name.toLowerCase();
+          if (nameLower.includes('hair') ||
+              nameLower.includes('bushy') ||
+              nameLower.includes('side_part') ||
+              nameLower.includes('sidepart') ||
+              nameLower.includes('eyebrow') ||
+              nameLower === 'male_bushy' ||
+              nameLower === 'side_part_wavy') {
+            hairObjects.push(obj);
+          }
+        });
+
+        // Initialize hair customization service if hair objects were found
+        if (hairObjects.length > 0) {
+          hairService = new HairService();
+          hairService.registerObjects(hairObjects);
+        }
+
         // Center & scale to a reasonable size
         const box = new THREE.Box3().setFromObject(model);
         const size = new THREE.Vector3();
@@ -278,7 +307,7 @@ export default function CharacterGLBScene({
           loadingTextMesh = null;
         }
 
-        onReady?.({ scene, model, meshes, windEngine: windEngine });
+        onReady?.({ scene, model, meshes, windEngine: windEngine, hairService: hairService || undefined });
       },
       (progressEvent) => {
         // Calculate loading progress percentage
@@ -357,6 +386,11 @@ export default function CharacterGLBScene({
         scene.remove(loadingTextMesh);
         loadingTextMesh.geometry.dispose();
         (loadingTextMesh.material as THREE.Material).dispose();
+      }
+
+      // Clean up hair service
+      if (hairService) {
+        hairService.dispose();
       }
 
       if (model) scene.remove(model);

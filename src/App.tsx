@@ -6,6 +6,8 @@ import Preloader from './components/Preloader';
 import { useThreeState } from './context/threeContext';
 import { ModulesProvider, useModulesContext } from './context/ModulesContext';
 import { createEyeHeadTrackingService } from './latticework/eyeHeadTracking/eyeHeadTrackingService';
+import { HairCustomizationPanel } from './components/hair/HairCustomizationPanel';
+import { HairService } from './latticework/hair/hairService';
 import './styles.css';
 
 import { AU_TO_MORPHS } from './engine/arkit/shapeDict';
@@ -18,6 +20,7 @@ function AppContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [hairService, setHairService] = useState<HairService | null>(null);
 
   // Helper: audit morph coverage
   function auditMorphCoverage(model: any) {
@@ -56,7 +59,7 @@ function AppContent() {
   }
 
   const handleReady = useCallback(
-    ({ meshes, model, windEngine }: { meshes: any[]; model?: any; windEngine?: any }) => {
+    ({ meshes, model, windEngine, hairService }: { meshes: any[]; model?: any; windEngine?: any; hairService?: HairService }) => {
       engine.onReady({ meshes, model });
 
       // Set wind engine in context if available
@@ -65,6 +68,15 @@ function AppContent() {
         // Expose wind engine globally for debugging
         if (typeof window !== 'undefined') {
           (window as any).windEngine = windEngine;
+        }
+      }
+
+      // Set hair service if available
+      if (hairService) {
+        setHairService(hairService);
+        // Expose hair service globally for debugging
+        if (typeof window !== 'undefined') {
+          (window as any).hairService = hairService;
         }
       }
 
@@ -84,12 +96,13 @@ function AppContent() {
 
   // Initialize eye/head tracking service on app startup
   useEffect(() => {
-    console.log('[App] Creating standalone eye/head tracking service with engine:', engine);
+    console.log('[App] Creating eye/head tracking service with animation scheduler');
     const service = createEyeHeadTrackingService({
       eyeTrackingEnabled: true,
       headTrackingEnabled: true,
       headFollowEyes: true,
-      engine: engine, // Pass engine for direct composite calls
+      animationAgency: anim, // Pass animation agency for scheduling approach
+      engine: engine, // Pass engine as fallback
     });
 
     service.start();
@@ -114,7 +127,7 @@ function AppContent() {
   }), []);
 
   // Use BASE_URL for all assets to work with GitHub Pages base path
-  const glbSrc = import.meta.env.BASE_URL + "characters/jonathan.glb";
+  const glbSrc = import.meta.env.BASE_URL + "characters/jonathan_new.glb";
   const skyboxUrl = import.meta.env.BASE_URL + "skyboxes/3BR2D07.jpg";
 
   return (
@@ -141,6 +154,16 @@ function AppContent() {
         disabled={isLoading}
       />
       <ModulesMenu animationManager={anim} />
+
+      {/* Hair Customization Panel - positioned in top right */}
+      <div style={{
+        position: 'absolute',
+        top: '20px',
+        right: '20px',
+        zIndex: 1000,
+      }}>
+        <HairCustomizationPanel hairService={hairService} />
+      </div>
     </div>
   );
 }

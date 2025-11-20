@@ -982,6 +982,36 @@ export class EngineThree {
     return undefined;
   }
 
+  /**
+   * Set render order for hair/eyebrow objects to ensure they render on top of face
+   * Hair should render AFTER the face to avoid Z-fighting
+   *
+   * Typical render order values:
+   * - Face/body: 0 (default)
+   * - Eyebrows: 1 (render after face)
+   * - Hair: 2 (render after eyebrows)
+   */
+  setHairRenderOrder(object: THREE.Object3D, isEyebrow: boolean) {
+    // Set render order for this object and all its children
+    const renderOrder = isEyebrow ? 1 : 2;
+
+    object.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.renderOrder = renderOrder;
+
+        // Also ensure material has proper depth settings
+        const mesh = child as THREE.Mesh;
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+        materials.forEach((mat) => {
+          // Enable depth write and depth test to ensure proper sorting
+          mat.depthWrite = true;
+          mat.depthTest = true;
+        });
+      }
+    });
+  }
+
   // ========================================
   // End Hair & Eyebrow Control
   // ========================================

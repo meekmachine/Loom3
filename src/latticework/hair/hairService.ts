@@ -59,6 +59,11 @@ export class HairService {
         ref.originalMaterial = mesh.material;
       }
 
+      // Set render order to ensure hair renders on top of face
+      if (this.engine) {
+        this.engine.setHairRenderOrder(obj, isEyebrow);
+      }
+
       return ref;
     });
 

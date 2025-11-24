@@ -37,6 +37,7 @@ export interface EyeHeadTrackingConfig {
   eyeBlinkRate?: number; // Blinks per minute
   eyePriority?: number; // Animation priority for eye movements
   eyeIntensity?: number; // Intensity of eye movements (0-1)
+  eyeBlendWeight?: number; // Morph ↔ bone blend for eye continuum AUs
 
   // Head tracking settings
   headTrackingEnabled?: boolean;
@@ -45,6 +46,7 @@ export interface EyeHeadTrackingConfig {
   headSpeed?: number; // Speed of head movements (0.1-1.0)
   headPriority?: number; // Animation priority for head movements
   headIntensity?: number; // Intensity of head movements (0-1)
+  headBlendWeight?: number; // Morph ↔ bone blend for head continuum AUs
 
   // Webcam face tracking
   webcamTrackingEnabled?: boolean; // Enable webcam-based face tracking
@@ -60,11 +62,16 @@ export interface EyeHeadTrackingConfig {
   // General settings
   idleVariation?: boolean; // Add natural variation when idle
   idleVariationInterval?: number; // Milliseconds between idle movements
+
+  // Return to neutral settings
+  returnToNeutralEnabled?: boolean; // Gracefully return to center when not tracking
+  returnToNeutralDelay?: number; // Delay before returning to neutral (ms)
+  returnToNeutralDuration?: number; // Duration of return transition (ms)
 }
 
 export interface EyeHeadTrackingState {
-  eyeStatus: 'idle' | 'tracking' | 'saccade' | 'smooth_pursuit';
-  headStatus: 'idle' | 'tracking' | 'following';
+  eyeStatus: 'idle' | 'tracking' | 'lagging';
+  headStatus: 'idle' | 'tracking' | 'lagging';
 
   // Current gaze target
   currentGaze: GazeTarget;
@@ -81,6 +88,10 @@ export interface EyeHeadTrackingState {
   // Coordination state
   isSpeaking: boolean;
   isListening: boolean;
+
+  // Return to neutral timer
+  returnToNeutralTimer: number | null;
+  lastGazeUpdateTime: number;
 }
 
 export interface EyeHeadTrackingCallbacks {
@@ -118,20 +129,22 @@ export const DEFAULT_ANIMATION_KEYS = {
  */
 export const DEFAULT_EYE_HEAD_CONFIG = {
   // Eye settings
-  eyeTrackingEnabled: true,
+  eyeTrackingEnabled: false, // Disabled by default
   eyeSaccadeSpeed: 0.7,
   eyeSmoothPursuit: false,
   eyeBlinkRate: 17, // Average blinks per minute
   eyePriority: 20, // Higher than prosodic/lipsync
-  eyeIntensity: 1.0, // Full intensity by default
+  eyeIntensity: 1.2, // 120% intensity for more range
+  eyeBlendWeight: 0.5,
 
   // Head settings
-  headTrackingEnabled: true,
+  headTrackingEnabled: false, // Disabled by default
   headFollowEyes: true,
   headFollowDelay: 200,
   headSpeed: 0.4,
   headPriority: 15, // Slightly lower than eyes
-  headIntensity: 0.5, // Half intensity by default
+  headIntensity: 0.8, // 80% intensity for more natural head movement
+  headBlendWeight: 0.7,
 
   // Webcam tracking
   webcamTrackingEnabled: false,
@@ -145,6 +158,11 @@ export const DEFAULT_EYE_HEAD_CONFIG = {
   // Idle behavior
   idleVariation: true,
   idleVariationInterval: 2000,
+
+  // Return to neutral
+  returnToNeutralEnabled: false, // Disabled by default
+  returnToNeutralDelay: 3000, // 3 seconds
+  returnToNeutralDuration: 800, // 800ms for graceful return
 };
 
 /**

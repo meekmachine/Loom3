@@ -50,6 +50,8 @@ function coerceSnippet(d: NonNullable<LoadAnimationEvent['data']>, playing: bool
     curves,
     isPlaying: playing,
     loop: !!d.loop,
+    loopIteration: typeof (d as any).loopIteration === 'number' ? (d as any).loopIteration : 0,
+    lastLoopTime: typeof (d as any).lastLoopTime === 'number' ? (d as any).lastLoopTime : 0,
     snippetPlaybackRate: rate,
     snippetIntensityScale: typeof d.snippetIntensityScale === 'number' ? d.snippetIntensityScale : 1,
     snippetCategory: (d as any).snippetCategory ?? 'default',
@@ -84,7 +86,9 @@ export const animationMachine = createMachine({
       on: {
         LOAD_ANIMATION: { actions: 'addSnippetPaused' },
         REMOVE_ANIMATION: { actions: 'removeSnippet' },
-        PLAY_ALL: { target: 'playing', actions: 'markAllPlaying' }
+        PLAY_ALL: { target: 'playing', actions: 'markAllPlaying' },
+        SNIPPET_LOOPED: { actions: 'updateLoopState' },
+        SET_LOOP_STATE: { actions: 'updateLoopState' }
       }
     },
     playing: {
@@ -97,7 +101,9 @@ export const animationMachine = createMachine({
         UI_PROGRESS: { actions: 'updateCurrentTimes' },
         CURVE_CHANGED: { actions: 'mergeCurve' },
         MANUAL_SET: { actions: 'manualSet' },
-        MANUAL_CLEAR: { actions: 'manualClear' }
+        MANUAL_CLEAR: { actions: 'manualClear' },
+        SNIPPET_LOOPED: { actions: 'updateLoopState' },
+        SET_LOOP_STATE: { actions: 'updateLoopState' }
       }
     },
     paused: {
@@ -108,7 +114,9 @@ export const animationMachine = createMachine({
         STOP_ALL: { target: 'stopped', actions: 'markAllPaused' },
         CURVE_CHANGED: { actions: 'mergeCurve' },
         MANUAL_SET: { actions: 'manualSet' },
-        MANUAL_CLEAR: { actions: 'manualClear' }
+        MANUAL_CLEAR: { actions: 'manualClear' },
+        SNIPPET_LOOPED: { actions: 'updateLoopState' },
+        SET_LOOP_STATE: { actions: 'updateLoopState' }
       }
     }
   }
@@ -170,6 +178,19 @@ export const animationMachine = createMachine({
       const manualOverrides = { ...context.manualOverrides };
       delete manualOverrides[event.id];
       return { manualOverrides };
+    }),
+
+    updateLoopState: assign(({ context, event }) => {
+      if (event.type !== 'SNIPPET_LOOPED' && event.type !== 'SET_LOOP_STATE') return {};
+      if (!event.name) return {};
+      const idx = context.animations.findIndex((s) => s.name === event.name);
+      if (idx < 0) return {};
+      const animations = context.animations.slice();
+      const sn = { ...animations[idx] };
+      if (typeof event.iteration === 'number') sn.loopIteration = Math.max(0, event.iteration);
+      if (typeof event.localTime === 'number') sn.lastLoopTime = event.localTime;
+      animations[idx] = sn;
+      return { animations };
     }),
 
     // scheduler feedback (optional UI mirrors)

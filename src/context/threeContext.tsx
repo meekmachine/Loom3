@@ -53,6 +53,27 @@ export const ThreeProvider: React.FC<React.PropsWithChildren> = ({ children }) =
       setMorph: (key: string, v: number) => engineRef.current!.setMorph(key, v),
       transitionAU: (id: number | string, v: number, dur?: number) => engineRef.current!.transitionAU?.(id as any, v, dur),
       transitionMorph: (key: string, v: number, dur?: number) => engineRef.current!.transitionMorph?.(key, v, dur),
+
+      // Continuum helper methods for animation scheduler (instant)
+      setEyesHorizontal: (v: number) => engineRef.current!.setEyesHorizontal?.(v),
+      setEyesVertical: (v: number) => engineRef.current!.setEyesVertical?.(v),
+      setHeadHorizontal: (v: number) => engineRef.current!.setHeadHorizontal?.(v),
+      setHeadVertical: (v: number) => engineRef.current!.setHeadVertical?.(v),
+      setHeadRoll: (v: number) => engineRef.current!.setHeadRoll?.(v),
+      setJawHorizontal: (v: number) => engineRef.current!.setJawHorizontal?.(v),
+      setTongueHorizontal: (v: number) => engineRef.current!.setTongueHorizontal?.(v),
+      setTongueVertical: (v: number) => engineRef.current!.setTongueVertical?.(v),
+
+      // Continuum transition methods for animation scheduler (animated)
+      transitionEyesHorizontal: (v: number, dur?: number) => engineRef.current!.transitionEyesHorizontal?.(v, dur),
+      transitionEyesVertical: (v: number, dur?: number) => engineRef.current!.transitionEyesVertical?.(v, dur),
+      transitionHeadHorizontal: (v: number, dur?: number) => engineRef.current!.transitionHeadHorizontal?.(v, dur),
+      transitionHeadVertical: (v: number, dur?: number) => engineRef.current!.transitionHeadVertical?.(v, dur),
+      transitionHeadRoll: (v: number, dur?: number) => engineRef.current!.transitionHeadRoll?.(v, dur),
+      transitionJawHorizontal: (v: number, dur?: number) => engineRef.current!.transitionJawHorizontal?.(v, dur),
+      transitionTongueHorizontal: (v: number, dur?: number) => engineRef.current!.transitionTongueHorizontal?.(v, dur),
+      transitionTongueVertical: (v: number, dur?: number) => engineRef.current!.transitionTongueVertical?.(v, dur),
+
       onSnippetEnd: (name: string) => {
         try {
           // Dispatch a window-level CustomEvent for any listeners (debug/UIs)

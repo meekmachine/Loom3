@@ -1,19 +1,19 @@
 {
-  "name": "headTilt",
-  "description": "Head tilts left ↔ right (roll continuum)",
+  "name": "headPitch",
+  "description": "Head nods down ↔ up using pitch continuum",
   "curves": {
-    "55": [
+    "54": [
       { "time": 0.0,  "intensity": 0.0 },
-      { "time": 0.25, "intensity": 0.4 },
+      { "time": 0.25, "intensity": 0.55 },
       { "time": 0.5,  "intensity": 0.0 },
       { "time": 0.75, "intensity": 0.0 },
       { "time": 1.0,  "intensity": 0.0 }
     ],
-    "56": [
+    "33": [
       { "time": 0.0,  "intensity": 0.0 },
       { "time": 0.25, "intensity": 0.0 },
       { "time": 0.5,  "intensity": 0.0 },
-      { "time": 0.75, "intensity": 0.4 },
+      { "time": 0.75, "intensity": 0.45 },
       { "time": 1.0,  "intensity": 0.0 }
     ]
   },

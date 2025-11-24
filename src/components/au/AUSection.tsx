@@ -5,7 +5,7 @@ import DockableAccordionItem from './DockableAccordionItem';
 import AUSlider from './AUSlider';
 import ContinuumSlider from './ContinuumSlider';
 import { CurveEditor } from '../CurveEditor';
-import { AUInfo, CONTINUUM_PAIRS } from '../../engine/arkit/shapeDict';
+import { AUInfo, CONTINUUM_PAIRS, hasLeftRightMorphs } from '../../engine/arkit/shapeDict';
 import { EngineThree } from '../../engine/EngineThree';
 import type { NormalizedSnippet } from '../../latticework/animation/types';
 import { useThreeState } from '../../context/threeContext';
@@ -191,8 +191,66 @@ export default function AUSection({
             if (!pairedAU) {
               // Pair not in this section, render as individual
               const intensity = auStates[au.id] ?? 0;
-              if (!showUnusedSliders && intensity <= 0) return null;
+              const intensityL = auStates[`${au.id}L`] ?? 0;
+              const intensityR = auStates[`${au.id}R`] ?? 0;
 
+              // Check if this AU has left/right morphs
+              const hasLR = hasLeftRightMorphs(auNum);
+
+              if (!showUnusedSliders && intensity <= 0 && intensityL <= 0 && intensityR <= 0) return null;
+
+              // If AU has left/right variants, render 3 sliders
+              if (hasLR) {
+                return (
+                  <VStack key={au.id} w="100%" spacing={1} align="stretch">
+                    <Box w="100%" bg="gray.800" p={2} borderRadius="md">
+                      <AUSlider
+                        au={au.id}
+                        name={au.name}
+                        intensity={intensity}
+                        muscularBasis={au.muscularBasis}
+                        links={au.links}
+                        engine={engine}
+                        disabled={disabled}
+                        side="both"
+                        onChange={(val) => {
+                          onAUChange?.(au.id, val);
+                        }}
+                      />
+                    </Box>
+                    <HStack w="100%" spacing={2}>
+                      <Box flex={1} bg="gray.750" p={2} borderRadius="md">
+                        <AUSlider
+                          au={au.id}
+                          name={au.name}
+                          intensity={intensityL}
+                          engine={engine}
+                          disabled={disabled}
+                          side="L"
+                          onChange={(val) => {
+                            onAUChange?.(`${au.id}L`, val);
+                          }}
+                        />
+                      </Box>
+                      <Box flex={1} bg="gray.750" p={2} borderRadius="md">
+                        <AUSlider
+                          au={au.id}
+                          name={au.name}
+                          intensity={intensityR}
+                          engine={engine}
+                          disabled={disabled}
+                          side="R"
+                          onChange={(val) => {
+                            onAUChange?.(`${au.id}R`, val);
+                          }}
+                        />
+                      </Box>
+                    </HStack>
+                  </VStack>
+                );
+              }
+
+              // Otherwise single bilateral slider
               return (
                 <Box key={au.id} w="100%">
                   <AUSlider
@@ -203,6 +261,7 @@ export default function AUSection({
                     links={au.links}
                     engine={engine}
                     disabled={disabled}
+                    side="both"
                     onChange={(val) => {
                       onAUChange?.(au.id, val);
                       engine?.setAU(au.id as any, val);
@@ -272,8 +331,69 @@ export default function AUSection({
 
           // Regular individual AU slider
           const intensity = auStates[au.id] ?? 0;
-          if (!showUnusedSliders && intensity <= 0) return null;
+          const intensityL = auStates[`${au.id}L`] ?? 0;
+          const intensityR = auStates[`${au.id}R`] ?? 0;
 
+          // Check if this AU has left/right morphs
+          const hasLR = hasLeftRightMorphs(auNum);
+
+          if (!showUnusedSliders && intensity <= 0 && intensityL <= 0 && intensityR <= 0) return null;
+
+          // If AU has left/right variants, render 3 sliders in a compact layout
+          if (hasLR) {
+            return (
+              <VStack key={au.id} w="100%" spacing={1} align="stretch">
+                {/* Both sides slider */}
+                <Box w="100%" bg="gray.800" p={2} borderRadius="md">
+                  <AUSlider
+                    au={au.id}
+                    name={au.name}
+                    intensity={intensity}
+                    muscularBasis={au.muscularBasis}
+                    links={au.links}
+                    engine={engine}
+                    disabled={disabled}
+                    side="both"
+                    onChange={(val) => {
+                      onAUChange?.(au.id, val);
+                    }}
+                  />
+                </Box>
+
+                {/* Left and Right sliders in a compact row */}
+                <HStack w="100%" spacing={2}>
+                  <Box flex={1} bg="gray.750" p={2} borderRadius="md">
+                    <AUSlider
+                      au={au.id}
+                      name={au.name}
+                      intensity={intensityL}
+                      engine={engine}
+                      disabled={disabled}
+                      side="L"
+                      onChange={(val) => {
+                        onAUChange?.(`${au.id}L`, val);
+                      }}
+                    />
+                  </Box>
+                  <Box flex={1} bg="gray.750" p={2} borderRadius="md">
+                    <AUSlider
+                      au={au.id}
+                      name={au.name}
+                      intensity={intensityR}
+                      engine={engine}
+                      disabled={disabled}
+                      side="R"
+                      onChange={(val) => {
+                        onAUChange?.(`${au.id}R`, val);
+                      }}
+                    />
+                  </Box>
+                </HStack>
+              </VStack>
+            );
+          }
+
+          // Otherwise render single bilateral slider
           return (
             <Box key={au.id} w="100%">
               <AUSlider
@@ -284,6 +404,7 @@ export default function AUSection({
                 links={au.links}
                 engine={engine}
                 disabled={disabled}
+                side="both"
                 onChange={(val) => {
                   onAUChange?.(au.id, val);
 

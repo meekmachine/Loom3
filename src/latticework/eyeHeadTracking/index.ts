@@ -8,9 +8,6 @@ export {
   createEyeHeadTrackingService,
 } from './eyeHeadTrackingService';
 
-export { eyeTrackingMachine } from './eyeTrackingMachine';
-export { headTrackingMachine } from './headTrackingMachine';
-
 export type {
   EyeHeadTrackingConfig,
   EyeHeadTrackingState,

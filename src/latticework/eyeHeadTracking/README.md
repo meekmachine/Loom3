@@ -4,22 +4,21 @@ Coordinates eye and head movements that naturally follow mouth animations and sp
 
 ## Architecture
 
-The Eye and Head Tracking Agency uses a **dual-submachine architecture** with two independent XState state machines:
-
-1. **Eye Tracking Machine** - Manages eye gaze direction, saccades, smooth pursuit, and blinking
-2. **Head Tracking Machine** - Manages head rotation and tilt to follow eye gaze or external targets
-
-Both submachines are coordinated by the **EyeHeadTrackingService**, which provides a unified API and integrates with the Animation Service for scheduling.
+- **Single controller + scheduler**: `EyeHeadTrackingService` now talks directly to `EyeHeadTrackingScheduler`, which generates the exact AU curves that get scheduled through the animation agency (no more per-axis XState machines).
+- **Shared animation agency**: Every gaze change results in snippets named `eyeHeadTracking/eyeYaw`, `eyePitch`, `headYaw`, `headPitch`, and `headRoll`, so you can play and inspect the same snippets directly from the snippets library UI.
+- **Head lag logic**: Head motion reuses the existing follow-delay concept, but it’s implemented inside the service (eyes move immediately, head schedules its own delayed snippet).
+- **Blinking handled elsewhere**: Automatic blinking moved to the dedicated `BlinkService`; this agency focuses purely on gaze and head pose.
+- **Blend weights**: Eye/head morph↔bone blend controls are exposed in the UI and forwarded to `engine.setAUMixWeight(...)` so bones always move, with morph overlays matched to the slider.
 
 ## Features
 
-- **Coordinated Eye-Head Movement**: Head automatically follows eye gaze with configurable delay
-- **Natural Eye Movements**: Supports both saccadic (rapid) and smooth pursuit eye movements
-- **Automatic Blinking**: Configurable blink rate with natural timing
-- **Idle Variation**: Subtle random movements when not actively tracking
-- **Speech Coordination**: Reduces idle variation during speech
-- **Listener Mode**: Can look at imaginary speaker position
-- **High Priority**: Eye/head movements override prosodic and lip-sync animations
+- **Coordinated Eye-Head Movement**: Head automatically follows eye gaze with configurable delay.
+- **Configurable Lag**: Eyes can react instantly while the head eases into the same pose after a delay.
+- **Idle Variation**: Subtle random movements when not actively tracking.
+- **Speech Coordination**: Reduces idle variation during speech.
+- **Listener Mode**: Can look at imaginary speaker position.
+- **High Priority**: Eye/head movements override prosodic and lip-sync animations.
+- **Blend Control**: UI exposes morph ↔ bone mix for both eyes and head (hooked to `engine.setAUMixWeight`).
 
 ## Usage
 
@@ -56,8 +55,7 @@ eyeHeadTracking.setGazeTarget({
   z: 0,    // Depth (optional)
 });
 
-// Eyes will move immediately (saccade or smooth pursuit)
-// Head will follow after the configured delay
+// Eyes move immediately; head follows after the configured delay (if enabled)
 ```
 
 ### Coordinating with Speech
@@ -154,23 +152,15 @@ eyeHeadTracking.setGazeTarget({ x: 0.5, y: 0.2 });
 
 **Note:** Both modes use the same composite AU architecture (morphs + bones), just different scheduling mechanisms.
 
-## State Machine Architecture
+## Runtime Status Flags
 
-### Eye Tracking Machine States
+The service maintains simple status flags instead of separate state machines:
 
-- **idle**: Not tracking, eyes at rest
-- **tracking**: Actively tracking a target
-- **saccade**: Rapid eye movement (50-200ms)
-- **smooth_pursuit**: Smooth following movement
-- **blinking**: Eye blink (150ms)
+- `eyeStatus`: `'idle' | 'tracking' | 'lagging'`
+- `headStatus`: `'idle' | 'tracking' | 'lagging'`
+- `headFollowTimer`: tracks the pending timeout when `headFollowEyes` and `headFollowDelay` are enabled.
 
-### Head Tracking Machine States
-
-- **idle**: Not tracking, head at neutral position
-- **tracking**: Actively tracking a target
-- **delayedFollow**: Waiting before following eyes
-- **following**: Following eye gaze direction
-- **moving**: Moving to explicit position target
+These flags are surfaced via `getState()` and useful for UI/debug overlays (e.g., highlighting when the head is intentionally lagging behind the eyes).
 
 ## Action Units (AUs)
 
@@ -180,7 +170,7 @@ The agency controls the following ARKit blendshapes via AUs:
 - **61-64**: Both eyes (look left/right/up/down)
 - **65-68**: Left eye individual (look left/right/up/down)
 - **69-72**: Right eye individual (look left/right/up/down)
-- **43**: Blink
+- **43**: Blink *(handled by BlinkService snippets)*
 - **5**: Eye wide
 - **7**: Eye squint
 

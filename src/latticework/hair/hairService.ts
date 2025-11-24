@@ -114,6 +114,7 @@ export class HairService {
         visible: partState?.visible ?? true,  // Default to visible if no part state
         scale: partState?.scale,
         position: partState?.position,
+        isEyebrow: isEyebrow,
       };
 
       // Delegate all rendering to engine

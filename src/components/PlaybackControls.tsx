@@ -17,7 +17,9 @@ import {
   Menu,
   MenuButton,
   MenuList,
-  MenuItem
+  MenuItem,
+  Collapse,
+  Divider
 } from '@chakra-ui/react';
 import {
   FaPlay,
@@ -26,10 +28,13 @@ import {
   FaDownload,
   FaUpload,
   FaTrashAlt,
-  FaFolderOpen
+  FaFolderOpen,
+  FaChevronDown,
+  FaChevronRight
 } from 'react-icons/fa';
 import { TimeIcon, ChevronDownIcon } from '@chakra-ui/icons';
 import { useThreeState } from '../context/threeContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 /**
  * PlaybackControls - Controls for the animation service
@@ -47,6 +52,16 @@ export default function PlaybackControls() {
   const [emotionKeys, setEmotionKeys] = useState<string[]>([]);
   const [speakingKeys, setSpeakingKeys] = useState<string[]>([]);
   const [visemeKeys, setVisemeKeys] = useState<string[]>([]);
+  const [eyeHeadTrackingKeys, setEyeHeadTrackingKeys] = useState<string[]>([]);
+
+  // Collapse states for agency groups
+  const [agencyCollapseStates, setAgencyCollapseStates] = useState<Record<string, boolean>>({
+    'blink': true,
+    'combined': true,
+    'eyeHeadTracking': true,
+    'prosodic': true,
+    'default': false, // Component-loaded animations expanded by default
+  });
 
   // Load animation categories from localStorage
   const loadCategories = () => {
@@ -62,6 +77,7 @@ export default function PlaybackControls() {
     setEmotionKeys(loadCategoryList('emotionAnimationsList'));
     setSpeakingKeys(loadCategoryList('speakingAnimationsList'));
     setVisemeKeys(loadCategoryList('visemeAnimationsList'));
+    setEyeHeadTrackingKeys(loadCategoryList('eyeHeadTrackingAnimationsList'));
   };
 
   useEffect(() => {
@@ -97,6 +113,79 @@ export default function PlaybackControls() {
       clearInterval(interval);
     };
   }, [anim]);
+
+  // Group snippets by agency (snippetCategory)
+  const groupedSnippets = React.useMemo(() => {
+    const groups: Record<string, any[]> = {};
+
+    snippets.forEach(sn => {
+      const category = sn.snippetCategory || 'default';
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(sn);
+    });
+
+    return groups;
+  }, [snippets]);
+
+  // Tropical gradient colors that cycle through
+  const tropicalColors = [
+    '#FF6B9D', // Hot Pink
+    '#FFA07A', // Light Salmon
+    '#FFD700', // Gold
+    '#7FFF00', // Chartreuse
+    '#00CED1', // Dark Turquoise
+    '#9370DB', // Medium Purple
+    '#FF69B4', // Hot Pink
+    '#FF8C00', // Dark Orange
+  ];
+
+  // Agency display names and descriptions
+  const agencyInfo: Record<string, { name: string; description: string; colorIndex: number }> = {
+    'blink': {
+      name: 'Blink Agency',
+      description: 'Automatic eye blinking',
+      colorIndex: 0
+    },
+    'combined': {
+      name: 'LipSync Agency',
+      description: 'Speech lip-sync with jaw coordination',
+      colorIndex: 1
+    },
+    'eyeHeadTracking': {
+      name: 'Eye/Head Tracking Agency',
+      description: 'Gaze and head movement',
+      colorIndex: 2
+    },
+    'prosodic': {
+      name: 'Prosodic Agency',
+      description: 'Speech prosody (emphasis, pauses)',
+      colorIndex: 3
+    },
+    'default': {
+      name: 'Component Loaded',
+      description: 'Animations loaded from UI',
+      colorIndex: 4
+    },
+    'visemeSnippet': {
+      name: 'Viseme Snippets',
+      description: 'Manual viseme animations',
+      colorIndex: 5
+    },
+    'auSnippet': {
+      name: 'AU Snippets',
+      description: 'Action Unit animations',
+      colorIndex: 6
+    }
+  };
+
+  const toggleAgencyCollapse = (category: string) => {
+    setAgencyCollapseStates(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
 
   // Load animation from localStorage category
   function handleLoadFromCategory(category: string, key: string) {
@@ -243,45 +332,38 @@ export default function PlaybackControls() {
   }
 
   // Snippet controls
-  function handlePlaySnippet(idx: number) {
-    const sn = snippets[idx];
-    anim?.setSnippetPlaying?.(sn.name, true);
+  function handlePlaySnippet(name: string) {
+    anim?.setSnippetPlaying?.(name, true);
   }
 
-  function handlePauseSnippet(idx: number) {
-    const sn = snippets[idx];
-    anim?.setSnippetPlaying?.(sn.name, false);
+  function handlePauseSnippet(name: string) {
+    anim?.setSnippetPlaying?.(name, false);
   }
 
-  function handleRemoveSnippet(idx: number) {
-    const sn = snippets[idx];
-    anim?.remove?.(sn.name);
+  function handleRemoveSnippet(name: string, snippetName: string) {
+    anim?.remove?.(name);
     toast({
       title: 'Snippet removed',
-      description: `"${sn.name}" removed`,
+      description: `"${snippetName}" removed`,
       status: 'info',
       duration: 2000
     });
   }
 
-  function handleLoopToggle(idx: number) {
-    const sn = snippets[idx];
-    anim?.setSnippetLoop?.(sn.name, !sn.loop);
+  function handleLoopToggle(name: string, currentLoop: boolean) {
+    anim?.setSnippetLoop?.(name, !currentLoop);
   }
 
-  function handleScrubTime(idx: number, val: number) {
-    const sn = snippets[idx];
-    anim?.setSnippetTime?.(sn.name, val);
+  function handleScrubTime(name: string, val: number) {
+    anim?.setSnippetTime?.(name, val);
   }
 
-  function handlePlaybackRate(idx: number, val: number) {
-    const sn = snippets[idx];
-    anim?.setSnippetPlaybackRate?.(sn.name, val);
+  function handlePlaybackRate(name: string, val: number) {
+    anim?.setSnippetPlaybackRate?.(name, val);
   }
 
-  function handleIntensityScale(idx: number, val: number) {
-    const sn = snippets[idx];
-    anim?.setSnippetIntensityScale?.(sn.name, val);
+  function handleIntensityScale(name: string, val: number) {
+    anim?.setSnippetIntensityScale?.(name, val);
   }
 
   function handleClearAll() {
@@ -367,6 +449,31 @@ export default function PlaybackControls() {
               <MenuItem
                 key={key}
                 onClick={() => handleLoadFromCategory('visemeAnimationsList', key)}
+              >
+                {key}
+              </MenuItem>
+            ))}
+          </MenuList>
+        </Menu>
+
+        <Menu>
+          <MenuButton
+            as={Button}
+            leftIcon={<FaFolderOpen />}
+            rightIcon={<ChevronDownIcon />}
+            colorScheme="blue"
+            size="sm"
+          >
+            Eye/Head Tracking
+          </MenuButton>
+          <MenuList maxH="300px" overflowY="auto">
+            {eyeHeadTrackingKeys.length === 0 && (
+              <MenuItem isDisabled>No eye/head tracking animations</MenuItem>
+            )}
+            {eyeHeadTrackingKeys.map((key) => (
+              <MenuItem
+                key={key}
+                onClick={() => handleLoadFromCategory('eyeHeadTrackingAnimationsList', key)}
               >
                 {key}
               </MenuItem>
@@ -469,139 +576,258 @@ export default function PlaybackControls() {
         </label>
       </HStack>
 
-      {/* Loaded snippets */}
+      {/* Loaded snippets grouped by agency */}
       <Text fontWeight="bold" mb={2} fontSize="sm" color="gray.50">
         Loaded Animations:
       </Text>
-      {snippets.length === 0 ? (
-        <Text fontSize="sm" color="gray.400">
-          No animations loaded.
-        </Text>
-      ) : (
-        <>
-          <VStack align="stretch" spacing={3}>
-            {snippets.map((sn, idx) => (
-              <Box
-                key={sn.name || idx}
-                p={2}
-                bg="gray.750"
-                borderWidth="1px"
-                borderColor="gray.600"
-                borderRadius="md"
-                boxShadow="sm"
-              >
-                <Flex align="center" justify="space-between">
-                  <Text fontWeight="semibold" fontSize="sm" color="brand.400">
-                    {sn.name || `Snippet ${idx}`}
-                    {sn.isPlaying ? ' (Playing)' : ' (Stopped)'}
-                  </Text>
-                  <HStack spacing={1}>
-                    <IconButton
-                      size="xs"
-                      colorScheme="green"
-                      icon={<FaPlay />}
-                      aria-label="Play"
-                      onClick={() => handlePlaySnippet(idx)}
-                      isDisabled={sn.isPlaying}
-                    />
-                    <IconButton
-                      size="xs"
-                      colorScheme="yellow"
-                      icon={<FaPause />}
-                      aria-label="Pause"
-                      onClick={() => handlePauseSnippet(idx)}
-                    />
-                    <IconButton
-                      size="xs"
-                      colorScheme="gray"
-                      icon={<FaTrashAlt />}
-                      aria-label="Remove"
-                      onClick={() => handleRemoveSnippet(idx)}
-                    />
-                  </HStack>
-                </Flex>
+      {/* Scrollable container with fixed height - always visible */}
+      <Box
+        h="300px"
+        overflowY="auto"
+        overflowX="hidden"
+        borderRadius="md"
+        bg="gray.900"
+        p={2}
+        css={{
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'var(--chakra-colors-gray-800)',
+            borderRadius: '4px',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: 'var(--chakra-colors-gray-600)',
+            borderRadius: '4px',
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            background: 'var(--chakra-colors-gray-500)',
+          },
+        }}
+      >
+        {snippets.length === 0 ? (
+          <Flex align="center" justify="center" h="100%">
+            <Text fontSize="sm" color="gray.400">
+              No animations loaded.
+            </Text>
+          </Flex>
+        ) : (
+          <VStack align="stretch" spacing={2}>
+            <AnimatePresence mode="popLayout">
+              {Object.entries(groupedSnippets)
+                .sort(([categoryA], [categoryB]) => {
+                  // Sort: component-loaded first, then agencies alphabetically
+                  if (categoryA === 'default') return -1;
+                  if (categoryB === 'default') return 1;
+                  return categoryA.localeCompare(categoryB);
+                })
+                .map(([category, categorySnippets]) => {
+                  const info = agencyInfo[category] || {
+                    name: category,
+                    description: 'Unknown category',
+                    colorIndex: 7
+                  };
+                  const isCollapsed = agencyCollapseStates[category] ?? true;
+                  const currentColor = tropicalColors[info.colorIndex % tropicalColors.length];
+                  const nextColor = tropicalColors[(info.colorIndex + 1) % tropicalColors.length];
 
-                <HStack spacing={2} mt={2} alignItems="center">
-                  <Text fontSize="xs" color="gray.300">Loop:</Text>
-                  <Switch
-                    size="sm"
-                    colorScheme="brand"
-                    isChecked={sn.loop}
-                    onChange={() => handleLoopToggle(idx)}
-                  />
-                </HStack>
+                  return (
+                    <motion.div
+                      key={category}
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{
+                        height: { duration: 0.3, ease: 'easeInOut' },
+                        opacity: { duration: 0.2 }
+                      }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      <Box>
+                        {/* Agency Header */}
+                        <motion.div
+                          animate={{
+                            background: isCollapsed
+                              ? currentColor
+                              : `linear-gradient(135deg, ${currentColor} 0%, ${nextColor} 100%)`
+                          }}
+                          transition={{ duration: 0.5, ease: 'easeInOut' }}
+                          style={{ borderRadius: '6px' }}
+                        >
+                          <HStack
+                            p={2}
+                            cursor="pointer"
+                            onClick={() => toggleAgencyCollapse(category)}
+                            _hover={{ opacity: 0.9 }}
+                            transition="opacity 0.2s"
+                          >
+                            <IconButton
+                              size="xs"
+                              variant="ghost"
+                              icon={isCollapsed ? <FaChevronRight /> : <FaChevronDown />}
+                              aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                              color="white"
+                              _hover={{ bg: 'whiteAlpha.200' }}
+                            />
+                            <VStack align="start" spacing={0} flex={1}>
+                              <Text fontSize="sm" fontWeight="bold" color="white" textShadow="0 1px 2px rgba(0,0,0,0.3)">
+                                {info.name}
+                              </Text>
+                              <Text fontSize="xs" color="whiteAlpha.900">
+                                {info.description} ({categorySnippets.length} animation{categorySnippets.length !== 1 ? 's' : ''})
+                              </Text>
+                            </VStack>
+                          </HStack>
+                        </motion.div>
 
-                <Text fontSize="xs" mt={1} color="gray.300">
-                  Time: {sn.currentTime?.toFixed(2) || 0} / {(sn.duration || 0).toFixed(2)} s
-                </Text>
-                <Slider
-                  aria-label="time"
-                  colorScheme="brand"
-                  min={0}
-                  max={sn.duration || 1}
-                  step={0.01}
-                  value={sn.currentTime || 0}
-                  onChange={(val) => handleScrubTime(idx, val)}
-                  mb={2}
-                  size="sm"
-                >
-                  <SliderTrack>
-                    <SliderFilledTrack />
-                  </SliderTrack>
-                  <SliderThumb boxSize={3}>
-                    <TimeIcon boxSize={2} />
-                  </SliderThumb>
-                </Slider>
+                        {/* Snippets in this category */}
+                        <Collapse in={!isCollapsed} animateOpacity>
+                          <VStack align="stretch" spacing={2} mt={2} ml={4}>
+                            <AnimatePresence mode="popLayout">
+                              {categorySnippets.map((sn) => (
+                                <motion.div
+                                  key={sn.name}
+                                  initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                                  animate={{ opacity: 1, height: 'auto', marginBottom: 8 }}
+                                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                                  transition={{
+                                    height: { duration: 0.3, ease: 'easeInOut' },
+                                    opacity: { duration: 0.2 },
+                                    marginBottom: { duration: 0.3 }
+                                  }}
+                                  style={{ overflow: 'hidden' }}
+                                >
+                                  <Box
+                                    p={2}
+                                    bg="gray.750"
+                                    borderWidth="1px"
+                                    borderColor="gray.600"
+                                    borderRadius="md"
+                                    boxShadow="sm"
+                                  >
+                                    <Flex align="center" justify="space-between">
+                                      <Text fontWeight="semibold" fontSize="sm" color="brand.400">
+                                        {sn.name}
+                                        {sn.isPlaying ? ' (Playing)' : ' (Stopped)'}
+                                      </Text>
+                                      <HStack spacing={1}>
+                                        <IconButton
+                                          size="xs"
+                                          colorScheme="green"
+                                          icon={<FaPlay />}
+                                          aria-label="Play"
+                                          onClick={() => handlePlaySnippet(sn.name)}
+                                          isDisabled={sn.isPlaying}
+                                        />
+                                        <IconButton
+                                          size="xs"
+                                          colorScheme="yellow"
+                                          icon={<FaPause />}
+                                          aria-label="Pause"
+                                          onClick={() => handlePauseSnippet(sn.name)}
+                                        />
+                                        <IconButton
+                                          size="xs"
+                                          colorScheme="gray"
+                                          icon={<FaTrashAlt />}
+                                          aria-label="Remove"
+                                          onClick={() => handleRemoveSnippet(sn.name, sn.name)}
+                                        />
+                                      </HStack>
+                                    </Flex>
 
-                <Text fontSize="xs" color="gray.300">
-                  Playback Rate: {sn.snippetPlaybackRate?.toFixed(2) || 1}x
-                </Text>
-                <Slider
-                  colorScheme="pink"
-                  min={0.1}
-                  max={3.0}
-                  step={0.1}
-                  value={sn.snippetPlaybackRate || 1}
-                  onChange={(val) => handlePlaybackRate(idx, val)}
-                  mb={2}
-                  size="sm"
-                >
-                  <SliderTrack>
-                    <SliderFilledTrack />
-                  </SliderTrack>
-                  <SliderThumb boxSize={3} />
-                </Slider>
+                                    <HStack spacing={2} mt={2} alignItems="center">
+                                      <Text fontSize="xs" color="gray.300">Loop:</Text>
+                                      <Switch
+                                        size="sm"
+                                        colorScheme="brand"
+                                        isChecked={sn.loop}
+                                        onChange={() => handleLoopToggle(sn.name, sn.loop)}
+                                      />
+                                    </HStack>
 
-                <Text fontSize="xs" color="gray.300">
-                  Intensity Scale: {sn.snippetIntensityScale?.toFixed(1) || 1}
-                </Text>
-                <Slider
-                  colorScheme="orange"
-                  min={0}
-                  max={2}
-                  step={0.1}
-                  value={sn.snippetIntensityScale || 1}
-                  onChange={(val) => handleIntensityScale(idx, val)}
-                  size="sm"
-                >
-                  <SliderTrack>
-                    <SliderFilledTrack />
-                  </SliderTrack>
-                  <SliderThumb boxSize={3} />
-                </Slider>
-              </Box>
-            ))}
+                                    <Text fontSize="xs" mt={1} color="gray.300">
+                                      Time: {sn.currentTime?.toFixed(2) || 0} / {(sn.duration || 0).toFixed(2)} s
+                                    </Text>
+                                    <Slider
+                                      aria-label="time"
+                                      colorScheme="brand"
+                                      min={0}
+                                      max={sn.duration || 1}
+                                      step={0.01}
+                                      value={sn.currentTime || 0}
+                                      onChange={(val) => handleScrubTime(sn.name, val)}
+                                      mb={2}
+                                      size="sm"
+                                    >
+                                      <SliderTrack>
+                                        <SliderFilledTrack />
+                                      </SliderTrack>
+                                      <SliderThumb boxSize={3}>
+                                        <TimeIcon boxSize={2} />
+                                      </SliderThumb>
+                                    </Slider>
+
+                                    <Text fontSize="xs" color="gray.300">
+                                      Playback Rate: {sn.snippetPlaybackRate?.toFixed(2) || 1}x
+                                    </Text>
+                                    <Slider
+                                      colorScheme="pink"
+                                      min={0.1}
+                                      max={3.0}
+                                      step={0.1}
+                                      value={sn.snippetPlaybackRate || 1}
+                                      onChange={(val) => handlePlaybackRate(sn.name, val)}
+                                      mb={2}
+                                      size="sm"
+                                    >
+                                      <SliderTrack>
+                                        <SliderFilledTrack />
+                                      </SliderTrack>
+                                      <SliderThumb boxSize={3} />
+                                    </Slider>
+
+                                    <Text fontSize="xs" color="gray.300">
+                                      Intensity Scale: {sn.snippetIntensityScale?.toFixed(1) || 1}
+                                    </Text>
+                                    <Slider
+                                      colorScheme="orange"
+                                      min={0}
+                                      max={2}
+                                      step={0.1}
+                                      value={sn.snippetIntensityScale || 1}
+                                      onChange={(val) => handleIntensityScale(sn.name, val)}
+                                      size="sm"
+                                    >
+                                      <SliderTrack>
+                                        <SliderFilledTrack />
+                                      </SliderTrack>
+                                      <SliderThumb boxSize={3} />
+                                    </Slider>
+                                  </Box>
+                                </motion.div>
+                              ))}
+                            </AnimatePresence>
+                          </VStack>
+                        </Collapse>
+                      </Box>
+                    </motion.div>
+                  );
+                })}
+            </AnimatePresence>
           </VStack>
-          <HStack justify="flex-end" mt={3}>
-            <Button
-              size="sm"
-              colorScheme="red"
-              onClick={handleClearAll}
-            >
-              Clear All
-            </Button>
-          </HStack>
-        </>
+        )}
+      </Box>
+      {snippets.length > 0 && (
+        <HStack justify="flex-end" mt={3}>
+          <Button
+            size="sm"
+            colorScheme="red"
+            onClick={handleClearAll}
+          >
+            Clear All
+          </Button>
+        </HStack>
       )}
     </Box>
   );

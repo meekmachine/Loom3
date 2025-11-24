@@ -208,6 +208,11 @@ export function createAnimationService(host: HostCaps){
     enable(name:string, on=true){ return impl.enable(name, on); },
     seek(name:string, offsetSec:number){ return impl.seek(name, offsetSec); },
     getState(){ return (machine as any).getSnapshot(); },
+    setSnippetLoopState(name: string, iteration: number, localTime?: number) {
+      try {
+        machine?.send?.({ type: 'SET_LOOP_STATE', name, iteration, localTime });
+      } catch {}
+    },
     dispose(){
       if (disposed) return;
       disposed = true;

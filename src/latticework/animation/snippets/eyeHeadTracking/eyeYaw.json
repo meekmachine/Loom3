@@ -1,5 +1,5 @@
 {
-  "name": "eyesHorizontal",
+  "name": "eyeYaw",
   "description": "Eyes sweep smoothly left ↔ right using continuum yaw",
   "curves": {
     "61": [

@@ -3,20 +3,13 @@ import {
   AU_TO_MORPHS,
   MORPH_VARIANTS,
   BONE_AU_TO_BINDINGS,
-  EYE_BONE_CANDIDATES_LEFT,
-  EYE_BONE_CANDIDATES_RIGHT,
-  JAW_BONE_CANDIDATES,
-  HEAD_BONE_CANDIDATES,
-  NECK_BONE_CANDIDATES,
-  TONGUE_BONE_CANDIDATES,
-  EYE_MESH_CANDIDATES_LEFT,
-  EYE_MESH_CANDIDATES_RIGHT,
-  HEAD_CTRL_CANDIDATES,
   BONE_DRIVEN_AUS,
   EYE_AXIS,
   MIXED_AUS,
   AU_TO_COMPOSITE_MAP,
-  COMPOSITE_ROTATIONS
+  COMPOSITE_ROTATIONS,
+  CC4_BONE_NODES,
+  CC4_EYE_MESH_NODES
 } from './arkit/shapeDict';
 
 const X_AXIS = new THREE.Vector3(1, 0, 0);
@@ -290,16 +283,13 @@ export class EngineFour {
   private resolveBones(model: THREE.Object3D): ResolvedBones {
     const result: ResolvedBones = {};
 
-    const findBone = (candidates: string[]): THREE.Object3D | undefined => {
-      for (const pattern of candidates) {
-        const found = model.getObjectByName(pattern);
-        if (found) return found;
-      }
-      return undefined;
+    const findNode = (name?: string | null): THREE.Object3D | undefined => {
+      if (!name) return undefined;
+      return model.getObjectByName(name) ?? undefined;
     };
 
-    const register = (key: BoneKeys, candidates: string[]) => {
-      const obj = findBone(candidates);
+    const register = (key: BoneKeys, primary?: string | null, fallback?: string | null) => {
+      const obj = findNode(primary) || findNode(fallback || undefined);
       if (obj) {
         result[key] = {
           obj,
@@ -310,12 +300,12 @@ export class EngineFour {
       }
     };
 
-    register('EYE_L', EYE_BONE_CANDIDATES_LEFT);
-    register('EYE_R', EYE_BONE_CANDIDATES_RIGHT);
-    register('JAW', JAW_BONE_CANDIDATES);
-    register('HEAD', HEAD_BONE_CANDIDATES);
-    register('NECK', NECK_BONE_CANDIDATES);
-    register('TONGUE', TONGUE_BONE_CANDIDATES);
+    register('EYE_L', CC4_BONE_NODES.EYE_L, CC4_EYE_MESH_NODES.LEFT);
+    register('EYE_R', CC4_BONE_NODES.EYE_R, CC4_EYE_MESH_NODES.RIGHT);
+    register('JAW', CC4_BONE_NODES.JAW);
+    register('HEAD', CC4_BONE_NODES.HEAD);
+    register('NECK', CC4_BONE_NODES.NECK);
+    register('TONGUE', CC4_BONE_NODES.TONGUE);
 
     return result;
   }

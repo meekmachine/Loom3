@@ -9,6 +9,7 @@ import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { HairService } from '../latticework/hair/hairService';
 import { classifyHairObject } from '../engine/arkit/shapeDict';
 import { useThreeState } from '../context/threeContext';
+import { getGLBCacheManager } from '../utils/GLBCacheManager';
 
 export type CharacterReady = {
   scene: THREE.Scene;
@@ -208,9 +209,24 @@ export default function CharacterGLBScene({
       );
     };
 
-    loader.load(
-      src,
-      gltf => {
+    // Use cache manager to fetch GLB (from cache or network)
+    const cacheManager = getGLBCacheManager();
+
+    cacheManager.fetch(src)
+      .then(cacheResult => {
+        // Log cache status
+        console.log(`[GLB Cache] ${src} - ${cacheResult.fromCache ? 'FROM CACHE' : 'DOWNLOADED'} (${Math.round(cacheResult.size! / 1024 / 1024)}MB)`);
+
+        // Convert ArrayBuffer to Blob for GLTFLoader
+        const blob = new Blob([cacheResult.data]);
+        const blobUrl = URL.createObjectURL(blob);
+
+        // Load the GLB from the blob URL
+        loader.load(
+          blobUrl,
+          gltf => {
+            // Clean up blob URL after loading
+            URL.revokeObjectURL(blobUrl);
         model = gltf.scene;
         scene.add(model);
 
@@ -295,24 +311,115 @@ export default function CharacterGLBScene({
         }
 
         onReady?.({ scene, model, meshes, hairService: hairService || undefined });
-      },
-      (progressEvent) => {
-        // Calculate loading progress percentage
-        if (progressEvent.lengthComputable) {
-          const percentComplete = (progressEvent.loaded / progressEvent.total) * 100;
-          const roundedProgress = Math.round(percentComplete);
+          },
+          (progressEvent) => {
+            // Calculate loading progress percentage
+            if (progressEvent.lengthComputable) {
+              const percentComplete = (progressEvent.loaded / progressEvent.total) * 100;
+              const roundedProgress = Math.round(percentComplete);
 
-          // Update 3D loading text with progress
-          updateLoadingText(roundedProgress);
+              // Update 3D loading text with progress
+              updateLoadingText(roundedProgress);
 
-          // Also call the onProgress callback
-          onProgress?.(roundedProgress);
-        }
-      },
-      (err) => {
-        console.error(`Failed to load ${src}. Place your GLB under public/`, err);
-      }
-    );
+              // Also call the onProgress callback
+              onProgress?.(roundedProgress);
+            }
+          },
+          (err) => {
+            console.error(`Failed to load ${src} from blob. Place your GLB under public/`, err);
+          }
+        );
+      })
+      .catch((err) => {
+        console.error(`Failed to fetch/cache ${src}:`, err);
+        // Fallback to direct loading if cache fails
+        loader.load(
+          src,
+          gltf => {
+            model = gltf.scene;
+            scene.add(model);
+
+            // Hair detection (same as above)
+            const hairObjects: THREE.Object3D[] = [];
+            model.traverse((obj) => {
+              const classification = classifyHairObject(obj.name);
+              if (classification) {
+                hairObjects.push(obj);
+              }
+            });
+
+            if (hairObjects.length > 0) {
+              hairService = new HairService(engine);
+              hairService.registerObjects(hairObjects);
+            }
+
+            // Center & scale
+            const box = new THREE.Box3().setFromObject(model);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+
+            model.position.x += -center.x;
+            model.position.y += -center.y;
+            model.position.z += -center.z;
+
+            const maxDim = Math.max(size.x, size.y, size.z) || 1;
+            const desiredMax = 1.6;
+            const scale = desiredMax / maxDim;
+            model.scale.setScalar(scale);
+
+            const box2 = new THREE.Box3().setFromObject(model);
+            box2.getSize(size);
+
+            if (cameraOverride) {
+              const [px, py, pz] = cameraOverride.position;
+              const [tx, ty, tz] = cameraOverride.target;
+              camera.position.set(px, py, pz);
+              controls.target.set(tx, ty, tz);
+              controls.update();
+            } else {
+              const targetY = size.y * 0.35;
+              controls.target.set(0, targetY, 0);
+              const fitHeight = size.y * 0.6;
+              const fov = camera.fov * Math.PI / 180;
+              const dist = (fitHeight / 2) / Math.tan(fov / 2) * 1.15;
+              camera.position.set(0, targetY, dist);
+              controls.update();
+            }
+
+            const meshes: THREE.Mesh[] = [];
+            model.traverse((obj) => {
+              if ((obj as THREE.Mesh).isMesh) {
+                const m = obj as THREE.Mesh;
+                if (Array.isArray(m.morphTargetInfluences) && m.morphTargetInfluences.length > 0) {
+                  meshes.push(m);
+                }
+              }
+            });
+
+            if (loadingTextMesh) {
+              scene.remove(loadingTextMesh);
+              loadingTextMesh.geometry.dispose();
+              (loadingTextMesh.material as THREE.Material).dispose();
+              loadingTextMesh = null;
+            }
+
+            onReady?.({ scene, model, meshes, hairService: hairService || undefined });
+          },
+          (progressEvent) => {
+            if (progressEvent.lengthComputable) {
+              const percentComplete = (progressEvent.loaded / progressEvent.total) * 100;
+              const roundedProgress = Math.round(percentComplete);
+              updateLoadingText(roundedProgress);
+              onProgress?.(roundedProgress);
+            }
+          },
+          (err) => {
+            console.error(`Failed to load ${src}. Place your GLB under public/`, err);
+          }
+        );
+      });
 
     const clock = new THREE.Clock();
     const animate = () => {

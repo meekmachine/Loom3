@@ -15,25 +15,36 @@ import type { GazeTarget } from './types';
 export interface EyeHeadHostCaps {
   scheduleSnippet: (snippet: any) => string | null;
   removeSnippet: (name: string) => void;
+  getCurrentValue?: (auId: string) => number;
   onSnippetEnd?: (name: string) => void;
 }
 
 export interface GazeTransitionConfig {
-  duration: number; // ms - how long the transition takes
+  duration: number; // ms - base duration for transitions
   easing: 'linear' | 'easeInOut' | 'easeOut';
   eyeIntensity: number; // 0-1 scale factor for eye movement
   headIntensity: number; // 0-1 scale factor for head movement
   eyePriority: number; // Animation priority
   headPriority: number; // Animation priority
+  // Trajectory-based timing parameters
+  minDurationScale: number; // Minimum duration scale (0.3 = 30% of base)
+  maxDurationScale: number; // Maximum duration scale (2.0 = 200% of base)
+  distanceScaling: number; // How much distance affects duration (default: 2.0)
+  headLagMultiplier: number; // How much slower head follows eyes (1.3 = 30% slower)
 }
 
 const DEFAULT_TRANSITION_CONFIG: GazeTransitionConfig = {
-  duration: 200, // 200ms for natural eye movement
+  duration: 200, // 200ms base for natural eye movement
   easing: 'easeOut',
   eyeIntensity: 1.0,
   headIntensity: 0.5,
   eyePriority: 20,
   headPriority: 15,
+  // Trajectory-based timing (start with similar behavior to original)
+  minDurationScale: 0.3, // 60ms minimum (200 * 0.3)
+  maxDurationScale: 2.0, // 400ms maximum (200 * 2.0) - extended for graceful large movements
+  distanceScaling: 2.0, // Distance divisor in formula
+  headLagMultiplier: 1.3, // Head takes 30% longer for graceful follow-through
 };
 
 // Real ARKit AU IDs (these already call applyCompositeMotion internally)
@@ -113,7 +124,16 @@ export class EyeHeadTrackingScheduler {
     } = options || {};
 
     const { x: targetX, y: targetY } = target;
-    const { eyeIntensity, headIntensity, eyePriority, headPriority } = this.transitionConfig;
+    const {
+      eyeIntensity,
+      headIntensity,
+      eyePriority,
+      headPriority,
+      minDurationScale,
+      maxDurationScale,
+      distanceScaling,
+      headLagMultiplier
+    } = this.transitionConfig;
 
     // Calculate target positions with intensity scaling
     const targetEyeYaw = targetX * eyeIntensity;
@@ -121,7 +141,7 @@ export class EyeHeadTrackingScheduler {
     const targetHeadYaw = targetX * headIntensity;
     const targetHeadPitch = targetY * headIntensity;
 
-    // Calculate duration based on distance (optional: make speed adaptive)
+    // Calculate distances for trajectory-based timing
     const eyeDistance = Math.sqrt(
       Math.pow(targetEyeYaw - this.currentEyeYaw, 2) +
       Math.pow(targetEyePitch - this.currentEyePitch, 2)
@@ -131,9 +151,17 @@ export class EyeHeadTrackingScheduler {
       Math.pow(targetHeadPitch - this.currentHeadPitch, 2)
     );
 
-    // Adaptive duration: faster for small movements, slower for large ones
-    const adaptiveDuration = duration * Math.min(1.0, Math.max(0.3, eyeDistance / 2));
-    const durationSec = adaptiveDuration / 1000;
+    // Trajectory-based adaptive duration for eyes
+    // Formula maintains similar behavior to original: duration * clamp(distance / distanceScaling)
+    const eyeDurationScale = Math.min(maxDurationScale, Math.max(minDurationScale, eyeDistance / distanceScaling));
+    const eyeDuration = duration * eyeDurationScale;
+
+    // Head follows with lag for more graceful, natural movement
+    const headDurationScale = Math.min(maxDurationScale, Math.max(minDurationScale, headDistance / distanceScaling));
+    const headDuration = duration * headDurationScale * headLagMultiplier;
+
+    const eyeDurationSec = eyeDuration / 1000;
+    const headDurationSec = headDuration / 1000;
 
     // Schedule eye movements using COMBINED snippet with multiple AUs
     if (eyeEnabled) {
@@ -145,21 +173,21 @@ export class EyeHeadTrackingScheduler {
       // This ensures smooth transitions when switching directions (left→right, right→left)
       eyeCurves[EYE_HEAD_AUS.EYE_YAW_LEFT] = [
         { time: 0, intensity: this.currentEyeYaw < 0 ? Math.abs(this.currentEyeYaw) : 0 },
-        { time: durationSec, intensity: targetEyeYaw < 0 ? Math.abs(targetEyeYaw) : 0 }
+        { time: eyeDurationSec, intensity: targetEyeYaw < 0 ? Math.abs(targetEyeYaw) : 0 }
       ];
       eyeCurves[EYE_HEAD_AUS.EYE_YAW_RIGHT] = [
         { time: 0, intensity: this.currentEyeYaw > 0 ? this.currentEyeYaw : 0 },
-        { time: durationSec, intensity: targetEyeYaw > 0 ? targetEyeYaw : 0 }
+        { time: eyeDurationSec, intensity: targetEyeYaw > 0 ? targetEyeYaw : 0 }
       ];
 
       // Pitch (vertical): ALWAYS schedule BOTH up AND down AUs
       eyeCurves[EYE_HEAD_AUS.EYE_PITCH_UP] = [
         { time: 0, intensity: this.currentEyePitch > 0 ? this.currentEyePitch : 0 },
-        { time: durationSec, intensity: targetEyePitch > 0 ? targetEyePitch : 0 }
+        { time: eyeDurationSec, intensity: targetEyePitch > 0 ? targetEyePitch : 0 }
       ];
       eyeCurves[EYE_HEAD_AUS.EYE_PITCH_DOWN] = [
         { time: 0, intensity: this.currentEyePitch < 0 ? Math.abs(this.currentEyePitch) : 0 },
-        { time: durationSec, intensity: targetEyePitch < 0 ? Math.abs(targetEyePitch) : 0 }
+        { time: eyeDurationSec, intensity: targetEyePitch < 0 ? Math.abs(targetEyePitch) : 0 }
       ];
 
       // Only schedule if we have curves to apply
@@ -173,7 +201,7 @@ export class EyeHeadTrackingScheduler {
           snippetIntensityScale: 1.0, // Already scaled in curve values
         });
 
-        console.log(`[Scheduler V2] ✓ Eye gaze: (${this.currentEyeYaw.toFixed(2)}, ${this.currentEyePitch.toFixed(2)}) → (${targetEyeYaw.toFixed(2)}, ${targetEyePitch.toFixed(2)}) over ${adaptiveDuration.toFixed(0)}ms`);
+        console.log(`[Scheduler V2] ✓ Eye gaze: (${this.currentEyeYaw.toFixed(2)}, ${this.currentEyePitch.toFixed(2)}) → (${targetEyeYaw.toFixed(2)}, ${targetEyePitch.toFixed(2)}) over ${eyeDuration.toFixed(0)}ms`);
       }
 
       // Update tracked position
@@ -187,24 +215,39 @@ export class EyeHeadTrackingScheduler {
 
       const headCurves: Record<string, Array<{time: number; intensity: number}>> = {};
 
+      // CRITICAL: Query ACTUAL current values from animation agency
+      // This ensures smooth continuity even when prosodic or other agencies have controlled these AUs
+      const actualHeadYawLeft = this.host.getCurrentValue?.(EYE_HEAD_AUS.HEAD_YAW_LEFT) ?? 0;
+      const actualHeadYawRight = this.host.getCurrentValue?.(EYE_HEAD_AUS.HEAD_YAW_RIGHT) ?? 0;
+      const actualHeadPitchUp = this.host.getCurrentValue?.(EYE_HEAD_AUS.HEAD_PITCH_UP) ?? 0;
+      const actualHeadPitchDown = this.host.getCurrentValue?.(EYE_HEAD_AUS.HEAD_PITCH_DOWN) ?? 0;
+
+      // Reconstruct continuum values from current directional AUs
+      const actualHeadYaw = actualHeadYawRight - actualHeadYawLeft;  // Positive = right, negative = left
+      const actualHeadPitch = actualHeadPitchUp - actualHeadPitchDown; // Positive = up, negative = down
+
+      console.log(`[Scheduler V2] Head AU current values: yawL=${actualHeadYawLeft.toFixed(3)}, yawR=${actualHeadYawRight.toFixed(3)}, pitchUp=${actualHeadPitchUp.toFixed(3)}, pitchDown=${actualHeadPitchDown.toFixed(3)} → continuum yaw=${actualHeadYaw.toFixed(3)}, pitch=${actualHeadPitch.toFixed(3)}`);
+
       // Yaw (horizontal): ALWAYS schedule BOTH left AND right AUs
+      // Start from ACTUAL current values, not internal tracking
       headCurves[EYE_HEAD_AUS.HEAD_YAW_LEFT] = [
-        { time: 0, intensity: this.currentHeadYaw < 0 ? Math.abs(this.currentHeadYaw) : 0 },
-        { time: durationSec, intensity: targetHeadYaw < 0 ? Math.abs(targetHeadYaw) : 0 }
+        { time: 0, intensity: actualHeadYawLeft },  // ✅ Start from actual current value
+        { time: headDurationSec, intensity: targetHeadYaw < 0 ? Math.abs(targetHeadYaw) : 0 }
       ];
       headCurves[EYE_HEAD_AUS.HEAD_YAW_RIGHT] = [
-        { time: 0, intensity: this.currentHeadYaw > 0 ? this.currentHeadYaw : 0 },
-        { time: durationSec, intensity: targetHeadYaw > 0 ? targetHeadYaw : 0 }
+        { time: 0, intensity: actualHeadYawRight }, // ✅ Start from actual current value
+        { time: headDurationSec, intensity: targetHeadYaw > 0 ? targetHeadYaw : 0 }
       ];
 
       // Pitch (vertical): ALWAYS schedule BOTH up AND down AUs
+      // Start from ACTUAL current values, not internal tracking
       headCurves[EYE_HEAD_AUS.HEAD_PITCH_UP] = [
-        { time: 0, intensity: this.currentHeadPitch > 0 ? this.currentHeadPitch : 0 },
-        { time: durationSec, intensity: targetHeadPitch > 0 ? targetHeadPitch : 0 }
+        { time: 0, intensity: actualHeadPitchUp },   // ✅ Start from actual current value
+        { time: headDurationSec, intensity: targetHeadPitch > 0 ? targetHeadPitch : 0 }
       ];
       headCurves[EYE_HEAD_AUS.HEAD_PITCH_DOWN] = [
-        { time: 0, intensity: this.currentHeadPitch < 0 ? Math.abs(this.currentHeadPitch) : 0 },
-        { time: durationSec, intensity: targetHeadPitch < 0 ? Math.abs(targetHeadPitch) : 0 }
+        { time: 0, intensity: actualHeadPitchDown }, // ✅ Start from actual current value
+        { time: headDurationSec, intensity: targetHeadPitch < 0 ? Math.abs(targetHeadPitch) : 0 }
       ];
 
       // Only schedule if we have curves
@@ -218,7 +261,7 @@ export class EyeHeadTrackingScheduler {
           snippetIntensityScale: 1.0, // Already scaled in curve values
         });
 
-        console.log(`[Scheduler V2] ✓ Head gaze: (${this.currentHeadYaw.toFixed(2)}, ${this.currentHeadPitch.toFixed(2)}) → (${targetHeadYaw.toFixed(2)}, ${targetHeadPitch.toFixed(2)}) over ${adaptiveDuration.toFixed(0)}ms`);
+        console.log(`[Scheduler V2] ✓ Head gaze: ACTUAL (${actualHeadYaw.toFixed(2)}, ${actualHeadPitch.toFixed(2)}) → TARGET (${targetHeadYaw.toFixed(2)}, ${targetHeadPitch.toFixed(2)}) over ${headDuration.toFixed(0)}ms (lag: ${headLagMultiplier}x)`);
       }
 
       // Update tracked position

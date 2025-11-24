@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useMemo, useEffect } from 'react';
+import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import CharacterGLBScene from './scenes/CharacterGLBScene';
 import SliderDrawer from './components/SliderDrawer';
 import ModulesMenu from './components/ModulesMenu';
@@ -7,7 +7,9 @@ import { useThreeState } from './context/threeContext';
 import { ModulesProvider, useModulesContext } from './context/ModulesContext';
 import { createEyeHeadTrackingService } from './latticework/eyeHeadTracking/eyeHeadTrackingService';
 import { HairService } from './latticework/hair/hairService';
+import { BlinkService } from './latticework/blink/blinkService';
 import './styles.css';
+import { setupGLBCacheDebug } from './utils/glbCacheDebug';
 
 import { AU_TO_MORPHS } from './engine/arkit/shapeDict';
 
@@ -20,6 +22,7 @@ function AppContent() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [hairService, setHairService] = useState<HairService | null>(null);
+  const [blinkService, setBlinkService] = useState<BlinkService | null>(null);
 
   // Helper: audit morph coverage
   function auditMorphCoverage(model: any) {
@@ -84,31 +87,62 @@ function AppContent() {
     setLoadingProgress(progress);
   }, []);
 
-  // Initialize eye/head tracking service on app startup
+  // Initialize GLB cache debug utilities
   useEffect(() => {
+    setupGLBCacheDebug();
+  }, []);
+
+  // Initialize eye/head tracking service when both engine and anim are ready
+  useEffect(() => {
+    if (!engine || !anim) return;
+
     console.log('[App] Creating eye/head tracking service with animation scheduler');
     const service = createEyeHeadTrackingService({
-      eyeTrackingEnabled: true,
-      headTrackingEnabled: true,
-      headFollowEyes: true,
+      // Use default config - disabled by default, can be enabled in UI
       animationAgency: anim, // Pass animation agency for scheduling approach
       engine: engine, // Pass engine as fallback
     });
 
     service.start();
     setEyeHeadTrackingService(service);
-    console.log('[App] ✓ Eye/head tracking service initialized and registered');
-
-    // Test mouse tracking immediately
-    service.setMode('mouse');
-    console.log('[App] ✓ Mouse tracking enabled by default');
+    console.log('[App] ✓ Eye/head tracking service initialized (disabled by default)');
 
     return () => {
       console.log('[App] Cleaning up eye/head tracking service');
       service.dispose();
       setEyeHeadTrackingService(null);
     };
-  }, [engine, setEyeHeadTrackingService]);
+  }, [engine, anim, setEyeHeadTrackingService]);
+
+  // Initialize blink service when animation service is ready
+  useEffect(() => {
+    if (!anim) return;
+
+    console.log('[App] Creating blink service with animation scheduler');
+    const service = new BlinkService({
+      scheduleSnippet: (snippet: any) => {
+        return anim.schedule?.(snippet) || null;
+      },
+      removeSnippet: (name: string) => {
+        anim.remove?.(name);
+      },
+    });
+
+    setBlinkService(service);
+
+    // Expose blink service globally for debugging
+    if (typeof window !== 'undefined') {
+      (window as any).blinkService = service;
+    }
+
+    console.log('[App] ✓ Blink service initialized and registered');
+
+    return () => {
+      console.log('[App] Cleaning up blink service');
+      service.dispose();
+      setBlinkService(null);
+    };
+  }, [anim]);
 
   // Camera override memoized
   const cameraOverride = useMemo(() => ({
@@ -143,6 +177,7 @@ function AppContent() {
         onToggle={() => setDrawerOpen(!drawerOpen)}
         disabled={isLoading}
         hairService={hairService}
+        blinkService={blinkService}
       />
       <ModulesMenu animationManager={anim} />
     </div>

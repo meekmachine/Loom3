@@ -10,7 +10,7 @@ import {
   HStack,
   VStack
 } from '@chakra-ui/react';
-import { AUInfo } from '../../engine/arkit/shapeDict';
+import { AUInfo, AU_MIX_DEFAULTS } from '../../engine/arkit/shapeDict';
 import { EngineThree } from '../../engine/EngineThree';
 
 interface ContinuumSliderProps {
@@ -38,7 +38,6 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
   disabled = false
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
-  const [mixValue, setMixValue] = useState<number>(1); // Default to 1 (full bone)
 
   // Color: blue for negative, neutral in center, orange for positive
   const getSliderColor = (val: number): string => {
@@ -66,6 +65,9 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
     // Vertical/pitch: use positive (up) AU
     baseAUId = posId;
   }
+
+  // Initialize mix value from AU_MIX_DEFAULTS
+  const [mixValue, setMixValue] = useState<number>(AU_MIX_DEFAULTS[baseAUId] ?? 1.0);
 
   // Get current mix value from engine, or use local state
   const getMix = () => {

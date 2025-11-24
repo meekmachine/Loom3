@@ -91,15 +91,26 @@ export interface Engine {
    */
   getActiveTransitionCount?: () => number;
 
-  // Composite helper methods for continuum pairs
+  // Composite helper methods for continuum pairs (instant)
   setEyesHorizontal?: (value: number) => void;
   setEyesVertical?: (value: number) => void;
   setHeadHorizontal?: (value: number) => void;
   setHeadVertical?: (value: number) => void;
   setHeadTilt?: (value: number) => void;
+  setHeadRoll?: (value: number) => void;
   setJawHorizontal?: (value: number) => void;
   setTongueHorizontal?: (value: number) => void;
   setTongueVertical?: (value: number) => void;
+
+  // Composite transition methods for continuum pairs (animated)
+  transitionEyesHorizontal?: (value: number, durationMs?: number) => void;
+  transitionEyesVertical?: (value: number, durationMs?: number) => void;
+  transitionHeadHorizontal?: (value: number, durationMs?: number) => void;
+  transitionHeadVertical?: (value: number, durationMs?: number) => void;
+  transitionHeadRoll?: (value: number, durationMs?: number) => void;
+  transitionJawHorizontal?: (value: number, durationMs?: number) => void;
+  transitionTongueHorizontal?: (value: number, durationMs?: number) => void;
+  transitionTongueVertical?: (value: number, durationMs?: number) => void;
 }
 
 /**

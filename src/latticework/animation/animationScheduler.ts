@@ -119,7 +119,7 @@ export class AnimationScheduler {
   /** Track current AU values for smooth continuity when scheduling new snippets */
   private currentValues = new Map<string, number>();
   /** Track last sampled local times per snippet to detect loop wrap events. */
-  private loopLocalTimes = new Map<any, number>();
+  private loopLocalTimes = new Map<string, { local: number; loopCount: number }>();
   /** Detect and handle natural snippet completions (non-looping). Uses wall-clock anchoring. */
   private checkCompletions(tPlay: number) {
     const snippets = this.currentSnippets();
@@ -226,7 +226,7 @@ export class AnimationScheduler {
         local = Math.min(dur, Math.max(0, local));
       }
 
-      this.handleLoopContinuity(sn, local);
+      this.handleLoopContinuity(sn, local, now, dur, rate);
 
       for (const [curveId, arr] of Object.entries(sn.curves || {})) {
         // Sample the curve at the current local time
@@ -288,12 +288,12 @@ export class AnimationScheduler {
         // Combine replace-mode winner with additive sum
         const combined = clamp01(replaceTarget.v + additiveSum);
         targets.set(curveId, { ...replaceTarget, v: combined });
-        console.log(`[Scheduler] Additive blend: AU ${curveId} = ${replaceTarget.v.toFixed(3)} (replace) + ${additiveSum.toFixed(3)} (additive) = ${combined.toFixed(3)}`);
+        console.log(`[AnimationScheduler][Additive] AU ${curveId}: replace=${replaceTarget.v.toFixed(3)} additive=${additiveSum.toFixed(3)} → ${combined.toFixed(3)}`);
       } else {
         // No replace-mode snippet, just use additive sum
         const combined = clamp01(additiveSum);
         targets.set(curveId, { v: combined, pri: maxAdditivePri, durMs: 120, category: 'default' });
-        console.log(`[Scheduler] Additive blend: AU ${curveId} = ${additiveSum.toFixed(3)} (additive only) = ${combined.toFixed(3)}`);
+        console.log(`[AnimationScheduler][Additive] AU ${curveId}: additive only=${additiveSum.toFixed(3)} → ${combined.toFixed(3)}`);
       }
     }
 
@@ -325,13 +325,20 @@ export class AnimationScheduler {
 
         const negAU = String(config.negative);
         const posAU = String(config.positive);
-        const negValue = targets.get(negAU)?.v ?? 0;
-        const posValue = targets.get(posAU)?.v ?? 0;
+        const negEntry = targets.get(negAU);
+        const posEntry = targets.get(posAU);
+        const negValue = negEntry?.v ?? 0;
+        const posValue = posEntry?.v ?? 0;
 
         // If either AU is active, calculate continuum value and call the appropriate method
         if (negValue > 0 || posValue > 0) {
           // Continuum value: -1 (negative) to +1 (positive)
           const continuumValue = posValue - negValue;
+          const continuumDurationMs = Math.max(
+            negEntry?.durMs ?? 0,
+            posEntry?.durMs ?? 0,
+            0
+          );
 
           // Determine which engine method to call based on node and axis
           const methodName = this.getContinuumMethodName(node, axisName);
@@ -341,9 +348,35 @@ export class AnimationScheduler {
             const continuumKey = `${methodName}:${negAU}-${posAU}`;
 
             if (!processedContinuums.has(continuumKey) && this.host[methodName]) {
-              this.host[methodName](continuumValue);
-              console.log(`[Scheduler] Continuum: ${node}.${axisName} = ${continuumValue.toFixed(2)} (AU${negAU}=${negValue.toFixed(2)}, AU${posAU}=${posValue.toFixed(2)}) → ${methodName}()`);
+              const transitionName = methodName.startsWith('set')
+                ? `transition${methodName.slice(3)}`
+                : null;
+              if (
+                transitionName &&
+                typeof (this.host as any)[transitionName] === 'function' &&
+                continuumDurationMs > 0
+              ) {
+                (this.host as any)[transitionName](continuumValue, continuumDurationMs);
+                console.log(
+                  `[AnimationScheduler][Continuum] ${node}.${axisName} value=${continuumValue.toFixed(
+                    3
+                  )} duration=${continuumDurationMs.toFixed(0)}ms via ${transitionName}`
+                );
+              } else {
+                this.host[methodName](continuumValue);
+                console.log(
+                  `[AnimationScheduler][Continuum] ${node}.${axisName} value=${continuumValue.toFixed(
+                    3
+                  )} (neg AU${negAU}=${negValue.toFixed(3)}, pos AU${posAU}=${posValue.toFixed(
+                    3
+                  )}) via ${methodName}`
+                );
+              }
               processedContinuums.add(continuumKey);
+            } else if (!processedContinuums.has(continuumKey) && !this.host[methodName]) {
+              console.warn(
+                `[AnimationScheduler][Continuum] Missing host method ${methodName} for ${node}.${axisName}`
+              );
             }
           }
 
@@ -393,7 +426,6 @@ export class AnimationScheduler {
 
       const v = clamp01(entry.v);
       (this.host.transitionMorph ?? this.host.setMorph)?.(morphName, v, entry.durMs);
-      this.currentValues.set(curveId, v);
       processedIds.push(curveId);
     });
 
@@ -401,14 +433,43 @@ export class AnimationScheduler {
   }
 
   /** Detect loop wrap events and refresh inherited keyframes so loops resume from the latest AU values. */
-  private handleLoopContinuity(sn: Snippet & { curves: Record<string, SchedulerCurvePoint[]> }, localTime: number) {
-    const prev = this.loopLocalTimes.get(sn);
+  private handleLoopContinuity(
+    sn: Snippet & { curves: Record<string, SchedulerCurvePoint[]> },
+    localTime: number,
+    now: number,
+    duration: number,
+    rate: number
+  ) {
+    const key = sn.name || '__anon__';
 
-    if (sn.loop && prev !== undefined && localTime + 1e-4 < prev) {
-      this.reseedInheritedKeyframes(sn);
+    if (!sn.loop || duration <= 0) {
+      this.loopLocalTimes.set(key, { local: localTime, loopCount: 0 });
+      return;
     }
 
-    this.loopLocalTimes.set(sn, localTime);
+    const startWall = (sn as any).startWallTime;
+    if (!startWall) {
+      this.loopLocalTimes.set(key, { local: localTime, loopCount: 0 });
+      return;
+    }
+
+    const elapsed = ((now - startWall) / 1000) * rate;
+    const loopCount = Math.floor(elapsed / duration);
+    const prev = this.loopLocalTimes.get(key);
+
+    if (prev && loopCount > prev.loopCount) {
+      this.reseedInheritedKeyframes(sn);
+      if (key) {
+        this.safeSend({
+          type: 'SNIPPET_LOOPED',
+          name: key,
+          iteration: loopCount,
+          localTime
+        });
+      }
+    }
+
+    this.loopLocalTimes.set(key, { local: localTime, loopCount });
   }
 
   private reseedInheritedKeyframes(sn: Snippet & { curves: Record<string, SchedulerCurvePoint[]> }) {
@@ -518,8 +579,8 @@ export class AnimationScheduler {
       // Clone the keyframe array to avoid mutating the original
       const newKeyframes = keyframes.map(kf => ({ ...kf }));
 
-      // If first keyframe is at time 0, replace its intensity with current value
-      if (newKeyframes[0].time === 0 || newKeyframes[0].inherit) {
+      // If first keyframe is marked for inherit (or sits at time 0), replace its intensity with current value
+      if (newKeyframes[0].inherit || newKeyframes[0].time === 0) {
         const currentValue = this.currentValues.get(auId) ?? 0;
         const prevValue = newKeyframes[0].intensity ?? 0;
 
@@ -529,7 +590,7 @@ export class AnimationScheduler {
 
         newKeyframes[0] = {
           ...newKeyframes[0],
-          time: 0,
+          time: newKeyframes[0].time,
           intensity: currentValue,
           inherit: newKeyframes[0].inherit
         };
@@ -551,6 +612,8 @@ export class AnimationScheduler {
 
   remove(name: string) {
     this.safeSend({ type: 'REMOVE_ANIMATION', name });
+    this.loopLocalTimes.delete(name);
+    this.ended.delete(name);
   }
 
   schedule(data: any, opts: ScheduleOpts = {}) {
@@ -665,6 +728,7 @@ export class AnimationScheduler {
     this.pausedAt = 0;
     // Clear all scheduled snippets
     this.sched.forEach((r) => { r.enabled = false; r.startsAt = 0; r.offset = 0; });
+    this.loopLocalTimes.clear();
     if (this.rafId != null) {
       cancelAnimationFrame(this.rafId as any);
       this.rafId = null;

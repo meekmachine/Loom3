@@ -25,13 +25,11 @@ Comprehensive collection of continuum-based animation snippets for natural eye a
 - **`headTurnRight.json`** - Turn head right (60% intensity, 0.5s)
 - **`headLookUp.json`** - Tilt head up (40% intensity, 0.5s)
 - **`headLookDown.json`** - Tilt head down (50% intensity, 0.5s)
-- **`headTiltLeft.json`** - Tilt head left/roll (35% intensity, 0.4s)
-- **`headTiltRight.json`** - Tilt head right/roll (35% intensity, 0.4s)
+- **`headRoll.json`** - Tilt head left ↔ right (roll axis test, 0.4s)
 
-### Head - Sweep & Gestures
 - **`headYaw.json`** - Full horizontal sweep: left → neutral → right (1s)
 - **`headPitch.json`** - Full vertical sweep: down → neutral → up (1s)
-- **`headRoll.json`** - Full roll sweep: left → neutral → right (1s)
+- **`headRollCircular.json`** - Circular head roll (yaw + pitch + roll, 1.2s)
 - **`headSweepHorizontal.json`** - Extended sweep: left → right → neutral → left (3s)
 - **`headNod.json`** - Double nod gesture (2 nods, 0.8s total)
 - **`headShake.json`** - Head shake "no" gesture (0.75s)

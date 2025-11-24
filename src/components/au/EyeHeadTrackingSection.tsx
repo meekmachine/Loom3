@@ -36,6 +36,30 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
   const [eyeSaccadeSpeed, setEyeSaccadeSpeed] = useState(0.7);
   const [headSpeed, setHeadSpeed] = useState(0.4);
   const [headFollowDelay, setHeadFollowDelay] = useState(200);
+  const [returnToNeutralEnabled, setReturnToNeutralEnabled] = useState(false);
+  const [returnToNeutralDelay, setReturnToNeutralDelay] = useState(3000);
+  const [eyeBlendWeight, setEyeBlendWeight] = useState(0.5);
+  const [headBlendWeight, setHeadBlendWeight] = useState(0.7);
+
+  // Initialize service config on mount to match UI state
+  useEffect(() => {
+    if (!eyeHeadTrackingService) return;
+
+    // Sync initial UI state to service
+    eyeHeadTrackingService.updateConfig({
+      eyeTrackingEnabled,
+      headTrackingEnabled,
+      headFollowEyes,
+      eyeIntensity: eyeSaccadeSpeed,
+      headIntensity: headSpeed,
+      headFollowDelay,
+      returnToNeutralEnabled,
+      returnToNeutralDelay,
+    });
+    eyeHeadTrackingService.setEyeBlendWeight(eyeBlendWeight);
+    eyeHeadTrackingService.setHeadBlendWeight(headBlendWeight);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eyeHeadTrackingService]); // Only run on mount when service becomes available
 
   // Poll service mode to detect external changes (from Conversation Service)
   useEffect(() => {
@@ -129,6 +153,16 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
   const handleConfigChange = (config: any) => {
     if (!eyeHeadTrackingService) return;
     eyeHeadTrackingService.updateConfig(config);
+  };
+
+  const handleEyeBlendChange = (value: number) => {
+    setEyeBlendWeight(value);
+    eyeHeadTrackingService?.setEyeBlendWeight(value);
+  };
+
+  const handleHeadBlendChange = (value: number) => {
+    setHeadBlendWeight(value);
+    eyeHeadTrackingService?.setHeadBlendWeight(value);
   };
 
   // Cleanup webcam on unmount
@@ -440,6 +474,114 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
                 </VStack>
               )}
             </Box>
+          </VStack>
+        </Box>
+
+        {/* Morph ↔ Bone Blend */}
+        <Box pt={4} borderTop="1px" borderColor="gray.700">
+          <Text fontSize="sm" fontWeight="bold" mb={3} color="gray.300">
+            Morph ↔ Bone Blend
+          </Text>
+          <VStack spacing={3} align="stretch">
+            <VStack spacing={1} align="stretch">
+              <HStack justify="space-between">
+                <Text fontSize="xs" color="blue.200">Eyes</Text>
+                <Text fontSize="xs" color="gray.400" fontFamily="mono">{eyeBlendWeight.toFixed(2)}</Text>
+              </HStack>
+              <Slider
+                min={0}
+                max={1}
+                step={0.01}
+                value={eyeBlendWeight}
+                isDisabled={disabled || !eyeTrackingEnabled}
+                onChange={handleEyeBlendChange}
+              >
+                <SliderTrack bg="blue.900">
+                  <SliderFilledTrack bg="blue.400" />
+                </SliderTrack>
+                <SliderThumb boxSize={4} bg="blue.300" />
+              </Slider>
+              <Text fontSize="xs" color="gray.500">
+                0 = morph only, 1 = bone only (same as continuum slider blend)
+              </Text>
+            </VStack>
+
+            <VStack spacing={1} align="stretch">
+              <HStack justify="space-between">
+                <Text fontSize="xs" color="green.200">Head</Text>
+                <Text fontSize="xs" color="gray.400" fontFamily="mono">{headBlendWeight.toFixed(2)}</Text>
+              </HStack>
+              <Slider
+                min={0}
+                max={1}
+                step={0.01}
+                value={headBlendWeight}
+                isDisabled={disabled || !headTrackingEnabled}
+                onChange={handleHeadBlendChange}
+              >
+                <SliderTrack bg="green.900">
+                  <SliderFilledTrack bg="green.400" />
+                </SliderTrack>
+                <SliderThumb boxSize={4} bg="green.300" />
+              </Slider>
+              <Text fontSize="xs" color="gray.500">
+                Adjust balance of morph overlay vs. bone rotation for head turns
+              </Text>
+            </VStack>
+          </VStack>
+        </Box>
+
+        {/* Return to Neutral Settings */}
+        <Box pt={4} borderTop="1px" borderColor="gray.700">
+          <Text fontSize="sm" fontWeight="bold" mb={3} color="gray.300">
+            Return to Neutral
+          </Text>
+          <VStack spacing={3} align="stretch">
+            <HStack justify="space-between">
+              <VStack align="start" spacing={0}>
+                <Text fontSize="xs" color="gray.400">Auto-Return to Center</Text>
+                <Text fontSize="xs" color="gray.600">Gracefully return to neutral after delay</Text>
+              </VStack>
+              <Switch
+                isChecked={returnToNeutralEnabled}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  setReturnToNeutralEnabled(enabled);
+                  handleConfigChange({ returnToNeutralEnabled: enabled });
+                }}
+                size="sm"
+                colorScheme="cyan"
+                isDisabled={disabled}
+              />
+            </HStack>
+
+            {returnToNeutralEnabled && (
+              <VStack spacing={1} align="stretch">
+                <HStack justify="space-between">
+                  <Text fontSize="xs" color="gray.400">Return Delay (ms)</Text>
+                  <Text fontSize="xs" color="gray.400" fontFamily="mono">{returnToNeutralDelay}ms</Text>
+                </HStack>
+                <Slider
+                  value={returnToNeutralDelay}
+                  onChange={(val) => {
+                    setReturnToNeutralDelay(val);
+                    handleConfigChange({ returnToNeutralDelay: val });
+                  }}
+                  min={500}
+                  max={10000}
+                  step={500}
+                  isDisabled={disabled}
+                >
+                  <SliderTrack bg="gray.700">
+                    <SliderFilledTrack bg="cyan.400" />
+                  </SliderTrack>
+                  <SliderThumb boxSize={4} bg="cyan.400" />
+                </Slider>
+                <Text fontSize="xs" color="gray.600" mt={1}>
+                  How long to wait before returning to center
+                </Text>
+              </VStack>
+            )}
           </VStack>
         </Box>
 

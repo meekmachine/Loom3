@@ -21,17 +21,20 @@ import VisemeSection from './au/VisemeSection';
 import TTSSection from './au/TTSSection';
 import EyeHeadTrackingSection from './au/EyeHeadTrackingSection';
 import HairSection from './au/HairSection';
+import BlinkSection from './au/BlinkSection';
 import DockableAccordionItem from './au/DockableAccordionItem';
 import PlaybackControls from './PlaybackControls';
 import { useThreeState } from '../context/threeContext';
 import type { NormalizedSnippet, CurvePoint } from '../latticework/animation/types';
 import { HairService } from '../latticework/hair/hairService';
+import { BlinkService } from '../latticework/blink/blinkService';
 
 interface SliderDrawerProps {
   isOpen: boolean;
   onToggle: () => void;
   disabled?: boolean;
   hairService?: HairService | null;
+  blinkService?: BlinkService | null;
 }
 
 type Keyframe = { time: number; value: number };
@@ -55,7 +58,8 @@ export default function SliderDrawer({
   isOpen,
   onToggle,
   disabled = false,
-  hairService
+  hairService,
+  blinkService
 }: SliderDrawerProps) {
   const { engine, anim, addFrameListener } = useThreeState();
 
@@ -205,13 +209,10 @@ export default function SliderDrawer({
     });
   }, [auGroups, auStates, showUnusedSliders, useCurveEditor]);
 
-  // Reset face to neutral
+  // Reset face to neutral - uses comprehensive engine method that resets both morphs and bones
   const setFaceToNeutral = () => {
-    // Zero out all AUs in engine
-    Object.keys(AU_INFO).forEach(id => {
-      engine?.setAU(id as any, 0);
-    });
-    // Clear local state
+    engine?.resetToNeutral();
+    // Clear local UI state
     setAuStates({});
     setVisemeStates({});
   };
@@ -249,7 +250,14 @@ export default function SliderDrawer({
         onClose={onToggle}
         size="md"
       >
-        <DrawerContent zIndex={9999} bg="gray.850">
+        <DrawerContent
+          zIndex={9999}
+          bg="rgba(255, 255, 255, 0.5)"
+          backdropFilter="blur(10px)"
+          sx={{
+            WebkitBackdropFilter: "blur(10px)",
+          }}
+        >
           <DrawerCloseButton color="gray.400" _hover={{ color: 'gray.200', bg: 'gray.700' }} />
           <DrawerHeader borderBottomWidth="1px" borderColor="gray.700" bg="gray.800" color="gray.50" fontWeight="bold">
             Action Units
@@ -310,7 +318,7 @@ export default function SliderDrawer({
             </VStack>
           </Box>
 
-          <DrawerBody bg="gray.850">
+          <DrawerBody bg="transparent">
             <Accordion allowMultiple>
               {/* Text-to-Speech Section */}
               <TTSSection
@@ -332,6 +340,12 @@ export default function SliderDrawer({
               {/* Hair & Eyebrows Section */}
               <HairSection
                 hairService={hairService}
+                disabled={disabled}
+              />
+
+              {/* Blinking Section */}
+              <BlinkSection
+                blinkService={blinkService}
                 disabled={disabled}
               />
 

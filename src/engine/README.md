@@ -2,6 +2,15 @@
 
 This directory contains the core facial animation engine that drives morphs (blendshapes) and bones for realistic character animation.
 
+## 📚 Essential Reading
+
+Before working with the engine, read these comprehensive guides:
+
+1. **[COMPOSITE_MOTION_GUIDE.md](../../COMPOSITE_MOTION_GUIDE.md)** - Complete guide to the composite motion system (pitch/yaw/roll controls for eyes, head, jaw, tongue, and future body parts)
+2. **[MIX_WEIGHT_SYSTEM.md](../../MIX_WEIGHT_SYSTEM.md)** - Critical documentation on how mix weights work (morph/bone blending)
+
+**⚠️ CRITICAL**: Always read MIX_WEIGHT_SYSTEM.md before modifying mix weight code. The behavior is non-obvious and easy to break.
+
 ## Architecture Overview
 
 ### Core Components
@@ -267,6 +276,12 @@ engine.getPaused(); // Check state
 - Mix weight changes trigger immediate reapply via `reapplyComposites()`
 - Single RAF loop shared across all systems (no timer conflicts)
 - Transitions use elapsed time accumulation (no wall-clock drift)
+
+## Animation Agency Integration
+
+- The animation agency (animation scheduler) never calls `setAU` directly for head/eye continuums; it routes through the continuum helpers (`setEyesHorizontal`, `transitionHeadVertical`, etc.). These helpers maintain composite yaw/pitch/roll state and keep bones + morphs synchronized.
+- Head/Eye tracking snippets are generated with canonical names (`eyeHeadTracking/eyeYaw`, `headYaw`, etc.). When they reach the scheduler, it samples AU pairs (31/32, 33/54, 55/56, 61/62, 63/64) and calls the corresponding transition helper with the sampled tween duration.
+- Mix weights continue to apply only to morph overlays. Agencies can expose UI sliders (e.g., `setHeadBlendWeight`) that forward to `engine.setAUMixWeight` for the relevant AU IDs so you can bias toward morphs or bones without touching scheduler code.
 
 ## File Structure
 

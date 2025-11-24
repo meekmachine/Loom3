@@ -1,5 +1,5 @@
 {
-  "name": "headHorizontal",
+  "name": "headYaw",
   "description": "Head turns left ↔ right using yaw continuum",
   "curves": {
     "31": [

@@ -57,6 +57,8 @@ export type NormalizedSnippet = {
   curves: CurvesMap;
   isPlaying: boolean;
   loop: boolean;
+  loopIteration: number;
+  lastLoopTime: number;
 
   snippetPlaybackRate: number;
   snippetIntensityScale: number;
@@ -128,6 +130,20 @@ export interface ManualSetEvent {
 }
 export interface ManualClearEvent { type: 'MANUAL_CLEAR'; id: string | number; }
 
+export interface SnippetLoopEvent {
+  type: 'SNIPPET_LOOPED';
+  name: string;
+  iteration: number;
+  localTime: number;
+}
+
+export interface SetLoopStateEvent {
+  type: 'SET_LOOP_STATE';
+  name: string;
+  iteration: number;
+  localTime?: number;
+}
+
 export type AnimEvent =
   | LoadAnimationEvent
   | RemoveAnimationEvent
@@ -138,7 +154,9 @@ export type AnimEvent =
   | KeyframeHitEvent
   | UIProgressEvent
   | ManualSetEvent
-  | ManualClearEvent;
+  | ManualClearEvent
+  | SnippetLoopEvent
+  | SetLoopStateEvent;
 
 // ---------- Scheduler plumbing ----------
 export type RuntimeSched = { name: string; startsAt: number; offset: number; enabled: boolean };

@@ -345,22 +345,21 @@ COMPOSITE_ROTATIONS.forEach(comp => {
 });
 
 // Candidate node names to resolve placeholders per-side on common CC/GLB exports.
-export const EYE_BONE_CANDIDATES_LEFT:  string[] = [
-  'Eye_L','LeftEye','CC_Base_Eye_L','CC_Base_L_Eye','L_Eye','EyeLeft','LeftEyeBall'
-];
-export const EYE_BONE_CANDIDATES_RIGHT: string[] = [
-  'Eye_R','RightEye','CC_Base_Eye_R','CC_Base_R_Eye','R_Eye','EyeRight','RightEyeBall'
-];
+// Canonical CC4 bone + mesh names. Since we only target CC4 rigs now, the mapping is explicit.
+export const CC4_BONE_NODES = {
+  EYE_L: 'CC_Base_L_Eye',
+  EYE_R: 'CC_Base_R_Eye',
+  HEAD: 'CC_Base_Head',
+  NECK: 'CC_Base_NeckTwist01',
+  NECK_TWIST: 'CC_Base_NeckTwist02',
+  JAW: 'CC_Base_JawRoot',
+  TONGUE: 'CC_Base_Tongue01'
+} as const;
 
-export const HEAD_BONE_CANDIDATES:  string[] = ['Head','CC_Base_Head','Head_001','HeadBone','HeadCtrl'];
-export const NECK_BONE_CANDIDATES:  string[] = ['Neck','CC_Base_Neck','Neck1','Neck_01','NeckTwist','CC_Base_NeckTwist01','CC_Base_NeckTwist02'];
-export const JAW_BONE_CANDIDATES:   string[] = ['CC_Base_JawRoot','JawRoot','Jaw','CC_Base_Jaw','Mandible','LowerJaw','CC_Base_UpperJaw'];
-export const TONGUE_BONE_CANDIDATES:string[] = ['Tongue','CC_Base_Tongue','Tongue_Base','Tongue01','Tongue_Tip'];
-
-// For rigs that expose eyes/head as meshes (not bones)
-export const EYE_MESH_CANDIDATES_LEFT:  string[] = ['CC_Base_Eye','CC_Base_Eye_L','L_EyeMesh'];
-export const EYE_MESH_CANDIDATES_RIGHT: string[] = ['CC_Base_Eye_1','CC_Base_Eye_R','R_EyeMesh'];
-export const HEAD_CTRL_CANDIDATES:      string[] = ['Head','CC_Base_Head','HeadCtrl','HeadNode'];
+export const CC4_EYE_MESH_NODES = {
+  LEFT: 'CC_Base_Eye',
+  RIGHT: 'CC_Base_Eye_1'
+} as const;
 
 // --- Metadata (subset) ---
 
@@ -617,6 +616,18 @@ export const HAIR_OBJECT_REGISTRY: Record<string, HairObjectType> = {
   'LeftEyebrow': 'eyebrow',
   'RightEyebrow': 'eyebrow',
 } as const;
+
+/**
+ * Helper function to check if an AU has separate left/right morphs
+ * @param auId - The AU ID to check
+ * @returns true if the AU has both _L and _R morph variants
+ */
+export function hasLeftRightMorphs(auId: number): boolean {
+  const morphs = AU_TO_MORPHS[auId] || [];
+  const hasLeft = morphs.some(k => /_L$|Left$/.test(k));
+  const hasRight = morphs.some(k => /_R$|Right$/.test(k));
+  return hasLeft && hasRight;
+}
 
 /**
  * Helper function to determine if an object is hair or eyebrow

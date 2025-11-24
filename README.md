@@ -19,7 +19,6 @@
    - [Eye & Head Tracking](#eye--head-tracking)
    - [Lip-Sync Agency](#lip-sync-agency)
    - [Prosodic Expression](#prosodic-expression)
-   - [Hair Customization](#hair-customization)
 6. [Modules](#modules)
 7. [Development](#development)
 8. [Deployment](#deployment)
@@ -60,7 +59,6 @@ The development server will start at `http://localhost:5173` with hot module rep
   - **Lip-Sync Agency**: Phoneme prediction and viseme animation
   - **Prosodic Expression Agency**: Emotional head gestures and speech timing
   - **Eye/Head Tracking Agency**: Gaze control with mouse, webcam, or manual modes
-  - **Hair Customization Agency**: Real-time hair and eyebrow color/glow customization
   - **Conversation Agency**: Multi-modal conversational AI orchestration
 
 - **Immutable State**: Reactive state management ensures predictable updates and time-travel debugging
@@ -153,12 +151,6 @@ LoomLarge/
 │   │   ├── lipsync/                    # Lip-sync phoneme predictor
 │   │   ├── prosodic/                   # Prosodic expression (head gestures)
 │   │   ├── eyeHeadTracking/            # Eye/head tracking service
-│   │   ├── hair/                       # Hair/eyebrow customization agency
-│   │   │   ├── types.ts                # Type definitions and color presets
-│   │   │   ├── hairMachine.ts          # XState machine for hair state
-│   │   │   ├── hairService.ts          # Service layer for Three.js integration
-│   │   │   ├── README.md               # User documentation
-│   │   │   └── ARCHITECTURE.md         # Technical architecture docs
 │   │   ├── conversation/               # Conversational AI orchestration
 │   │   └── transcription/              # Speech-to-text services
 │   ├── components/
@@ -167,9 +159,6 @@ LoomLarge/
 │   │   │   ├── VisemeSection.tsx       # Viseme controls
 │   │   │   ├── EyeHeadTrackingSection.tsx  # Eye/head tracking UI
 │   │   │   └── ContinuumSlider.tsx     # Bidirectional AU slider
-│   │   ├── hair/                       # Hair customization UI
-│   │   │   ├── HairCustomizationPanel.tsx  # Hair/eyebrow color controls
-│   │   │   └── HairCustomizationPanel.css  # Panel styles
 │   │   ├── SliderDrawer.tsx            # Main dockable UI drawer
 │   │   ├── PlaybackControls.tsx        # Animation playback controls
 │   │   ├── CurveEditor.tsx             # Visual curve editor
@@ -311,53 +300,6 @@ The **Prosodic Expression Agency** (`latticework/prosodic/prosodicService.ts`) a
 
 4. **Scheduling**: Prosodic snippets scheduled with medium priority (20)
 
-### Hair Customization
-
-The **Hair Customization Agency** (`latticework/hair/`) provides real-time character hair and eyebrow customization with independent controls:
-
-1. **State Machine**: XState machine manages separate hair and eyebrow states
-   ```typescript
-   const hairService = new HairService();
-   hairService.send({ type: 'SET_HAIR_BASE_COLOR', baseColor: '#ff5733' });
-   hairService.send({ type: 'SET_EYEBROW_COLOR', eyebrowColor: EYEBROW_PRESETS.black });
-   ```
-
-2. **RGB Color Pickers**: Independent control of hair and eyebrow colors
-   - Base color picker with hex input for precise RGB control
-   - Glow color picker for emissive effects
-   - Intensity slider (0-1) for glow strength
-   - 11 color presets (6 natural + 5 neon with glow)
-
-3. **Automatic Object Detection**: Classifies 3D model parts on load
-   ```typescript
-   // Eyebrow detection patterns (case-insensitive):
-   // - "eyebrow", "brow", "male_bushy"
-
-   // Hair detection patterns:
-   // - "hair", "bushy", "side_part", "sidepart"
-   ```
-
-4. **Wireframe Outlines**: Optional outline visualization with configurable color and opacity
-
-5. **Part-Level Control**: Show/hide individual hair/eyebrow parts for fine-tuned customization
-
-**Usage**:
-```typescript
-// Service exposed globally for debugging
-window.hairService.send({
-  type: 'SET_HAIR_GLOW',
-  emissive: '#00ff00',
-  intensity: 0.8
-});
-
-// Reset to defaults
-window.hairService.send({ type: 'RESET_TO_DEFAULT' });
-```
-
-**UI Panel**: Collapsible panel in top-right corner with tabbed sections for Hair, Eyebrows, Outline, and Parts.
-
-See [src/latticework/hair/ARCHITECTURE.md](src/latticework/hair/ARCHITECTURE.md) for complete technical documentation.
-
 ---
 
 ## Modules
@@ -472,42 +414,6 @@ window.eyeHeadTrackingService?.updateConfig({
   headIntensity: 0.7,
   headFollowEyes: true
 });
-```
-
-### Debugging Hair Customization
-
-The hair service is exposed globally for debugging:
-
-```javascript
-// Get current state
-window.hairService?.getState();
-
-// Change hair color
-window.hairService?.send({
-  type: 'SET_HAIR_BASE_COLOR',
-  baseColor: '#ff0000'
-});
-
-// Set glow effect
-window.hairService?.send({
-  type: 'SET_HAIR_GLOW',
-  emissive: '#00ff00',
-  intensity: 1.0
-});
-
-// Set eyebrow color separately
-window.hairService?.send({
-  type: 'SET_EYEBROW_COLOR',
-  eyebrowColor: {
-    name: 'Black',
-    baseColor: '#1a1a1a',
-    emissive: '#000000',
-    emissiveIntensity: 0
-  }
-});
-
-// Reset to defaults
-window.hairService?.send({ type: 'RESET_TO_DEFAULT' });
 ```
 
 ### TypeScript Type Checking

@@ -22,8 +22,8 @@ Latticework is the collection of agencies under `src/latticework/` that listen t
    - `tts/`: follow the architecture plan in `src/latticework/tts/TTS_AGENCY_ARCHITECTURE.md`; publish public API docs.
    - Verify `lipsync/`, `eyeHeadTracking/`, `prosodic/`, and `animation/` documents clearly state how they depend on host capabilities.
 3. **Per-Agent Factory**
-   - Build `createAgentLatticework(hostCaps, micSource, camSource)` that instantiates every agency for one avatar and connects sensor streams.
-   - Add tests to prove multiple agents + multiple humans can run simultaneously without shared state collisions.
+   - Build `createAgentLatticework(hostCaps, micSource, camSource)` that instantiates every agency for one avatar and connects sensor streams. ---  here we dont need to instantiate every agency on start up. we should be able to spin up these agencies on the fly. the hard part will be making the system work with multiple agents, so we will know which instance of latticework a given agent belongs to in a multi-agent setup.
+   - Add tests to prove multiple agents + multiple humans can run simultaneously without shared state collisions. We dont need tests for this yet. We just need to make it work and independently test it. then this functionality will be covered by the same unit and functional testing we are using throughout the platform.
 4. **Documentation Drafts**
    - README “chapters” for Project Setup (how LoomLarge exposes host capabilities) and Agency Pattern (how each folder works). Include file references so we can verify every statement.
 

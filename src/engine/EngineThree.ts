@@ -1491,6 +1491,18 @@ export class EngineThree {
   }
 
   /**
+   * Get current head rotation values for hair physics
+   * Returns { yaw, pitch, roll } in range [-1, 1]
+   */
+  getHeadRotation(): { yaw: number; pitch: number; roll: number } {
+    return {
+      yaw: this.currentHeadYaw,
+      pitch: this.currentHeadPitch,
+      roll: this.currentHeadRoll
+    };
+  }
+
+  /**
    * Apply vertex displacement to hair geometry
    * Uses a displacement function that takes vertex position and returns new position
    */

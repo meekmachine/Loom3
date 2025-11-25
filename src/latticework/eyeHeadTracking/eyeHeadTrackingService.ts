@@ -32,8 +32,6 @@ export class EyeHeadTrackingService {
   private trackingMode: 'manual' | 'mouse' | 'webcam' = 'manual';
   private mouseListener: ((e: MouseEvent) => void) | null = null;
   private webcamTracking: any = null; // Webcam tracking instance
-  private lastMouseMoveTime: number = 0;
-  private mouseThrottleDelay: number = 50; // Throttle mouse updates to every 50ms for smooth tracking
 
   constructor(
     config: EyeHeadTrackingConfig = {},
@@ -77,18 +75,8 @@ export class EyeHeadTrackingService {
       removeSnippet: (name: string) => {
         agency.remove?.(name);
       },
-      updateCurve: (name: string, auId: string, curve: any) => {
-        // Send CURVE_CHANGED event to animation machine to update existing snippet keyframes
-        // This allows smooth transitions by updating curves in-place instead of recreating snippets
-        const state = agency.getState?.();
-        if (state?.context?.machine) {
-          state.context.machine.send({
-            type: 'CURVE_CHANGED',
-            nameOrId: name,
-            auId: auId,
-            curve: curve
-          });
-        }
+      onSnippetEnd: (name: string) => {
+        try { agency.onSnippetEnd?.(name); } catch {}
       }
     };
 
@@ -371,14 +359,6 @@ export class EyeHeadTrackingService {
         return;
       }
 
-      // Throttle mouse updates to prevent overwhelming the animation system
-      // This allows animations to complete their transitions smoothly
-      const now = Date.now();
-      if (now - this.lastMouseMoveTime < this.mouseThrottleDelay) {
-        return;
-      }
-      this.lastMouseMoveTime = now;
-
       // Convert mouse position to normalized coordinates (-1 to 1)
       // Negate x for mirror behavior: mouse left → character looks right (at the user)
       const x = -((e.clientX / window.innerWidth) * 2 - 1);
@@ -477,12 +457,10 @@ export class EyeHeadTrackingService {
     // Scale duration based on distance traveled
     // Base durations: eye 150-400ms, head 250-600ms
     // Use different scaling for mouse (faster response) vs manual
-    // For mouse mode: use SHORT durations that match the throttle rate (50ms)
-    // This ensures each animation completes before the next one starts
-    const minEyeDuration = this.trackingMode === 'mouse' ? 50 : 150;
-    const maxEyeDuration = this.trackingMode === 'mouse' ? 80 : 400;
-    const minHeadDuration = this.trackingMode === 'mouse' ? 50 : 250;
-    const maxHeadDuration = this.trackingMode === 'mouse' ? 80 : 600;
+    const minEyeDuration = this.trackingMode === 'mouse' ? 100 : 150;
+    const maxEyeDuration = this.trackingMode === 'mouse' ? 300 : 400;
+    const minHeadDuration = this.trackingMode === 'mouse' ? 200 : 250;
+    const maxHeadDuration = this.trackingMode === 'mouse' ? 500 : 600;
 
     // Linear interpolation based on distance (0 to sqrt(2) for full diagonal)
     const normalizedDistance = Math.min(distance / Math.sqrt(2), 1.0);

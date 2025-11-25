@@ -154,10 +154,42 @@ model.traverse((obj) => {
 - See `CharacterGLBScene.tsx` (line 240) - logs all objects during model load
 
 ### Hair Shape Keys
-Hair meshes have **14 shape keys** for:
-- Head movement follow (hair follows head rotation)
-- Physics-based deformation
-- Style variations
+Hair meshes have **14 shape keys** for styling and partial movement:
+
+**Current Available Morphs (Side_part_wavy hair):**
+1. `Fluffy_Bottom_ALL` - Adds volume to bottom of hair
+2. `Fluffy_Right` - Adds volume to right side
+3. `Hairline_High_ALL` - Raises hairline all around
+4. `Hairline_High_M` - Raises hairline in middle
+5. `Hairline_High_R` - Raises hairline on right
+6. `Hairline_Low_ALL` - Lowers hairline all around
+7. `Hairline_Low_M` - Lowers hairline in middle
+8. `Hairline_Low_R` - Lowers hairline on right
+9. `Hairline_Out_All` - Pushes hairline outward
+10. **`L_Hair_Front`** - Moves long section forward ✓
+11. **`L_Hair_Left`** - Moves long section left ✓
+12. **`L_Hair_Right`** - Moves long section right ✓
+13. `Length_Long` - Makes hair longer
+14. `Length_Short` - Makes hair shorter
+
+**Limitations:**
+- The `L_Hair_*` morphs only affect the long section of hair, not the entire hair mesh
+- No `L_Hair_Back` morph exists for backward movement
+- For full directional hair movement (all hair sections moving together), you need to enable **Hair Physics** in Character Creator 4
+
+**Enabling Full Hair Physics in CC4:**
+To get comprehensive directional movement morphs:
+1. In Character Creator 4, select the hair object
+2. Go to Physics settings
+3. Enable "Hair Physics" or "Dynamic Hair"
+4. Re-export the GLB file
+
+This will add additional shape keys like:
+- `Hair_All_Forward` / `Hair_All_Back`
+- `Hair_All_Left` / `Hair_All_Right`
+- Wind simulation morphs
+- Gravity morphs
+- These affect the ENTIRE hair mesh, not just sections
 
 **Animation Implementation:**
 Hair can be animated using the existing morph target system:

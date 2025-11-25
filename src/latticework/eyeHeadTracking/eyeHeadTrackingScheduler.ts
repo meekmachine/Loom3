@@ -16,7 +16,6 @@ import type { GazeTarget } from './types';
 export interface EyeHeadHostCaps {
   scheduleSnippet: (snippet: any) => string | null;
   removeSnippet: (name: string) => void;
-  updateCurve?: (name: string, auId: string, curve: Array<{ time: number; intensity: number; inherit?: boolean }>) => void;
 }
 
 export interface GazeTransitionConfig {
@@ -65,7 +64,6 @@ function easeInOutCubic(t: number): number {
 export class EyeHeadTrackingScheduler {
   private host: EyeHeadHostCaps;
   private transitionConfig: GazeTransitionConfig;
-  private snippetsCreated: Set<string> = new Set();
 
   constructor(host: EyeHeadHostCaps, transitionConfig?: Partial<GazeTransitionConfig>) {
     this.host = host;
@@ -75,39 +73,6 @@ export class EyeHeadTrackingScheduler {
     };
 
     console.log('[Scheduler V2] ✓ Eye/head tracking scheduler initialized (animation agency mode)');
-  }
-
-  /**
-   * Update or create a snippet with new curves
-   * If snippet exists, update its curves. If not, create it.
-   */
-  private scheduleOrUpdateSnippet(
-    name: string,
-    curves: Record<string, Array<{ time: number; intensity: number; inherit?: boolean }>>,
-    duration: number,
-    priority: number
-  ): void {
-    const exists = this.snippetsCreated.has(name);
-
-    if (exists && this.host.updateCurve) {
-      // Update existing snippet curves
-      Object.entries(curves).forEach(([auId, curve]) => {
-        this.host.updateCurve!(name, auId, curve);
-      });
-    } else {
-      // Create new snippet
-      this.host.scheduleSnippet({
-        name,
-        curves,
-        maxTime: duration,
-        loop: false,
-        snippetCategory: 'eyeHeadTracking',
-        snippetPriority: priority,
-        snippetPlaybackRate: 1.0,
-        snippetIntensityScale: 1.0,
-      });
-      this.snippetsCreated.add(name);
-    }
   }
 
   /**
@@ -180,6 +145,7 @@ export class EyeHeadTrackingScheduler {
     );
     // Yaw (horizontal): -1 (left/AU 61) to +1 (right/AU 62)
     const yaw = x * intensity * 100; // Convert to 0-100 range
+    this.host.removeSnippet('eyeHeadTracking/eyeYaw');
 
     const yawCurves = this.buildContinuumCurves(
       EYE_HEAD_AUS.EYE_YAW_LEFT,
@@ -188,12 +154,20 @@ export class EyeHeadTrackingScheduler {
       duration
     );
 
-    // Update existing snippet or create new one
-    // This preserves the animation state and allows smooth transitions
-    this.scheduleOrUpdateSnippet('eyeHeadTracking/eyeYaw', yawCurves, duration, priority);
+    this.host.scheduleSnippet({
+      name: 'eyeHeadTracking/eyeYaw',
+      curves: yawCurves,
+      maxTime: duration,
+      loop: false,
+      snippetCategory: 'eyeHeadTracking',
+      snippetPriority: priority,
+      snippetPlaybackRate: 1.0,
+      snippetIntensityScale: 1.0,
+    });
 
     // Pitch (vertical): -1 (down/AU 64) to +1 (up/AU 63)
     const pitch = y * intensity * 100;
+    this.host.removeSnippet('eyeHeadTracking/eyePitch');
 
     const pitchCurves = this.buildContinuumCurves(
       EYE_HEAD_AUS.EYE_PITCH_DOWN,
@@ -202,8 +176,16 @@ export class EyeHeadTrackingScheduler {
       duration
     );
 
-    // Update existing snippet or create new one
-    this.scheduleOrUpdateSnippet('eyeHeadTracking/eyePitch', pitchCurves, duration, priority);
+    this.host.scheduleSnippet({
+      name: 'eyeHeadTracking/eyePitch',
+      curves: pitchCurves,
+      maxTime: duration,
+      loop: false,
+      snippetCategory: 'eyeHeadTracking',
+      snippetPriority: priority,
+      snippetPlaybackRate: 1.0,
+      snippetIntensityScale: 1.0,
+    });
   }
 
   /**
@@ -224,6 +206,7 @@ export class EyeHeadTrackingScheduler {
     );
     // Yaw (horizontal): -1 (left/AU 31) to +1 (right/AU 32)
     const yaw = x * intensity * 100;
+    this.host.removeSnippet('eyeHeadTracking/headYaw');
 
     const yawCurves = this.buildContinuumCurves(
       EYE_HEAD_AUS.HEAD_YAW_LEFT,
@@ -232,11 +215,20 @@ export class EyeHeadTrackingScheduler {
       duration
     );
 
-    // Update existing snippet or create new one
-    this.scheduleOrUpdateSnippet('eyeHeadTracking/headYaw', yawCurves, duration, priority);
+    this.host.scheduleSnippet({
+      name: 'eyeHeadTracking/headYaw',
+      curves: yawCurves,
+      maxTime: duration,
+      loop: false,
+      snippetCategory: 'eyeHeadTracking',
+      snippetPriority: priority,
+      snippetPlaybackRate: 1.0,
+      snippetIntensityScale: 1.0,
+    });
 
     // Pitch (vertical): -1 (down/AU 54) to +1 (up/AU 33)
     const pitch = y * intensity * 100;
+    this.host.removeSnippet('eyeHeadTracking/headPitch');
 
     const pitchCurves = this.buildContinuumCurves(
       EYE_HEAD_AUS.HEAD_PITCH_DOWN,
@@ -245,11 +237,20 @@ export class EyeHeadTrackingScheduler {
       duration
     );
 
-    // Update existing snippet or create new one
-    this.scheduleOrUpdateSnippet('eyeHeadTracking/headPitch', pitchCurves, duration, priority);
+    this.host.scheduleSnippet({
+      name: 'eyeHeadTracking/headPitch',
+      curves: pitchCurves,
+      maxTime: duration,
+      loop: false,
+      snippetCategory: 'eyeHeadTracking',
+      snippetPriority: priority,
+      snippetPlaybackRate: 1.0,
+      snippetIntensityScale: 1.0,
+    });
 
     // Roll (tilt): -1 (left/AU 55) to +1 (right/AU 56)
     const rollValue = roll * intensity * 100;
+    this.host.removeSnippet('eyeHeadTracking/headRoll');
 
     const rollCurves = this.buildContinuumCurves(
       EYE_HEAD_AUS.HEAD_ROLL_LEFT,
@@ -258,47 +259,50 @@ export class EyeHeadTrackingScheduler {
       duration
     );
 
-    // Update existing snippet or create new one
-    this.scheduleOrUpdateSnippet('eyeHeadTracking/headRoll', rollCurves, duration, priority);
+    this.host.scheduleSnippet({
+      name: 'eyeHeadTracking/headRoll',
+      curves: rollCurves,
+      maxTime: duration,
+      loop: false,
+      snippetCategory: 'eyeHeadTracking',
+      snippetPriority: priority,
+      snippetPlaybackRate: 1.0,
+      snippetIntensityScale: 1.0,
+    });
   }
 
   /**
    * Build continuum curves for a bidirectional axis
    * Value: negative values use negativeAU, positive values use positiveAU
    * This matches the continuum slider behavior
-   *
-   * IMPORTANT: First keyframes use inherit=true to enable automatic continuity.
-   * This allows the animation agency to smoothly transition from the current position
-   * instead of jumping back to 0, creating smooth, natural head/eye movements.
    */
   private buildContinuumCurves(
     negativeAU: string,
     positiveAU: string,
     value: number,
     duration: number
-  ): Record<string, Array<{ time: number; intensity: number; inherit?: boolean }>> {
-    const curves: Record<string, Array<{ time: number; intensity: number; inherit?: boolean }>> = {};
+  ): Record<string, Array<{ time: number; intensity: number }>> {
+    const curves: Record<string, Array<{ time: number; intensity: number }>> = {};
 
     // ALWAYS schedule BOTH directions for proper transitions
-    // Mark first keyframe with inherit=true for automatic continuity
     if (value < 0) {
       // Negative direction (left/down)
       curves[negativeAU] = [
-        { time: 0, intensity: 0, inherit: true },
+        { time: 0, intensity: 0 },
         { time: duration, intensity: Math.abs(value) }
       ];
       curves[positiveAU] = [
-        { time: 0, intensity: 0, inherit: true },
+        { time: 0, intensity: 0 },
         { time: duration, intensity: 0 }
       ];
     } else {
       // Positive direction (right/up)
       curves[negativeAU] = [
-        { time: 0, intensity: 0, inherit: true },
+        { time: 0, intensity: 0 },
         { time: duration, intensity: 0 }
       ];
       curves[positiveAU] = [
-        { time: 0, intensity: 0, inherit: true },
+        { time: 0, intensity: 0 },
         { time: duration, intensity: value }
       ];
     }
@@ -319,9 +323,6 @@ export class EyeHeadTrackingScheduler {
     this.host.removeSnippet('eyeHeadTracking/headYaw');
     this.host.removeSnippet('eyeHeadTracking/headPitch');
     this.host.removeSnippet('eyeHeadTracking/headRoll');
-
-    // Clear tracking set
-    this.snippetsCreated.clear();
 
     console.log('[Scheduler V2] Stopped - removed all gaze tracking snippets');
   }

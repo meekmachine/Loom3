@@ -40,6 +40,8 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
   const [returnToNeutralDelay, setReturnToNeutralDelay] = useState(3000);
   const [eyeBlendWeight, setEyeBlendWeight] = useState(0.5);
   const [headBlendWeight, setHeadBlendWeight] = useState(0.7);
+  const [followSpeed, setFollowSpeed] = useState(0.5);
+  const [mouseThrottleMs, setMouseThrottleMs] = useState(100);
 
   // Initialize service config on mount to match UI state
   useEffect(() => {
@@ -55,6 +57,8 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
       headFollowDelay,
       returnToNeutralEnabled,
       returnToNeutralDelay,
+      followSpeed,
+      mouseThrottleMs,
     });
     eyeHeadTrackingService.setEyeBlendWeight(eyeBlendWeight);
     eyeHeadTrackingService.setHeadBlendWeight(headBlendWeight);
@@ -474,6 +478,66 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
                 </VStack>
               )}
             </Box>
+          </VStack>
+        </Box>
+
+        {/* Follow Speed & Smoothing */}
+        <Box pt={4} borderTop="1px" borderColor="gray.700">
+          <Text fontSize="sm" fontWeight="bold" mb={3} color="gray.300">
+            Follow Speed & Smoothing
+          </Text>
+          <VStack spacing={3} align="stretch">
+            <VStack spacing={1} align="stretch">
+              <HStack justify="space-between">
+                <Text fontSize="xs" color="orange.200">Follow Speed</Text>
+                <Text fontSize="xs" color="gray.400" fontFamily="mono">{followSpeed.toFixed(2)}</Text>
+              </HStack>
+              <Slider
+                value={followSpeed}
+                onChange={(val) => {
+                  setFollowSpeed(val);
+                  handleConfigChange({ followSpeed: val });
+                }}
+                min={0}
+                max={1}
+                step={0.05}
+                isDisabled={disabled}
+              >
+                <SliderTrack bg="gray.700">
+                  <SliderFilledTrack bg="orange.400" />
+                </SliderTrack>
+                <SliderThumb boxSize={4} bg="orange.400" />
+              </Slider>
+              <Text fontSize="xs" color="gray.500">
+                0 = slow/smooth, 1 = fast/responsive
+              </Text>
+            </VStack>
+
+            <VStack spacing={1} align="stretch">
+              <HStack justify="space-between">
+                <Text fontSize="xs" color="yellow.200">Mouse Update Rate</Text>
+                <Text fontSize="xs" color="gray.400" fontFamily="mono">{mouseThrottleMs}ms</Text>
+              </HStack>
+              <Slider
+                value={mouseThrottleMs}
+                onChange={(val) => {
+                  setMouseThrottleMs(val);
+                  handleConfigChange({ mouseThrottleMs: val });
+                }}
+                min={16}
+                max={250}
+                step={16}
+                isDisabled={disabled}
+              >
+                <SliderTrack bg="gray.700">
+                  <SliderFilledTrack bg="yellow.400" />
+                </SliderTrack>
+                <SliderThumb boxSize={4} bg="yellow.400" />
+              </Slider>
+              <Text fontSize="xs" color="gray.500">
+                Higher = fewer updates, smoother tracking
+              </Text>
+            </VStack>
           </VStack>
         </Box>
 

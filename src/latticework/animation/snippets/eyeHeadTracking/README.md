@@ -239,3 +239,54 @@ These snippets work seamlessly with the Eye/Head Tracking Service:
 - All modes benefit from continuum-aware scheduling
 
 See [`src/latticework/eyeHeadTracking/`](../../eyeHeadTracking/) for service integration.
+
+## 🎭 Dynamic Snippet Creation
+
+The EyeHeadTrackingScheduler creates snippets dynamically for real-time tracking (mouse/webcam). Here's how it works:
+
+### Continuum Curve Structure
+For each axis (yaw, pitch, roll), the scheduler creates a snippet with BOTH AU directions:
+
+```javascript
+// For target x = -0.4 (look left), intensity = 0.5, duration = 0.05s
+const curves = {
+  "31": [ // HEAD_YAW_LEFT
+    { time: 0, intensity: 0, inherit: true },  // Start from current value
+    { time: 0.05, intensity: 20 }               // Target: |x| * intensity * 100 = 0.4 * 0.5 * 100
+  ],
+  "32": [ // HEAD_YAW_RIGHT
+    { time: 0, intensity: 0, inherit: true },  // Start from current value
+    { time: 0.05, intensity: 0 }                // Target: 0 (opposite direction)
+  ]
+};
+```
+
+### Key Concepts
+
+1. **Both AUs in Same Snippet**: Always include BOTH the negative and positive AU for a continuum pair. The animation scheduler's `applyContinuumTargets()` calculates `continuumValue = posValue - negValue` and calls the appropriate engine method.
+
+2. **`inherit: true` on First Keyframe**: This tells the animation agency to start from the current value instead of jumping to the specified intensity. This creates smooth transitions.
+
+3. **Intensity Scaling**: Values are scaled by `intensity * 100` to convert from the service's 0-1 range to the AU's 0-100 percentage range.
+
+4. **Short Durations for Mouse Tracking**: Mouse mode uses ~50-80ms durations so each animation completes before the next one starts (throttled at 50ms).
+
+### Animation Flow
+
+```
+Mouse moves → setGazeTarget(x, y) → scheduleGazeTransition()
+                                          ↓
+                            buildContinuumCurves(AU31, AU32, x*intensity*100, duration)
+                                          ↓
+                            scheduleOrUpdateSnippet('eyeHeadTracking/headYaw', curves)
+                                          ↓
+                            Animation scheduler loads snippet, applies continuity
+                                          ↓
+                            buildTargetMap() samples curves at current time
+                                          ↓
+                            applyContinuumTargets() → setHeadHorizontal(continuumValue)
+                                          ↓
+                            EngineThree applies bone rotation + morph blend
+```
+
+This architecture ensures smooth, natural head/eye movements that track the mouse without jitter or jumping.

@@ -1751,6 +1751,12 @@ export class EngineThree {
       if (!dict) continue;
       const keys = Object.keys(dict).sort();
       console.log(`📦 Mesh "${m.name || 'unnamed'}" has ${keys.length} shape keys`);
+
+      // Log hair mesh keys in detail
+      if (m.name && (m.name.includes('Side_part_wavy') || m.name.toLowerCase().includes('hair'))) {
+        console.log(`   💇 Hair morph keys for ${m.name}:`, keys);
+      }
+
       keys.forEach(k => allMorphKeys.add(k));
     }
     console.log(`\n✅ Total unique shape keys: ${allMorphKeys.size}`);

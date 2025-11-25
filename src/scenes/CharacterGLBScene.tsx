@@ -313,6 +313,23 @@ export default function CharacterGLBScene({
           hairService = new HairService(engine);
           hairService.registerObjects(hairObjects);
           console.log('[CharacterGLBScene] ✅ HairService initialized with', hairObjects.length, 'objects');
+
+          // Log available hair morphs for debugging
+          const availableHairMorphs = hairService.getAvailableHairMorphs();
+          console.group('[CharacterGLBScene] 💇 HAIR MORPH TARGETS');
+          console.log(`Found ${availableHairMorphs.length} hair morphs:`, availableHairMorphs);
+
+          // Log morphs from each hair object for detailed debugging
+          hairObjects.forEach(obj => {
+            if ((obj as THREE.Mesh).isMesh) {
+              const mesh = obj as THREE.Mesh;
+              const dict = (mesh as any).morphTargetDictionary;
+              if (dict) {
+                console.log(`\n${obj.name} morphs (${Object.keys(dict).length}):`, Object.keys(dict));
+              }
+            }
+          });
+          console.groupEnd();
         } else {
           console.warn('[CharacterGLBScene] ⚠️ No hair objects detected in model');
         }

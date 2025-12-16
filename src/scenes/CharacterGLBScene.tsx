@@ -7,22 +7,8 @@ import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { HairService } from '../latticework/hair/hairService';
+import { classifyHairObject } from '../engine/arkit/shapeDict';
 import { useThreeState } from '../context/threeContext';
-
-// Known hair/eyebrow object prefixes for this character
-const HAIR_PREFIXES = ['Side_part_wavy', 'hair', 'Hair'];
-const EYEBROW_PREFIXES = ['Male_Bushy', 'eyebrow', 'Eyebrow', 'brow', 'Brow'];
-
-function isHairOrEyebrow(name: string): 'hair' | 'eyebrow' | null {
-  const lower = name.toLowerCase();
-  for (const prefix of EYEBROW_PREFIXES) {
-    if (lower.startsWith(prefix.toLowerCase())) return 'eyebrow';
-  }
-  for (const prefix of HAIR_PREFIXES) {
-    if (lower.startsWith(prefix.toLowerCase())) return 'hair';
-  }
-  return null;
-}
 import { getGLBCacheManager } from '../utils/GLBCacheManager';
 
 export type CharacterReady = {
@@ -244,9 +230,6 @@ export default function CharacterGLBScene({
             URL.revokeObjectURL(blobUrl);
             console.log('[CharacterGLBScene] GLTF keys:', Object.keys(gltf), 'animations:', gltf.animations?.length ?? 0, gltf);
             console.log('[CharacterGLBScene] Animations object:', gltf.animations);
-            // Dump the entire GLTF object for inspection in browser console
-            console.log('[CharacterGLBScene] 🔬 FULL GLTF OBJECT (expand in console):', gltf);
-            console.log('[CharacterGLBScene] 🔬 GLTF SCENE (expand in console):', gltf.scene);
         model = gltf.scene;
         scene.add(model);
 
@@ -312,12 +295,14 @@ export default function CharacterGLBScene({
         console.groupEnd();
 
         // Automatically detect hair and eyebrow objects in the loaded model
-        // Find hair and eyebrow objects
+        // Uses centralized classification from shapeDict.ts
         const hairObjects: THREE.Object3D[] = [];
 
         console.group('[CharacterGLBScene] 🦱 HAIR OBJECT DETECTION');
         model.traverse((obj) => {
-          const classification = isHairOrEyebrow(obj.name);
+          // Use centralized classification helper
+          const classification = classifyHairObject(obj.name);
+
           if (classification) {
             console.log(`Found ${classification}: ${obj.name} (type: ${obj.type}, isMesh: ${(obj as THREE.Mesh).isMesh || false})`);
             hairObjects.push(obj);
@@ -443,7 +428,8 @@ export default function CharacterGLBScene({
             // Hair detection (same as above)
             const hairObjects: THREE.Object3D[] = [];
             model.traverse((obj) => {
-              if (isHairOrEyebrow(obj.name)) {
+              const classification = classifyHairObject(obj.name);
+              if (classification) {
                 hairObjects.push(obj);
               }
             });

@@ -7,6 +7,7 @@ import {
   CC4_BONE_NODES,
   CC4_EYE_MESH_NODES,
   CC4_MESHES,
+  CONTINUUM_PAIRS_MAP,
   type CompositeRotation,
 } from './arkit/shapeDict';
 
@@ -96,19 +97,24 @@ type NodeBase = {
 
 type ResolvedBones = Partial<Record<BoneKeys, NodeBase>>;
 
-type DriverEntry = {
-  driver: THREE.Object3D;
+// Unified transition system - simple lerp-based
+type Transition = {
+  key: string;
+  from: number;
+  to: number;
+  duration: number;      // seconds
+  elapsed: number;       // seconds
   apply: (value: number) => void;
-  lastValue: number;
-  action: THREE.AnimationAction | null;
+  easing: (t: number) => number;
+  resolve?: () => void;  // Called when transition completes
 };
 
 export class EngineThree {
   private auValues: Record<number, number> = {};
-  private mixerRoot: THREE.Object3D;
-  private mixer: THREE.AnimationMixer;
-  private driverEntries: Map<string, DriverEntry> = new Map();
-  private driverApplying = false;
+
+  // Unified transition system - simple lerp-based
+  private transitions = new Map<string, Transition>();
+
   private rigReady = false;
   private missingBoneWarnings = new Set<string>();
   private bakedMixer: THREE.AnimationMixer | null = null;
@@ -117,9 +123,15 @@ export class EngineThree {
   private bakedPaused = true;
   private bakedCurrent: string | null = null;
 
-  // Unified rotation state tracking for composite bones
+  // Skybox storage
+  private scene: THREE.Scene | null = null;
+  private skyboxTexture: THREE.Texture | null = null;
+
+  // Unified rotation state tracking for bones
   // Each bone maintains its complete 3D rotation (pitch/yaw/roll) to prevent overwriting
-  private boneRotations = {
+  // TODO: Eventually build this dynamically from shapeDict data and include ALL bones,
+  // not just face/head bones. For now, hardcoded to the 5 composite face bones.
+  private rotations: Record<string, { pitch: number; yaw: number; roll: number }> = {
     JAW: { pitch: 0, yaw: 0, roll: 0 },
     HEAD: { pitch: 0, yaw: 0, roll: 0 },
     EYE_L: { pitch: 0, yaw: 0, roll: 0 },
@@ -127,26 +139,12 @@ export class EngineThree {
     TONGUE: { pitch: 0, yaw: 0, roll: 0 }
   };
 
-  // Track current eye and head positions for composite motion (legacy - will be replaced by boneRotations)
-  private currentEyeYaw: number = 0;
-  private currentEyePitch: number = 0;
-  private currentHeadYaw: number = 0;
-  private currentHeadPitch: number = 0;
-  private currentHeadRoll: number = 0;
+  // Nodes with pending rotation changes - applied once per frame in update()
+  private pendingCompositeNodes = new Set<string>();
   private isPaused: boolean = false;
   private easeInOutQuad = (t:number) => (t<0.5? 2*t*t : -1+(4-2*t)*t);
 
-  constructor() {
-    this.mixerRoot = new THREE.Object3D();
-    this.mixerRoot.name = 'EngineThreeMixerRoot';
-    this.mixer = new THREE.AnimationMixer(this.mixerRoot);
-
-    this.registerDriver('headYaw', this.currentHeadYaw, (value) => this.setHeadHorizontal(value));
-    this.registerDriver('headPitch', this.currentHeadPitch, (value) => this.setHeadVertical(value));
-    this.registerDriver('headRoll', this.currentHeadRoll, (value) => this.setHeadRoll(value));
-    this.registerDriver('eyeYaw', this.currentEyeYaw, (value) => this.setEyesHorizontal(value));
-    this.registerDriver('eyePitch', this.currentEyePitch, (value) => this.setEyesVertical(value));
-  }
+  // No constructor needed - all state is initialized inline
 
   private getMorphValue(key: string): number {
     for (const m of this.meshes) {
@@ -159,56 +157,195 @@ export class EngineThree {
     return 0;
   }
   /** Smoothly tween an AU to a target value */
-  transitionAU = (id: number | string, to: number, durationMs = 200) => {
+  transitionAU = (id: number | string, to: number, durationMs = 200): Promise<void> => {
     const numId = typeof id === 'string' ? Number(id.replace(/[^\d]/g, '')) : id;
-    const driverKey = this.getAUDriverKey(numId);
-    const entry = this.ensureDriver(
-      driverKey,
-      this.auValues[numId] ?? 0,
-      (value) => this.setAU(numId, clamp01(value))
+    const key = this.getAUDriverKey(numId);
+    const from = this.auValues[numId] ?? 0;
+    const target = clamp01(to);
+    return this.addTransition(
+      key,
+      from,
+      target,
+      durationMs / 1000,
+      (value) => this.setAU(numId, value)
     );
-    this.queueDriverTween(driverKey, clamp01(to), durationMs, entry);
   };
 
   /** Smoothly tween a morph to a target value */
-  transitionMorph = (key: string, to: number, durationMs = 120) => {
+  transitionMorph = (key: string, to: number, durationMs = 120): Promise<void> => {
     const driverKey = this.getMorphDriverKey(key);
-    this.ensureDriver(
+    const from = this.getMorphValue(key);
+    const target = clamp01(to);
+    return this.addTransition(
       driverKey,
-      this.getMorphValue(key),
-      (value) => this.setMorph(key, clamp01(value))
+      from,
+      target,
+      durationMs / 1000,
+      (value) => this.setMorph(key, value)
     );
-    const entry = this.ensureDriver(
-      driverKey,
-      this.getMorphValue(key),
-      (value) => this.setMorph(key, clamp01(value))
-    );
-    this.queueDriverTween(driverKey, clamp01(to), durationMs, entry);
   };
+
+  /**
+   * Set a continuum AU pair immediately (no animation).
+   *
+   * Sign convention:
+   * - Negative value (-1 to 0): activates negAU (e.g., head left, eyes left)
+   * - Positive value (0 to +1): activates posAU (e.g., head right, eyes right)
+   *
+   * Internally calls setAU() which handles:
+   * - Morph application (scaled by mixWeight)
+   * - Bone rotation (always at full strength based on value)
+   *
+   * @param negAU - AU ID for negative direction (e.g., 31 for head left, 61 for eyes left)
+   * @param posAU - AU ID for positive direction (e.g., 32 for head right, 62 for eyes right)
+   * @param continuumValue - Value from -1 (full negative) to +1 (full positive)
+   */
+  setContinuum = (negAU: number, posAU: number, continuumValue: number) => {
+    const value = Math.max(-1, Math.min(1, continuumValue));
+
+    // Negative value = activate negAU, zero posAU
+    // Positive value = activate posAU, zero negAU
+    const negVal = value < 0 ? Math.abs(value) : 0;
+    const posVal = value > 0 ? value : 0;
+
+    this.setAU(negAU, negVal);
+    this.setAU(posAU, posVal);
+  };
+
+  /**
+   * Smoothly transition a continuum AU pair (e.g., eyes left/right, head up/down).
+   * Takes a continuum value from -1 to +1 and internally manages both AU values.
+   *
+   * Sign convention:
+   * - Negative value (-1 to 0): activates negAU (e.g., head left, eyes left)
+   * - Positive value (0 to +1): activates posAU (e.g., head right, eyes right)
+   *
+   * @param negAU - AU ID for negative direction (e.g., 31 for head left, 61 for eyes left)
+   * @param posAU - AU ID for positive direction (e.g., 32 for head right, 62 for eyes right)
+   * @param continuumValue - Target value from -1 (full negative) to +1 (full positive)
+   * @param durationMs - Transition duration in milliseconds
+   */
+  transitionContinuum = (negAU: number, posAU: number, continuumValue: number, durationMs = 200): Promise<void> => {
+    const target = Math.max(-1, Math.min(1, continuumValue));
+    const driverKey = `continuum_${negAU}_${posAU}`;
+
+    // Get current continuum value: negative if negAU active, positive if posAU active
+    const currentNeg = this.auValues[negAU] ?? 0;
+    const currentPos = this.auValues[posAU] ?? 0;
+    const currentContinuum = currentPos - currentNeg;  // pos - neg so positive = right
+
+    return this.addTransition(
+      driverKey,
+      currentContinuum,
+      target,
+      durationMs / 1000,
+      (value) => this.setContinuum(negAU, posAU, value)
+    );
+  };
+
   /** Advance internal transition tweens by deltaSeconds (called from ThreeProvider RAF loop). */
   update(deltaSeconds: number) {
     const dtSeconds = Math.max(0, deltaSeconds || 0);
     if (dtSeconds <= 0 || this.isPaused) return;
+
+    // Baked clip animations (pre-authored clips like idle animations)
     if (this.bakedMixer && !this.bakedPaused) this.bakedMixer.update(dtSeconds);
-    if (this.morphMixer) this.morphMixer.update(dtSeconds);  // Update proper morph animations
-    this.mixer.update(dtSeconds);
-    if (!this.rigReady) return;
-    this.applyDriverValues();
-    // Update mouse tracking (smooth interpolation)
-    if (this.mouseTrackingEnabled) {
+
+    // Morph target animations
+    if (this.morphMixer) this.morphMixer.update(dtSeconds);
+
+    // Unified transitions (AU, morph, composite movements)
+    this.tickTransitions(dtSeconds);
+
+    // Flush pending composite rotations (deferred from setAU calls)
+    this.flushPendingComposites();
+
+    // Mouse tracking interpolation
+    if (this.rigReady && this.mouseTrackingEnabled) {
       this.updateMouseTrackingSmooth(0.08);
     }
   }
 
-  /** Clear all running transitions (used when playback rate changes to prevent timing conflicts). */
-  clearTransitions() {
-    this.driverEntries.forEach((entry) => {
-      if (entry.action) {
-        entry.action.stop();
-        this.mixer.uncacheAction(entry.action.getClip(), entry.driver);
-        entry.action = null;
+  /** Apply all pending composite rotations and clear the set */
+  private flushPendingComposites() {
+    if (this.pendingCompositeNodes.size === 0) return;
+
+    for (const nodeKey of this.pendingCompositeNodes) {
+      this.applyCompositeRotation(nodeKey as 'JAW' | 'HEAD' | 'EYE_L' | 'EYE_R' | 'TONGUE');
+    }
+    this.pendingCompositeNodes.clear();
+  }
+
+  /**
+   * Tick all active transitions by dt seconds.
+   * Applies eased interpolation and removes completed transitions.
+   */
+  private tickTransitions(dt: number) {
+    const completed: string[] = [];
+
+    this.transitions.forEach((t, key) => {
+      t.elapsed += dt;
+      const progress = Math.min(t.elapsed / t.duration, 1.0);
+      const easedProgress = t.easing(progress);
+
+      // Interpolate and apply
+      const value = t.from + (t.to - t.from) * easedProgress;
+      t.apply(value);
+
+      // Check completion
+      if (progress >= 1.0) {
+        completed.push(key);
+        t.resolve?.();
       }
     });
+
+    // Remove completed transitions
+    completed.forEach(key => this.transitions.delete(key));
+  }
+
+  /**
+   * Add or replace a transition for the given key.
+   * If a transition with the same key exists, it is cancelled and replaced.
+   * @returns Promise that resolves when the transition completes
+   */
+  private addTransition(
+    key: string,
+    from: number,
+    to: number,
+    durationSec: number,
+    apply: (value: number) => void,
+    easing: (t: number) => number = this.easeInOutQuad
+  ): Promise<void> {
+    // Cancel existing transition for this key
+    const existing = this.transitions.get(key);
+    if (existing?.resolve) {
+      existing.resolve(); // Resolve immediately (cancelled)
+    }
+
+    // Instant transition if duration is 0 or values are equal
+    if (durationSec <= 0 || Math.abs(to - from) < 1e-6) {
+      apply(to);
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      this.transitions.set(key, {
+        key,
+        from,
+        to,
+        duration: durationSec,
+        elapsed: 0,
+        apply,
+        easing,
+        resolve,
+      });
+    });
+  }
+
+  /** Clear all running transitions (used when playback rate changes to prevent timing conflicts). */
+  clearTransitions() {
+    this.transitions.forEach(t => t.resolve?.());
+    this.transitions.clear();
   }
 
   /** Pause all active transitions (they will resume when update() is called again). */
@@ -228,99 +365,7 @@ export class EngineThree {
 
   /** Get count of active transitions (useful for debugging). */
   getActiveTransitionCount(): number {
-    let active = 0;
-    this.driverEntries.forEach((entry) => {
-      if (entry.action && entry.action.isRunning()) active += 1;
-    });
-    return active;
-  }
-
-  private registerDriver(key: string, initialValue: number, apply: (value: number) => void): DriverEntry {
-    const driver = new THREE.Object3D();
-    driver.name = key;
-    driver.position.x = initialValue;
-    this.mixerRoot.add(driver);
-    const entry: DriverEntry = {
-      driver,
-      apply,
-      lastValue: initialValue,
-      action: null,
-    };
-    this.driverEntries.set(key, entry);
-    return entry;
-  }
-
-  private ensureDriver(key: string, initialValue: number, apply: (value: number) => void): DriverEntry {
-    let entry = this.driverEntries.get(key);
-    if (!entry) {
-      entry = this.registerDriver(key, initialValue, apply);
-    }
-    return entry;
-  }
-
-  private stopDriverAction(entry: DriverEntry) {
-    if (entry.action) {
-      entry.action.stop();
-      this.mixer.uncacheAction(entry.action.getClip(), entry.driver);
-      entry.action = null;
-    }
-  }
-
-  private queueDriverTween(key: string, targetValue: number, durationMs: number, entry?: DriverEntry) {
-    const targetEntry = entry ?? this.driverEntries.get(key);
-    if (!targetEntry) return;
-    const driver = targetEntry.driver;
-    const from = driver.position.x;
-    const target = targetValue;
-    const durationSec = Math.max(durationMs, 0) / 1000;
-    if (durationSec === 0 || Math.abs(target - from) < 1e-6) {
-      this.setDriverInstant(key, target);
-      return;
-    }
-
-    this.stopDriverAction(targetEntry);
-    const track = new THREE.NumberKeyframeTrack('.position[x]', [0, durationSec], [from, target]);
-    const clip = new THREE.AnimationClip(`${driver.name}_clip_${Date.now()}`, durationSec, [track]);
-    const action = this.mixer.clipAction(clip, driver);
-    action.clampWhenFinished = true;
-    action.setLoop(THREE.LoopOnce, 0);
-    action.reset();
-    action.play();
-    targetEntry.action = action;
-  }
-
-  private setDriverInstant(key: string, value: number) {
-    const entry = this.driverEntries.get(key);
-    if (!entry) return;
-    this.stopDriverAction(entry);
-    entry.driver.position.x = value;
-    entry.lastValue = value;
-    if (!this.rigReady) return;
-    this.driverApplying = true;
-    entry.apply(value);
-    this.driverApplying = false;
-  }
-
-  private syncDriverValue(key: string, value: number) {
-    if (this.driverApplying) return;
-    const entry = this.driverEntries.get(key);
-    if (!entry) return;
-    entry.driver.position.x = value;
-    entry.lastValue = value;
-    if (!this.rigReady) return;
-    this.stopDriverAction(entry);
-  }
-
-  private applyDriverValues() {
-    this.driverEntries.forEach((entry) => {
-      const current = entry.driver.position.x;
-      if (Math.abs(current - entry.lastValue) > 1e-4) {
-        entry.lastValue = current;
-        this.driverApplying = true;
-        entry.apply(current);
-        this.driverApplying = false;
-      }
-    });
+    return this.transitions.size;
   }
 
   private getAUDriverKey(id: number) {
@@ -377,25 +422,29 @@ export class EngineThree {
   private bones: ResolvedBones = {};
 
   // --- Mix weight system ---
-  // Initialize with defaults from shapeDict (0 = morph only, 1 = bone only)
+  // Bones always apply at 100%. Mix weight controls the morph overlay:
+  // 0 = bone only (no morph), 1 = bone + full morph overlay
   private mixWeights: Record<number, number> = { ...AU_MIX_DEFAULTS };
 
   setAUMixWeight = (id: number, weight: number) => {
     this.mixWeights[id] = clamp01(weight);
-    // Re-apply composites so the new mix takes effect immediately
-    this.reapplyComposites();
+
+    // Reapply just this AU's morph with the new mix weight
+    const v = this.auValues[id] ?? 0;
+    if (v > 0) this.applyBothSides(id, v);
+
+    // Mark affected bone as pending (bones don't change, but ensures consistency)
+    const compositeInfo = AU_TO_COMPOSITE_MAP.get(id);
+    if (compositeInfo) {
+      for (const nodeKey of compositeInfo.nodes) {
+        this.pendingCompositeNodes.add(nodeKey);
+      }
+    }
   };
 
   getAUMixWeight = (id: number): number => {
     // Return stored mix weight, or default from AU_MIX_DEFAULTS, or 1.0 (full bone)
     return this.mixWeights[id] ?? AU_MIX_DEFAULTS[id] ?? 1.0;
-  };
-
-  /** Re-evaluate and apply head/eye composites from current AU values (used after mix changes). */
-  reapplyComposites = () => {
-    // Use tracked state variables instead of auValues to preserve current positions
-    this.applyHeadComposite(this.currentHeadYaw, this.currentHeadPitch, this.currentHeadRoll);
-    this.applyEyeComposite(this.currentEyeYaw, this.currentEyePitch);
   };
 
   /**
@@ -407,7 +456,7 @@ export class EngineThree {
     this.auValues = {};
 
     // 2. Reset all composite bone rotation state
-    this.boneRotations = {
+    this.rotations = {
       JAW: { pitch: 0, yaw: 0, roll: 0 },
       HEAD: { pitch: 0, yaw: 0, roll: 0 },
       EYE_L: { pitch: 0, yaw: 0, roll: 0 },
@@ -415,21 +464,15 @@ export class EngineThree {
       TONGUE: { pitch: 0, yaw: 0, roll: 0 }
     };
 
-    // 3. Reset tracked composite positions
-    this.currentEyeYaw = 0;
-    this.currentEyePitch = 0;
-    this.currentHeadYaw = 0;
-    this.currentHeadPitch = 0;
-    this.currentHeadRoll = 0;
-
-    // 4. Clear all active transitions
+    // 3. Clear all active transitions
     this.clearTransitions();
 
-    // 5. Apply neutral composites (zeros out both morphs and bones)
-    this.applyHeadComposite(0, 0, 0);
-    this.applyEyeComposite(0, 0);
+    // 4. Mark all composite bones as pending (they'll reset to base in flushPendingComposites)
+    (['HEAD', 'EYE_L', 'EYE_R', 'JAW', 'TONGUE'] as const).forEach(node => {
+      this.pendingCompositeNodes.add(node);
+    });
 
-    // 6. Zero out all morphs directly (catches any non-composite morphs)
+    // 5. Zero out all morphs directly
     for (const m of this.meshes) {
       const infl: any = (m as any).morphTargetInfluences;
       if (!infl) continue;
@@ -438,28 +481,35 @@ export class EngineThree {
       }
     }
 
-    // 7. Reset all bones to their base transforms
+    // 6. Reset all bones to their base transforms
     Object.values(this.bones).forEach((entry) => {
       if (!entry) return;
       entry.obj.position.copy(entry.basePos);
       entry.obj.quaternion.copy(entry.baseQuat);
     });
-
-    // 8. Sync driver state
-    ['headYaw','headPitch','headRoll','eyeYaw','eyePitch'].forEach((key) => this.syncDriverValue(key, 0));
   };
 
   hasBoneBinding = (id: number) => BONE_DRIVEN_AUS.has(id);
 
-  onReady = ({ meshes, model, animations }: { meshes: THREE.Mesh[]; model?: THREE.Object3D; animations?: THREE.AnimationClip[] }) => {
+  onReady = ({ meshes, model, animations, scene, skyboxTexture }: {
+    meshes: THREE.Mesh[];
+    model?: THREE.Object3D;
+    animations?: THREE.AnimationClip[];
+    scene?: THREE.Scene;
+    skyboxTexture?: THREE.Texture;
+  }) => {
     this.meshes = meshes;
+
+    // Store scene and skybox references
+    if (scene) this.scene = scene;
+    if (skyboxTexture) this.skyboxTexture = skyboxTexture;
+
     if (model) {
       this.model = model;
       this.bones = this.resolveBones(model);
       this.logResolvedOnce(this.bones);
       this.rigReady = true;
       this.missingBoneWarnings.clear();
-      this.applyDriverValues();
     }
 
     if (model && animations && animations.length) {
@@ -544,7 +594,6 @@ export class EngineThree {
       const idx = dict[key];
       if (idx !== undefined) infl[idx] = val;
     }
-    this.syncDriverValue(this.getMorphDriverKey(key), val);
   };
 
   /**
@@ -569,8 +618,6 @@ export class EngineThree {
       const idx = dict[key];
       if (idx !== undefined) infl[idx] = val;
     }
-
-    this.syncDriverValue(this.getMorphDriverKey(key), val);
   };
 
   applyMorphs = (keys: string[], v: number) => {
@@ -621,7 +668,7 @@ export class EngineThree {
 
     if (compositeInfo) {
       // This AU affects composite bone rotations (jaw, head, eyes)
-      // console.log(`[EngineThree] Composite AU ${id} = ${v.toFixed(2)} (axis: ${compositeInfo.axis}, nodes: ${compositeInfo.nodes.join(', ')})`);
+      // console.log(`[EngineThree] setAU(${id}, ${v.toFixed(2)}) → axis: ${compositeInfo.axis}, nodes: ${compositeInfo.nodes.join(', ')}`);
 
       // Always apply morphs first
       this.applyBothSides(id, v);
@@ -657,8 +704,8 @@ export class EngineThree {
         // Update the rotation state for this axis
         this.updateBoneRotation(nodeKey, compositeInfo.axis, axisValue);
 
-        // Apply the complete composite rotation
-        this.applyCompositeRotation(nodeKey);
+        // Mark node as pending - will be applied in update()
+        this.pendingCompositeNodes.add(nodeKey);
       }
     } else {
       // Non-composite AU: apply directly to both morphs and bones
@@ -667,468 +714,7 @@ export class EngineThree {
         this.applyBones(id, v);
       }
     }
-    this.syncDriverValue(this.getAUDriverKey(id), this.auValues[id]);
   };
-
-  /** --- High-level continuum helpers (UI-agnostic) ---
-   *  Values are in -1..1; we map to underlying AU pairs.
-   *  These functions keep EngineThree independent of React/Chakra/etc.
-   */
-
-  /** Eyes — horizontal continuum: left(61) ⟷ right(62) */
-  setEyesHorizontal = (v: number) => {
-    const x = Math.max(-1, Math.min(1, v ?? 0));
-    this.currentEyeYaw = x;
-    // Use composite motion to update both bones and blendshapes, preserving vertical
-    this.applyEyeComposite(this.currentEyeYaw, this.currentEyePitch);
-    this.syncDriverValue('eyeYaw', this.currentEyeYaw);
-  };
-
-  /** Eyes — vertical continuum: down(64) ⟷ up(63) — positive = up */
-  setEyesVertical = (v: number) => {
-    const y = Math.max(-1, Math.min(1, v ?? 0));
-    this.currentEyePitch = y;
-    // Use composite motion to update both bones and blendshapes, preserving horizontal
-    this.applyEyeComposite(this.currentEyeYaw, this.currentEyePitch);
-    this.syncDriverValue('eyePitch', this.currentEyePitch);
-  };
-
-  /** Left eye only — horizontal: 61L ⟷ 62L */
-  setLeftEyeHorizontal = (v: number) => {
-    const x = Math.max(-1, Math.min(1, v ?? 0));
-    if (x >= 0) { this.setAU('61L', 0); this.setAU('62L', x); }
-    else        { this.setAU('62L', 0); this.setAU('61L', -x); }
-  };
-
-  /** Left eye only — vertical: 64L ⟷ 63L — positive = up */
-  setLeftEyeVertical = (v: number) => {
-    const y = Math.max(-1, Math.min(1, v ?? 0));
-    if (y >= 0) { this.setAU('64L', 0); this.setAU('63L', y); }
-    else        { this.setAU('63L', 0); this.setAU('64L', -y); }
-  };
-
-  /** Right eye only — horizontal: 61R ⟷ 62R */
-  setRightEyeHorizontal = (v: number) => {
-    const x = Math.max(-1, Math.min(1, v ?? 0));
-    if (x >= 0) { this.setAU('61R', 0); this.setAU('62R', x); }
-    else        { this.setAU('62R', 0); this.setAU('61R', -x); }
-  };
-
-  /** Right eye only — vertical: 64R ⟷ 63R — positive = up */
-  setRightEyeVertical = (v: number) => {
-    const y = Math.max(-1, Math.min(1, v ?? 0));
-    if (y >= 0) { this.setAU('64R', 0); this.setAU('63R', y); }
-    else        { this.setAU('63R', 0); this.setAU('64R', -y); }
-  };
-
-  /** Head — horizontal continuum: left(31) ⟷ right(32) */
-  setHeadHorizontal = (v: number) => {
-    const x = Math.max(-1, Math.min(1, v ?? 0));
-    this.currentHeadYaw = x;
-    // Use composite motion to update both bones and blendshapes, preserving other axes
-    this.applyHeadComposite(this.currentHeadYaw, this.currentHeadPitch, this.currentHeadRoll);
-    this.syncDriverValue('headYaw', this.currentHeadYaw);
-  };
-
-  /** Head — vertical continuum: down(54) ⟷ up(33) — positive = up */
-  setHeadVertical = (v: number) => {
-    const y = Math.max(-1, Math.min(1, v ?? 0));
-    this.currentHeadPitch = y;
-    // Use composite motion to update both bones and blendshapes, preserving other axes
-    this.applyHeadComposite(this.currentHeadYaw, this.currentHeadPitch, this.currentHeadRoll);
-    this.syncDriverValue('headPitch', this.currentHeadPitch);
-  };
-
-  /** Head — tilt/roll continuum: left(55) ⟷ right(56) — positive = right tilt */
-  setHeadTilt = (v: number) => {
-    const r = Math.max(-1, Math.min(1, v ?? 0));
-    this.currentHeadRoll = r;
-    // Use composite motion to update both bones and blendshapes, preserving other axes
-    this.applyHeadComposite(this.currentHeadYaw, this.currentHeadPitch, this.currentHeadRoll);
-    this.syncDriverValue('headRoll', this.currentHeadRoll);
-  };
-
-  /** Alias for setHeadTilt for consistency with BoneControls naming */
-  setHeadRoll = (v: number) => {
-    this.setHeadTilt(v);
-  };
-
-  /**
-   * Generic bone-axis setter for JAW/TONGUE style continuums.
-   * Uses COMPOSITE_ROTATIONS to find the AU pair for the given node+axis.
-   */
-  private setBoneAxis = (
-    node: 'JAW' | 'TONGUE',
-    axis: 'pitch' | 'yaw',
-    value: number
-  ) => {
-    const v = Math.max(-1, Math.min(1, value ?? 0));
-
-    // Find the AU pair from COMPOSITE_ROTATIONS
-    const comp = COMPOSITE_ROTATIONS.find(c => c.node === node);
-    const axisConfig = comp?.[axis];
-    if (!axisConfig?.negative || !axisConfig?.positive) return;
-
-    const { negative: negAU, positive: posAU } = axisConfig;
-
-    // Update bone rotation state and apply composite
-    this.updateBoneRotation(node, axis, v);
-    this.applyCompositeRotation(node);
-
-    // Update AU values for UI sync
-    if (v >= 0) {
-      this.auValues[posAU] = v;
-      this.auValues[negAU] = 0;
-    } else {
-      this.auValues[negAU] = -v;
-      this.auValues[posAU] = 0;
-    }
-
-    // Apply morphs
-    this.applyBothSides(v >= 0 ? posAU : negAU, Math.abs(v));
-  };
-
-  /** Jaw — horizontal continuum: left(30) ⟷ right(35) */
-  setJawHorizontal = (v: number) => this.setBoneAxis('JAW', 'yaw', v);
-
-  /** Tongue — horizontal continuum: left(39) ⟷ right(40) */
-  setTongueHorizontal = (v: number) => this.setBoneAxis('TONGUE', 'yaw', v);
-
-  /** Tongue — vertical continuum: down(38) ⟷ up(37) — positive = up */
-  setTongueVertical = (v: number) => this.setBoneAxis('TONGUE', 'pitch', v);
-
-  /**
-   * Transition methods for continuum axes - smooth animated versions
-   * These call the instant set methods to ensure proper composite handling
-   */
-
-  /** Smoothly transition eyes horizontal (yaw) over duration */
-  transitionEyesHorizontal = (targetValue: number, durationMs: number = 200) => {
-    const target = Math.max(-1, Math.min(1, targetValue ?? 0));
-    this.queueDriverTween('eyeYaw', target, durationMs);
-  };
-
-  /** Smoothly transition eyes vertical (pitch) over duration */
-  transitionEyesVertical = (targetValue: number, durationMs: number = 200) => {
-    const target = Math.max(-1, Math.min(1, targetValue ?? 0));
-    this.queueDriverTween('eyePitch', target, durationMs);
-  };
-
-  /** Smoothly transition head horizontal (yaw) over duration */
-  transitionHeadHorizontal = (targetValue: number, durationMs: number = 300) => {
-    const target = Math.max(-1, Math.min(1, targetValue ?? 0));
-    this.queueDriverTween('headYaw', target, durationMs);
-  };
-
-  /** Smoothly transition head vertical (pitch) over duration */
-  transitionHeadVertical = (targetValue: number, durationMs: number = 300) => {
-    const target = Math.max(-1, Math.min(1, targetValue ?? 0));
-    this.queueDriverTween('headPitch', target, durationMs);
-  };
-
-  /** Smoothly transition head roll/tilt over duration */
-  transitionHeadRoll = (targetValue: number, durationMs: number = 300) => {
-    const target = Math.max(-1, Math.min(1, targetValue ?? 0));
-    this.queueDriverTween('headRoll', target, durationMs);
-  };
-
-  /** Smoothly transition jaw horizontal (yaw) over duration */
-  transitionJawHorizontal = (targetValue: number, durationMs: number = 200) => {
-    const target = Math.max(-1, Math.min(1, targetValue ?? 0));
-    if (target >= 0) {
-      this.transitionAU(35, target, durationMs);
-      this.transitionAU(30, 0, durationMs);
-    } else {
-      this.transitionAU(30, -target, durationMs);
-      this.transitionAU(35, 0, durationMs);
-    }
-  };
-
-  /** Smoothly transition tongue horizontal (yaw) over duration */
-  transitionTongueHorizontal = (targetValue: number, durationMs: number = 200) => {
-    const target = Math.max(-1, Math.min(1, targetValue ?? 0));
-    if (target >= 0) {
-      this.transitionAU(40, target, durationMs);
-      this.transitionAU(39, 0, durationMs);
-    } else {
-      this.transitionAU(39, -target, durationMs);
-      this.transitionAU(40, 0, durationMs);
-    }
-  };
-
-  /** Smoothly transition tongue vertical (pitch) over duration */
-  transitionTongueVertical = (targetValue: number, durationMs: number = 200) => {
-    const target = Math.max(-1, Math.min(1, targetValue ?? 0));
-    if (target >= 0) {
-      this.transitionAU(37, target, durationMs);
-      this.transitionAU(38, 0, durationMs);
-    } else {
-      this.transitionAU(38, -target, durationMs);
-      this.transitionAU(37, 0, durationMs);
-    }
-  };
-
-  /** Unified composite handler for head and eyes with full pitch/yaw combination (+optional tilt/roll) */
-  /**
-   * Apply composite motion (bones + morphs) for multi-axis movements.
-   *
-   * ⚠️ CRITICAL MIX WEIGHT BEHAVIOR - READ BEFORE MODIFYING:
-   * - Bones: ALWAYS applied at full intensity (NOT scaled by mix weight)
-   * - Morphs: Scaled by mix weight (0 = no morph, 1 = full morph)
-   *
-   * Example with mixWeight = 0.5:
-   *   Bone rotation: 100% intensity (eyeball rotates fully)
-   *   Morph overlay: 50% intensity (eyelid follows partially)
-   *
-   * See: MIX_WEIGHT_SYSTEM.md for detailed explanation
-   * See: COMPOSITE_MOTION_GUIDE.md for architecture overview
-   *
-   * @param baseYawId - Base AU for horizontal axis (e.g., 61 for eyes left)
-   * @param basePitchId - Base AU for vertical axis (e.g., 63 for eyes up)
-   * @param yaw - Horizontal value [-1, 1] (negative = left, positive = right)
-   * @param pitch - Vertical value [-1, 1] (negative = down, positive = up)
-   * @param downIdOverride - Optional override for down AU (default: basePitchId + 21)
-   * @param reverseYaw - Unused (kept for backwards compatibility)
-   * @param tiltIds - Optional roll/tilt AU pair (e.g., {left: 55, right: 56} for head)
-   * @param roll - Roll value [-1, 1] (negative = left tilt, positive = right tilt)
-   */
-  private applyCompositeMotion(
-    baseYawId: number,
-    basePitchId: number,
-    yaw: number,
-    pitch: number,
-    downIdOverride?: number,
-    reverseYaw?: boolean,
-    tiltIds?: { left: number; right: number },
-    roll?: number
-  ) {
-    const yawMix = this.getAUMixWeight(baseYawId);
-    const pitchMix = this.getAUMixWeight(basePitchId);
-
-    const leftId = baseYawId;
-    const rightId = baseYawId + 1;
-    const upId = basePitchId;
-    const downId = downIdOverride ?? basePitchId + 21; // 33->54 (head), 63->64 (eyes)
-
-    // --- Reverse yaw for bones only to match morph direction ---
-    const yawBone = -yaw;
-    const yawAbs = Math.abs(yawBone);
-    const pitchAbs = Math.abs(pitch);
-
-    // --- Tilt/Roll axis ---
-    const rollVal = roll ?? 0;
-    const rollAbs = Math.abs(rollVal);
-    const tiltLeftId = tiltIds?.left;
-    const tiltRightId = tiltIds?.right;
-
-    // ============================================================================
-    // BONES: ALWAYS FULL INTENSITY (NOT SCALED BY MIX WEIGHT)
-    // ============================================================================
-    // ⚠️ DO NOT multiply by yawMix/pitchMix here - bones always apply at 100%
-    // The mix weight ONLY affects morphs (see below)
-    this.applyBoneComposite(
-      { leftId, rightId, upId, downId, tiltLeftId, tiltRightId },
-      { yaw: yawBone, pitch, roll: rollVal }  // ← Full intensity values
-    );
-
-    // ============================================================================
-    // MORPHS: SCALED BY MIX WEIGHT
-    // ============================================================================
-    // ⚠️ DO multiply by yawMix/pitchMix here - morphs are the overlay
-    // mixWeight = 0.0 → no morph (pure bone)
-    // mixWeight = 1.0 → full morph (bone + morph)
-    this.applyMorphs(AU_TO_MORPHS[leftId] || [], yaw < 0 ? Math.abs(yaw) * yawMix : 0);
-    this.applyMorphs(AU_TO_MORPHS[rightId] || [], yaw > 0 ? Math.abs(yaw) * yawMix : 0);
-    this.applyMorphs(AU_TO_MORPHS[downId] || [], pitch < 0 ? pitchAbs * pitchMix : 0);
-    this.applyMorphs(AU_TO_MORPHS[upId] || [], pitch > 0 ? pitchAbs * pitchMix : 0);
-    if (tiltLeftId && tiltRightId) {
-      this.applyMorphs(AU_TO_MORPHS[tiltLeftId] || [], rollVal < 0 ? rollAbs * this.getAUMixWeight(tiltLeftId) : 0);
-      this.applyMorphs(AU_TO_MORPHS[tiltRightId] || [], rollVal > 0 ? rollAbs * this.getAUMixWeight(tiltRightId) : 0);
-    }
-    this.model?.updateMatrixWorld(true);
-  }
-
-  /**
-   * Compose bone rotations for yaw + pitch (+roll/tilt) in a single write per affected node.
-   * Avoids the prior issue where sequential calls (yaw then pitch) overwrote each other.
-   */
-  private applyBoneComposite(
-    ids: { leftId: number; rightId: number; upId: number; downId: number; tiltLeftId?: number; tiltRightId?: number },
-    vals: { yaw: number; pitch: number; roll?: number }
-  ) {
-    if (!this.model) return;
-
-    // Determine which AU ids are active by sign
-    const yawId = vals.yaw < 0 ? ids.leftId : vals.yaw > 0 ? ids.rightId : null;
-    const pitchId = vals.pitch < 0 ? ids.downId : vals.pitch > 0 ? ids.upId : null;
-    const roll = vals.roll ?? 0;
-    const tiltId = roll < 0 ? ids.tiltLeftId : roll > 0 ? ids.tiltRightId : null;
-
-    // Nothing to do
-    if (!yawId && !pitchId && !tiltId) return;
-
-    // Gather bindings for active ids
-    const selected: Array<{ id: number; v: number; bindings: any[] }> = [];
-    if (yawId) selected.push({ id: yawId, v: Math.abs(vals.yaw), bindings: BONE_AU_TO_BINDINGS[yawId] || [] });
-    if (pitchId) selected.push({ id: pitchId, v: Math.abs(vals.pitch), bindings: BONE_AU_TO_BINDINGS[pitchId] || [] });
-    if (tiltId) selected.push({ id: tiltId, v: Math.abs(roll), bindings: BONE_AU_TO_BINDINGS[tiltId] || [] });
-
-    if (!selected.length) return;
-
-    // Group intended channel deltas by resolved node
-    type R = { rx?: number; ry?: number; rz?: number; tx?: number; ty?: number; tz?: number; base: NodeBase };
-    const perNode = new Map<THREE.Object3D, R>();
-
-    for (const sel of selected) {
-      for (const raw of sel.bindings) {
-        // Clone to allow eye-axis overrides
-        const b = { ...raw };
-
-        // Eye axis overrides for CC rigs (match behavior of applyBones)
-        if (sel.id >= 61 && sel.id <= 62) {
-          b.channel = EYE_AXIS.yaw;
-        } else if (sel.id >= 63 && sel.id <= 64) {
-          b.channel = EYE_AXIS.pitch;
-        }
-
-        // Resolve node
-        const entry = this.bones[b.node as keyof ResolvedBones];
-        if (!entry) continue;
-
-        // Compute signed scalar in natural [-1, 1]
-        const signed = Math.min(1, Math.max(-1, sel.v * (b.scale ?? 1)));
-
-        // Convert to radians/units
-        const radians = b.maxDegrees ? deg2rad(b.maxDegrees) * signed : 0;
-        const units = b.maxUnits ? b.maxUnits * signed : 0;
-
-        // Accumulate per node/channel
-        let agg = perNode.get(entry.obj);
-        if (!agg) {
-          agg = { base: entry };
-          perNode.set(entry.obj, agg);
-        }
-        if (b.channel === 'rx' || b.channel === 'ry' || b.channel === 'rz') {
-          agg[b.channel] = (agg[b.channel] ?? 0) + radians;
-        } else {
-          agg[b.channel] = (agg[b.channel] ?? 0) + units;
-        }
-      }
-    }
-
-    // Now, for each node, write a single transform relative to its base
-    perNode.forEach((agg, obj) => {
-      const { base } = agg;
-
-      // Position: reset to base and apply any translations
-      obj.position.copy(base.basePos);
-      if (agg.tx || agg.ty || agg.tz) {
-        const dir = new THREE.Vector3(
-          agg.tx ?? 0,
-          agg.ty ?? 0,
-          agg.tz ?? 0
-        );
-        // Translate in the node's local axes oriented by base quaternion
-        dir.applyQuaternion(base.baseQuat);
-        obj.position.add(dir);
-      }
-
-      // Rotation: compose in a stable order (yaw→pitch→roll for head/eyes)
-      const q = new THREE.Quaternion();
-      const qx = new THREE.Quaternion();
-      const qy = new THREE.Quaternion();
-      const qz = new THREE.Quaternion();
-
-      qx.setFromAxisAngle(X_AXIS, agg.rx ?? 0);
-      qy.setFromAxisAngle(Y_AXIS, agg.ry ?? 0);
-      qz.setFromAxisAngle(Z_AXIS, agg.rz ?? 0);
-
-      // Start at base orientation, then apply Y, then X, then Z to match common rigs
-      q.copy(base.baseQuat).multiply(qy).multiply(qx).multiply(qz);
-      obj.quaternion.copy(q);
-
-      obj.updateMatrixWorld(false);
-    });
-  }
-
-  /** Apply composite head rotation/morphs for both axes + tilt/roll */
-  public applyHeadComposite(yaw: number, pitch: number, roll: number = 0) {
-    // Head turn should use ry (horizontal yaw), rx (vertical pitch), and rz (roll/tilt)
-    this.applyCompositeMotion(31, 33, yaw, pitch, 54, undefined, { left: 55, right: 56 }, roll);
-  }
-
-  /** Apply composite eye rotation/morphs for both axes */
-  public applyEyeComposite(yaw: number, pitch: number) {
-    // Eyes turn should use rz (horizontal yaw) and rx (vertical pitch)
-    this.applyCompositeMotion(61, 63, yaw, pitch, 64);
-  }
-
-  /**
-   * Smoothly transition eye composite to target yaw/pitch over duration
-   * This creates a smooth animated transition for eye tracking return-to-neutral
-   */
-  public transitionEyeComposite(targetYaw: number, targetPitch: number, durationMs: number = 800) {
-    const startYaw = this.currentEyeYaw;
-    const startPitch = this.currentEyePitch;
-    const startTime = performance.now();
-
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / durationMs, 1.0);
-      const easedProgress = this.easeInOutQuad(progress);
-
-      // Interpolate between start and target
-      const currentYaw = startYaw + (targetYaw - startYaw) * easedProgress;
-      const currentPitch = startPitch + (targetPitch - startPitch) * easedProgress;
-
-      // Apply the interpolated values
-      this.currentEyeYaw = currentYaw;
-      this.currentEyePitch = currentPitch;
-      this.applyEyeComposite(currentYaw, currentPitch);
-
-      // Continue animation if not complete
-      if (progress < 1.0) {
-        requestAnimationFrame(animate);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }
-
-  /**
-   * Smoothly transition head composite to target yaw/pitch/roll over duration
-   * This creates a smooth animated transition for head tracking return-to-neutral
-   */
-  public transitionHeadComposite(targetYaw: number, targetPitch: number, targetRoll: number = 0, durationMs: number = 800) {
-    const startYaw = this.currentHeadYaw;
-    const startPitch = this.currentHeadPitch;
-    const startRoll = this.currentHeadRoll;
-    const startTime = performance.now();
-
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / durationMs, 1.0);
-      const easedProgress = this.easeInOutQuad(progress);
-
-      // Interpolate between start and target
-      const currentYaw = startYaw + (targetYaw - startYaw) * easedProgress;
-      const currentPitch = startPitch + (targetPitch - startPitch) * easedProgress;
-      const currentRoll = startRoll + (targetRoll - startRoll) * easedProgress;
-
-      // Apply the interpolated values
-      this.currentHeadYaw = currentYaw;
-      this.currentHeadPitch = currentPitch;
-      this.currentHeadRoll = currentRoll;
-      this.applyHeadComposite(currentYaw, currentPitch, currentRoll);
-
-      // Continue animation if not complete
-      if (progress < 1.0) {
-        requestAnimationFrame(animate);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }
 
   /**
    * Calculate the offset needed for the character to look at the camera
@@ -1245,7 +831,7 @@ export class EngineThree {
     axis: 'pitch' | 'yaw' | 'roll',
     value: number
   ) {
-    this.boneRotations[nodeKey][axis] = Math.max(-1, Math.min(1, value));
+    this.rotations[nodeKey][axis] = Math.max(-1, Math.min(1, value));
   }
 
   /**
@@ -1264,19 +850,28 @@ export class EngineThree {
     }
 
     const { obj, basePos, baseQuat } = entry;
-    const rotState = this.boneRotations[nodeKey];
-
-    // console.log(`[EngineThree] applyCompositeRotation(${nodeKey}) - rotState:`, rotState);
+    const rotState = this.rotations[nodeKey];
 
     // Find the composite rotation config for this node
     const config = COMPOSITE_ROTATIONS.find(c => c.node === nodeKey);
     if (!config) return;
 
-    // Helper to get binding from the most active AU for an axis
-    const getBindingForAxis = (axisConfig: typeof config.pitch | typeof config.yaw | typeof config.roll) => {
+    // Helper to get binding from the correct AU for an axis based on direction
+    const getBindingForAxis = (
+      axisConfig: typeof config.pitch | typeof config.yaw | typeof config.roll,
+      direction: number
+    ) => {
       if (!axisConfig) return null;
 
-      // If multiple AUs, find which one is active (has highest value)
+      // For continuum pairs, select the AU based on direction
+      // negative direction → use negative AU's binding
+      // positive direction → use positive AU's binding
+      if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
+        const auId = direction < 0 ? axisConfig.negative : axisConfig.positive;
+        return BONE_AU_TO_BINDINGS[auId]?.[0];
+      }
+
+      // If multiple AUs (non-continuum), find which one is active (has highest value)
       if (axisConfig.aus.length > 1) {
         let maxAU = axisConfig.aus[0];
         let maxValue = this.auValues[maxAU] ?? 0;
@@ -1290,41 +885,48 @@ export class EngineThree {
         return BONE_AU_TO_BINDINGS[maxAU]?.[0];
       }
 
-      // Single AU or continuum pair - use first AU
+      // Single AU - use first AU
       return BONE_AU_TO_BINDINGS[axisConfig.aus[0]]?.[0];
     };
 
     // Build composite quaternion from individual axes
     const compositeQ = new THREE.Quaternion().copy(baseQuat);
 
-    // Apply rotations in order: yaw (Y), pitch (X), roll (Z) - standard Euler order
+    // Helper to get axis from config
+    const getAxis = (axisName: 'rx' | 'ry' | 'rz') =>
+      axisName === 'rx' ? X_AXIS : axisName === 'ry' ? Y_AXIS : Z_AXIS;
+
+    // Apply rotations in order: yaw, pitch, roll
+    // Use the axis from config (e.g., eyes use rz for yaw, head uses ry)
     if (config.yaw && rotState.yaw !== 0) {
-      const binding = getBindingForAxis(config.yaw);
+      const binding = getBindingForAxis(config.yaw, rotState.yaw);
       if (binding?.maxDegrees) {
-        const radians = deg2rad(binding.maxDegrees) * rotState.yaw * binding.scale;
-        // console.log(`  → Yaw: ${rotState.yaw.toFixed(2)} * ${binding.maxDegrees}° * ${binding.scale} = ${(radians * 180 / Math.PI).toFixed(1)}°`);
-        const deltaQ = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, radians);
+        // Use absolute value * scale since we selected the correct AU for direction
+        const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.yaw) * binding.scale;
+        const axis = getAxis(config.yaw.axis);
+        const deltaQ = new THREE.Quaternion().setFromAxisAngle(axis, radians);
         compositeQ.multiply(deltaQ);
       }
     }
 
     if (config.pitch && rotState.pitch !== 0) {
-      const binding = getBindingForAxis(config.pitch);
+      const binding = getBindingForAxis(config.pitch, rotState.pitch);
       if (binding?.maxDegrees) {
-        const radians = deg2rad(binding.maxDegrees) * rotState.pitch * binding.scale;
-        const axis = config.pitch.axis === 'rx' ? X_AXIS : config.pitch.axis === 'ry' ? Y_AXIS : Z_AXIS;
-        // console.log(`  → Pitch (${config.pitch.axis}): ${rotState.pitch.toFixed(2)} * ${binding.maxDegrees}° * ${binding.scale} = ${(radians * 180 / Math.PI).toFixed(1)}°`);
+        // Use absolute value * scale since we selected the correct AU for direction
+        const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.pitch) * binding.scale;
+        const axis = getAxis(config.pitch.axis);
         const deltaQ = new THREE.Quaternion().setFromAxisAngle(axis, radians);
         compositeQ.multiply(deltaQ);
       }
     }
 
     if (config.roll && rotState.roll !== 0) {
-      const binding = getBindingForAxis(config.roll);
+      const binding = getBindingForAxis(config.roll, rotState.roll);
       if (binding?.maxDegrees) {
-        const radians = deg2rad(binding.maxDegrees) * rotState.roll * binding.scale;
-        // console.log(`  → Roll: ${rotState.roll.toFixed(2)} * ${binding.maxDegrees}° * ${binding.scale} = ${(radians * 180 / Math.PI).toFixed(1)}°`);
-        const deltaQ = new THREE.Quaternion().setFromAxisAngle(Z_AXIS, radians);
+        // Use absolute value * scale since we selected the correct AU for direction
+        const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.roll) * binding.scale;
+        const axis = getAxis(config.roll.axis);
+        const deltaQ = new THREE.Quaternion().setFromAxisAngle(axis, radians);
         compositeQ.multiply(deltaQ);
       }
     }
@@ -1672,9 +1274,9 @@ export class EngineThree {
    */
   getHeadRotation(): { yaw: number; pitch: number; roll: number } {
     return {
-      yaw: this.currentHeadYaw,
-      pitch: this.currentHeadPitch,
-      roll: this.currentHeadRoll
+      yaw: this.rotations.HEAD?.yaw ?? 0,
+      pitch: this.rotations.HEAD?.pitch ?? 0,
+      roll: this.rotations.HEAD?.roll ?? 0
     };
   }
 
@@ -2492,6 +2094,38 @@ export class EngineThree {
       rightEye.rotation.z = base.z + THREE.MathUtils.degToRad(-this.currentRotations.eyes.x);
       rightEye.rotation.x = base.x + THREE.MathUtils.degToRad(this.currentRotations.eyes.y);
     }
+  };
+
+  // ============================================================================
+  // SKYBOX CONTROL METHODS
+  // ============================================================================
+
+  /** Rotate skybox by degrees (0-360) */
+  setSkyboxRotation = (degrees: number) => {
+    if (this.skyboxTexture) {
+      // Convert degrees to texture offset (0-360 maps to 0-1)
+      this.skyboxTexture.offset.x = degrees / 360;
+      this.skyboxTexture.needsUpdate = true;
+    }
+  };
+
+  /** Set skybox blur (0-1) */
+  setSkyboxBlur = (blur: number) => {
+    if (this.scene) {
+      this.scene.backgroundBlurriness = Math.max(0, Math.min(1, blur));
+    }
+  };
+
+  /** Set skybox intensity (0-2) */
+  setSkyboxIntensity = (intensity: number) => {
+    if (this.scene) {
+      this.scene.backgroundIntensity = Math.max(0, Math.min(2, intensity));
+    }
+  };
+
+  /** Check if skybox is ready */
+  isSkyboxReady = (): boolean => {
+    return this.skyboxTexture !== null && this.scene !== null;
   };
 }
 

@@ -7,7 +7,6 @@ import ContinuumSlider from './ContinuumSlider';
 import { CurveEditor } from '../CurveEditor';
 import { AUInfo } from '../../engine/arkit/shapeDict';
 import { EngineThree, CONTINUUM_PAIRS, hasLeftRightMorphs } from '../../engine/EngineThree';
-import { EngineFour } from '../../engine/EngineFour';
 import type { NormalizedSnippet } from '../../latticework/animation/types';
 import { useEngineState } from '../../context/engineContext';
 
@@ -113,7 +112,7 @@ interface AUSectionProps {
   section: string;
   aus: AUInfo[];
   auStates: Record<string, number>;
-  engine?: EngineThree | EngineFour | null;
+  engine?: EngineThree | null;
   showUnusedSliders?: boolean;
   onAUChange?: (id: string, value: number) => void;
   disabled?: boolean;
@@ -443,14 +442,6 @@ export default function AUSection({
             const posValue = auStates[positiveAU.id] ?? 0;
             const continuumValue = posValue - negValue;
 
-            // Determine which continuum helper to call
-            const isEyesHorizontal = pair.negative === 61 && pair.positive === 62;
-            const isEyesVertical = pair.negative === 64 && pair.positive === 63;
-            const isHeadHorizontal = pair.negative === 31 && pair.positive === 32;
-            const isHeadVertical = pair.negative === 54 && pair.positive === 33;
-            const isHeadTilt = pair.negative === 55 && pair.positive === 56;
-            const isJawHorizontal = pair.negative === 30 && pair.positive === 35;
-
             return (
               <Box key={`${pair.negative}-${pair.positive}`} w="100%">
                 <ContinuumSlider
@@ -461,28 +452,14 @@ export default function AUSection({
                   showBlendSlider={pair.showBlend}
                   disabled={disabled}
                   onChange={(val) => {
-                    // Update local state
+                    // Update local state for UI tracking
+                    // ContinuumSlider calls engine.setContinuum() directly
                     if (val >= 0) {
                       onAUChange?.(positiveAU.id, val);
                       onAUChange?.(negativeAU.id, 0);
                     } else {
-                      onAUChange?.(negativeAU.id, -val);
+                      onAUChange?.(negativeAU.id, Math.abs(val));
                       onAUChange?.(positiveAU.id, 0);
-                    }
-
-                    // Call the appropriate engine helper
-                    if (isEyesHorizontal) {
-                      engine?.setEyesHorizontal(val);
-                    } else if (isEyesVertical) {
-                      engine?.setEyesVertical(val);
-                    } else if (isHeadHorizontal) {
-                      engine?.setHeadHorizontal(val);
-                    } else if (isHeadVertical) {
-                      engine?.setHeadVertical(val);
-                    } else if (isHeadTilt) {
-                      engine?.setHeadTilt(val);
-                    } else if (isJawHorizontal) {
-                      engine?.setJawHorizontal(val);
                     }
                   }}
                 />

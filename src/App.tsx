@@ -74,16 +74,6 @@ function AppContent() {
         }
       }
 
-      // Expose engine globally for testing morph animations
-      if (typeof window !== 'undefined') {
-        (window as any).engine = engine;
-        console.log('[App] 🎭 Engine exposed globally. Test animation functions:');
-        console.log('  - engine.testSmileAnimation()');
-        console.log('  - engine.testBlinkAnimation()');
-        console.log('  - engine.testHeadAnimation()');
-        console.log('  - engine.stopAllMorphClips()');
-      }
-
       try {
         const summary = auditMorphCoverage(model);
         setAuditSummary(summary);

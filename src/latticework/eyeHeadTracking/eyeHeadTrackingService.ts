@@ -552,16 +552,23 @@ export class EyeHeadTrackingService {
       );
     } else if (this.config.engine) {
       // Direct engine path - simpler, bypasses animation scheduler
+      // Use transitionContinuum for each axis (yaw/pitch)
       if (applyEyes && this.config.eyeTrackingEnabled) {
         const eyeYaw = smoothedTarget.x * eyeIntensity;
         const eyePitch = smoothedTarget.y * eyeIntensity;
-        this.config.engine.transitionEyeComposite(eyeYaw, eyePitch, eyeDuration);
+        // Eyes horizontal: AU61 (left) / AU62 (right)
+        this.config.engine.transitionContinuum(61, 62, eyeYaw, eyeDuration);
+        // Eyes vertical: AU63 (up) / AU64 (down)
+        this.config.engine.transitionContinuum(64, 63, eyePitch, eyeDuration);
       }
 
       if (applyHead && this.config.headTrackingEnabled && this.config.headFollowEyes) {
         const headYaw = smoothedTarget.x * headIntensity;
         const headPitch = smoothedTarget.y * headIntensity;
-        this.config.engine.transitionHeadComposite(headYaw, headPitch, 0, headDuration);
+        // Head horizontal: AU31 (left) / AU32 (right)
+        this.config.engine.transitionContinuum(31, 32, headYaw, headDuration);
+        // Head vertical: AU54 (down) / AU33 (up)
+        this.config.engine.transitionContinuum(54, 33, headPitch, headDuration);
       }
     } else {
       console.warn('[EyeHeadTracking] No animation agency or engine available - cannot apply gaze');
@@ -634,11 +641,14 @@ export class EyeHeadTrackingService {
         if (useAgency && this.scheduler && this.config.animationAgency) {
           this.scheduler.resetToNeutral(duration);
         } else if (this.config.engine) {
+          // Use transitionContinuum to return all axes to neutral (0)
           if (this.config.eyeTrackingEnabled) {
-            this.config.engine.transitionEyeComposite(0, 0, duration);
+            this.config.engine.transitionContinuum(61, 62, 0, duration); // Eyes yaw
+            this.config.engine.transitionContinuum(64, 63, 0, duration); // Eyes pitch
           }
           if (this.config.headTrackingEnabled && this.config.headFollowEyes) {
-            this.config.engine.transitionHeadComposite(0, 0, 0, duration);
+            this.config.engine.transitionContinuum(31, 32, 0, duration); // Head yaw
+            this.config.engine.transitionContinuum(54, 33, 0, duration); // Head pitch
           }
         }
 

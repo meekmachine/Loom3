@@ -79,6 +79,20 @@ export default function AUQuickPanel() {
   // Combined continuum for head tilt/roll (left↔right)
   const [headR, setHeadR] = useState<number>(0);
 
+  /**
+   * Helper to apply a continuum value (-1 to +1) to a pair of AUs.
+   * Calls engine.setAU for both the negative and positive AU.
+   */
+  const applyContinuum = (negAU: number, posAU: number, value: number) => {
+    if (value >= 0) {
+      engine?.setAU(posAU, value);
+      engine?.setAU(negAU, 0);
+    } else {
+      engine?.setAU(negAU, -value);
+      engine?.setAU(posAU, 0);
+    }
+  };
+
   // Local state for Morph↔Bone blend sliders (so Chakra's Slider is controlled)
   const [mixValues, setMixValues] = useState<Record<number, number>>({});
   const getMix = (id: number) => (mixValues[id] ?? engine?.getAUMixWeight(id) ?? 1);
@@ -153,7 +167,7 @@ export default function AUQuickPanel() {
                         </HStack>
                         <Slider aria-label="eyes-horizontal" min={-1} max={1} step={0.01}
                           value={eyeH}
-                          onChange={(v) => { setEyeH(v); engine?.setEyesHorizontal(v); }}>
+                          onChange={(v) => { setEyeH(v); applyContinuum(61, 62, v); }}>
                           <SliderTrack><SliderFilledTrack /></SliderTrack>
                           <SliderThumb />
                         </Slider>
@@ -165,7 +179,7 @@ export default function AUQuickPanel() {
                         </HStack>
                         <Slider aria-label="eyes-vertical" min={-1} max={1} step={0.01}
                           value={eyeV}
-                          onChange={(v) => { setEyeV(v); engine?.setEyesVertical(v); }}>
+                          onChange={(v) => { setEyeV(v); applyContinuum(64, 63, v); }}>
                           <SliderTrack><SliderFilledTrack /></SliderTrack>
                           <SliderThumb />
                         </Slider>
@@ -178,14 +192,14 @@ export default function AUQuickPanel() {
                             <Text fontSize="xs">Left — Horizontal</Text>
                             <Text fontSize="xs" opacity={0.7}>{eyeLH.toFixed(2)}</Text>
                           </HStack>
-                          <Slider aria-label="left-eye-horizontal" min={-1} max={1} step={0.01} value={eyeLH} onChange={(v) => { setEyeLH(v); engine?.setLeftEyeHorizontal(v); }}>
+                          <Slider aria-label="left-eye-horizontal" min={-1} max={1} step={0.01} value={eyeLH} onChange={(v) => { setEyeLH(v); applyContinuum(65, 66, v); }}>
                             <SliderTrack><SliderFilledTrack /></SliderTrack><SliderThumb />
                           </Slider>
                           <HStack mt={2} mb={1} justify="space-between">
                             <Text fontSize="xs">Left — Vertical</Text>
                             <Text fontSize="xs" opacity={0.7}>{eyeLV.toFixed(2)}</Text>
                           </HStack>
-                          <Slider aria-label="left-eye-vertical" min={-1} max={1} step={0.01} value={eyeLV} onChange={(v) => { setEyeLV(v); engine?.setLeftEyeVertical(v); }}>
+                          <Slider aria-label="left-eye-vertical" min={-1} max={1} step={0.01} value={eyeLV} onChange={(v) => { setEyeLV(v); applyContinuum(68, 67, v); }}>
                             <SliderTrack><SliderFilledTrack /></SliderTrack><SliderThumb />
                           </Slider>
                         </VStack>
@@ -197,14 +211,14 @@ export default function AUQuickPanel() {
                             <Text fontSize="xs">Right — Horizontal</Text>
                             <Text fontSize="xs" opacity={0.7}>{eyeRH.toFixed(2)}</Text>
                           </HStack>
-                          <Slider aria-label="right-eye-horizontal" min={-1} max={1} step={0.01} value={eyeRH} onChange={(v) => { setEyeRH(v); engine?.setRightEyeHorizontal(v); }}>
+                          <Slider aria-label="right-eye-horizontal" min={-1} max={1} step={0.01} value={eyeRH} onChange={(v) => { setEyeRH(v); applyContinuum(69, 70, v); }}>
                             <SliderTrack><SliderFilledTrack /></SliderTrack><SliderThumb />
                           </Slider>
                           <HStack mt={2} mb={1} justify="space-between">
                             <Text fontSize="xs">Right — Vertical</Text>
                             <Text fontSize="xs" opacity={0.7}>{eyeRV.toFixed(2)}</Text>
                           </HStack>
-                          <Slider aria-label="right-eye-vertical" min={-1} max={1} step={0.01} value={eyeRV} onChange={(v) => { setEyeRV(v); engine?.setRightEyeVertical(v); }}>
+                          <Slider aria-label="right-eye-vertical" min={-1} max={1} step={0.01} value={eyeRV} onChange={(v) => { setEyeRV(v); applyContinuum(72, 71, v); }}>
                             <SliderTrack><SliderFilledTrack /></SliderTrack><SliderThumb />
                           </Slider>
                         </VStack>
@@ -262,7 +276,7 @@ export default function AUQuickPanel() {
                         </HStack>
                         <Slider aria-label="head-horizontal" min={-1} max={1} step={0.01}
                           value={headH}
-                          onChange={(v) => { setHeadH(v); engine?.setHeadHorizontal(v); }}>
+                          onChange={(v) => { setHeadH(v); applyContinuum(31, 32, v); }}>
                           <SliderTrack><SliderFilledTrack /></SliderTrack>
                           <SliderThumb />
                         </Slider>
@@ -274,7 +288,7 @@ export default function AUQuickPanel() {
                         </HStack>
                         <Slider aria-label="head-vertical" min={-1} max={1} step={0.01}
                           value={headV}
-                          onChange={(v) => { setHeadV(v); engine?.setHeadVertical(v); }}>
+                          onChange={(v) => { setHeadV(v); applyContinuum(54, 33, v); }}>
                           <SliderTrack><SliderFilledTrack /></SliderTrack>
                           <SliderThumb />
                         </Slider>
@@ -286,7 +300,7 @@ export default function AUQuickPanel() {
                         </HStack>
                         <Slider aria-label="head-tilt" min={-1} max={1} step={0.01}
                           value={headR}
-                          onChange={(v) => { setHeadR(v); engine?.setHeadTilt(v); }}>
+                          onChange={(v) => { setHeadR(v); applyContinuum(55, 56, v); }}>
                           <SliderTrack><SliderFilledTrack /></SliderTrack>
                           <SliderThumb />
                         </Slider>

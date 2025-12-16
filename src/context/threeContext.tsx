@@ -47,32 +47,16 @@ export const ThreeProvider: React.FC<React.PropsWithChildren> = ({ children }) =
     const host = {
       applyAU: (id: number | string, v: number) => {
         // All AUs use regular handling - composite AUs (61, 63, 64, 31, 33, 54, etc.)
-        // already handle blend shapes + bones through applyCompositeMotion()
+        // already handle blend shapes + bones through AU_TO_COMPOSITE_MAP in setAU()
         engineRef.current!.setAU(id as any, v);
       },
       setMorph: (key: string, v: number) => engineRef.current!.setMorph(key, v),
       transitionAU: (id: number | string, v: number, dur?: number) => engineRef.current!.transitionAU?.(id as any, v, dur),
       transitionMorph: (key: string, v: number, dur?: number) => engineRef.current!.transitionMorph?.(key, v, dur),
-
-      // Continuum helper methods for animation scheduler (instant)
-      setEyesHorizontal: (v: number) => engineRef.current!.setEyesHorizontal?.(v),
-      setEyesVertical: (v: number) => engineRef.current!.setEyesVertical?.(v),
-      setHeadHorizontal: (v: number) => engineRef.current!.setHeadHorizontal?.(v),
-      setHeadVertical: (v: number) => engineRef.current!.setHeadVertical?.(v),
-      setHeadRoll: (v: number) => engineRef.current!.setHeadRoll?.(v),
-      setJawHorizontal: (v: number) => engineRef.current!.setJawHorizontal?.(v),
-      setTongueHorizontal: (v: number) => engineRef.current!.setTongueHorizontal?.(v),
-      setTongueVertical: (v: number) => engineRef.current!.setTongueVertical?.(v),
-
-      // Continuum transition methods for animation scheduler (animated)
-      transitionEyesHorizontal: (v: number, dur?: number) => engineRef.current!.transitionEyesHorizontal?.(v, dur),
-      transitionEyesVertical: (v: number, dur?: number) => engineRef.current!.transitionEyesVertical?.(v, dur),
-      transitionHeadHorizontal: (v: number, dur?: number) => engineRef.current!.transitionHeadHorizontal?.(v, dur),
-      transitionHeadVertical: (v: number, dur?: number) => engineRef.current!.transitionHeadVertical?.(v, dur),
-      transitionHeadRoll: (v: number, dur?: number) => engineRef.current!.transitionHeadRoll?.(v, dur),
-      transitionJawHorizontal: (v: number, dur?: number) => engineRef.current!.transitionJawHorizontal?.(v, dur),
-      transitionTongueHorizontal: (v: number, dur?: number) => engineRef.current!.transitionTongueHorizontal?.(v, dur),
-      transitionTongueVertical: (v: number, dur?: number) => engineRef.current!.transitionTongueVertical?.(v, dur),
+      // Continuum transition: handles AU pairs like eyes left/right, head up/down
+      // Takes a single value from -1 to +1 and internally manages both AU values
+      transitionContinuum: (negAU: number, posAU: number, v: number, dur?: number) =>
+        engineRef.current!.transitionContinuum?.(negAU, posAU, v, dur),
 
       onSnippetEnd: (name: string) => {
         try {

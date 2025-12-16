@@ -22,7 +22,6 @@ import TTSSection from './au/TTSSection';
 import EyeHeadTrackingSection from './au/EyeHeadTrackingSection';
 import HairSection from './au/HairSection';
 import BlinkSection from './au/BlinkSection';
-import MeshPanel from './au/MeshPanel';
 import DockableAccordionItem from './au/DockableAccordionItem';
 import PlaybackControls from './PlaybackControls';
 import { useThreeState } from '../context/threeContext';
@@ -349,9 +348,6 @@ export default function SliderDrawer({
                 blinkService={blinkService}
                 disabled={disabled}
               />
-
-              {/* Mesh Visibility Panel */}
-              <MeshPanel engine={engine} />
 
               {/* Viseme Section */}
               <VisemeSection

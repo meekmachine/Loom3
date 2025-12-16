@@ -313,11 +313,12 @@ export class AnimationScheduler {
   /**
    * Apply targets using continuum-aware processing for composite bones.
    * Detects AU pairs that form continuums (e.g., eyes left/right, head up/down)
-   * and calls the appropriate engine continuum methods instead of individual setAU.
+   * and calls transitionAU for each AU directly. The engine's setAU() handles
+   * composite bone rotations automatically through AU_TO_COMPOSITE_MAP.
    */
   private applyContinuumTargets(targets: Map<string, { v: number; pri: number; durMs: number; category: string }>) {
     const processedAUs = new Set<string>();
-    const processedContinuums = new Set<string>(); // Track which continuums we've already called
+    const processedContinuums = new Set<string>(); // Track which continuum pairs we've already processed
 
     // Process each composite rotation definition from shapeDict
     for (const composite of COMPOSITE_ROTATIONS) {
@@ -333,70 +334,60 @@ export class AnimationScheduler {
       for (const { name: axisName, config } of axes) {
         if (!config || !config.negative || !config.positive) continue;
 
-        const negAU = String(config.negative);
-        const posAU = String(config.positive);
-        const negEntry = targets.get(negAU);
-        const posEntry = targets.get(posAU);
+        const negAU = config.negative;
+        const posAU = config.positive;
+        const negAUStr = String(negAU);
+        const posAUStr = String(posAU);
+        const negEntry = targets.get(negAUStr);
+        const posEntry = targets.get(posAUStr);
         const negValue = negEntry?.v ?? 0;
         const posValue = posEntry?.v ?? 0;
 
-        // If either AU is active, calculate continuum value and call the appropriate method
-        if (negValue > 0 || posValue > 0) {
-          // Continuum value: -1 (negative) to +1 (positive)
-          const continuumValue = posValue - negValue;
-          const continuumDurationMs = Math.max(
-            negEntry?.durMs ?? 0,
-            posEntry?.durMs ?? 0,
-            0
+        // Create unique key for this continuum pair to avoid duplicate processing
+        // (e.g., EYE_L and EYE_R share the same AU pairs 61/62)
+        const continuumKey = `${negAU}-${posAU}`;
+
+        // Check if either AU is in targets (even if value is 0 - we need to apply resets)
+        const hasNegTarget = targets.has(negAUStr);
+        const hasPosTarget = targets.has(posAUStr);
+
+        // Process if either AU is targeted and we haven't processed this pair yet
+        if ((hasNegTarget || hasPosTarget) && !processedContinuums.has(continuumKey)) {
+          const durationMs = Math.max(
+            negEntry?.durMs ?? 120,
+            posEntry?.durMs ?? 120,
+            120
           );
 
-          // Determine which engine method to call based on node and axis
-          const methodName = this.getContinuumMethodName(node, axisName);
-          if (methodName) {
-            // Create a unique key for this continuum to avoid duplicate calls
-            // (e.g., both EYE_L and EYE_R map to setEyesHorizontal, only call once)
-            const continuumKey = `${methodName}:${negAU}-${posAU}`;
+          // Calculate continuum value: -1 (full negative) to +1 (full positive)
+          const continuumValue = posValue - negValue;
 
-            if (!processedContinuums.has(continuumKey) && this.host[methodName]) {
-              const transitionName = methodName.startsWith('set')
-                ? `transition${methodName.slice(3)}`
-                : null;
-              if (
-                transitionName &&
-                typeof (this.host as any)[transitionName] === 'function' &&
-                continuumDurationMs > 0
-              ) {
-                (this.host as any)[transitionName](continuumValue, continuumDurationMs);
-                console.log(
-                  `[AnimationScheduler][Continuum] ${node}.${axisName} value=${continuumValue.toFixed(
-                    3
-                  )} duration=${continuumDurationMs.toFixed(0)}ms via ${transitionName}`
-                );
-              } else {
-                this.host[methodName](continuumValue);
-                console.log(
-                  `[AnimationScheduler][Continuum] ${node}.${axisName} value=${continuumValue.toFixed(
-                    3
-                  )} (neg AU${negAU}=${negValue.toFixed(3)}, pos AU${posAU}=${posValue.toFixed(
-                    3
-                  )}) via ${methodName}`
-                );
-              }
-              processedContinuums.add(continuumKey);
-            } else if (!processedContinuums.has(continuumKey) && !this.host[methodName]) {
-              console.warn(
-                `[AnimationScheduler][Continuum] Missing host method ${methodName} for ${node}.${axisName}`
-              );
-            }
+          // Use transitionContinuum if available (handles both AUs as a single animated value)
+          // This ensures smooth interpolation through the full -1 to +1 range
+          if (this.host.transitionContinuum) {
+            this.host.transitionContinuum(negAU, posAU, continuumValue, durationMs);
+          } else if (this.host.transitionAU) {
+            // Fallback: transition individual AUs (less smooth for continuums)
+            this.host.transitionAU(negAU, negValue, durationMs);
+            this.host.transitionAU(posAU, posValue, durationMs);
+          } else if (this.host.applyAU) {
+            this.host.applyAU(negAU, negValue);
+            this.host.applyAU(posAU, posValue);
           }
 
-          // Mark these AUs as processed so we don't apply them individually
-          processedAUs.add(negAU);
-          processedAUs.add(posAU);
+          console.log(
+            `[AnimationScheduler][Continuum] ${node}.${axisName}: continuum=${continuumValue.toFixed(3)} (AU${negAU}=${negValue.toFixed(3)}, AU${posAU}=${posValue.toFixed(3)}) dur=${durationMs}ms`
+          );
+
+          processedContinuums.add(continuumKey);
+
+          // Mark these AUs as processed so we don't apply them individually below
+          processedAUs.add(negAUStr);
+          processedAUs.add(posAUStr);
 
           // Track current values for continuity
-          this.currentValues.set(negAU, negValue);
-          this.currentValues.set(posAU, posValue);
+          this.currentValues.set(negAUStr, negValue);
+          this.currentValues.set(posAUStr, posValue);
         }
       }
     }
@@ -483,39 +474,6 @@ export class AnimationScheduler {
       }
       first.intensity = current;
     });
-  }
-
-  /**
-   * Get the engine method name for a given composite node and axis.
-   * Maps node+axis combinations to EngineThree continuum helper methods.
-   */
-  private getContinuumMethodName(node: string, axis: 'pitch' | 'yaw' | 'roll'): string | null {
-    // Eyes
-    if (node === 'EYE_L' || node === 'EYE_R') {
-      if (axis === 'yaw') return 'setEyesHorizontal';
-      if (axis === 'pitch') return 'setEyesVertical';
-    }
-
-    // Head
-    if (node === 'HEAD') {
-      if (axis === 'yaw') return 'setHeadHorizontal';
-      if (axis === 'pitch') return 'setHeadVertical';
-      if (axis === 'roll') return 'setHeadRoll';
-    }
-
-    // Jaw
-    if (node === 'JAW') {
-      if (axis === 'yaw') return 'setJawHorizontal';
-      // Jaw pitch is handled differently (jaw drop uses multiple AUs)
-    }
-
-    // Tongue
-    if (node === 'TONGUE') {
-      if (axis === 'yaw') return 'setTongueHorizontal';
-      if (axis === 'pitch') return 'setTongueVertical';
-    }
-
-    return null;
   }
 
   load(snippet: Snippet) {

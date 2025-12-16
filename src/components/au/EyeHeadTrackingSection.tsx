@@ -566,7 +566,7 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
                 <SliderThumb boxSize={4} bg="blue.300" />
               </Slider>
               <Text fontSize="xs" color="gray.500">
-                0 = morph only, 1 = bone only (same as continuum slider blend)
+                0 = bone only, 1 = bone + morph overlay
               </Text>
             </VStack>
 

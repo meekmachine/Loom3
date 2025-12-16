@@ -12,14 +12,13 @@ import {
 } from '@chakra-ui/react';
 import { AUInfo, AU_MIX_DEFAULTS } from '../../engine/arkit/shapeDict';
 import { EngineThree } from '../../engine/EngineThree';
-import { EngineFour } from '../../engine/EngineFour';
 
 interface ContinuumSliderProps {
   negativeAU: AUInfo;
   positiveAU: AUInfo;
   value: number; // -1 to 1
   onChange: (value: number) => void;
-  engine?: EngineThree | EngineFour; // Optional: for morph/bone blend control
+  engine?: EngineThree; // Optional: for morph/bone blend control
   showBlendSlider?: boolean; // Whether to show the morph/bone blend slider
   disabled?: boolean;
 }
@@ -27,7 +26,7 @@ interface ContinuumSliderProps {
 /**
  * ContinuumSlider - Bidirectional slider for paired AUs (e.g., Head Left <-> Right)
  * Range: -1 (negative AU) to +1 (positive AU)
- * Automatically calls engine methods to handle both blendshapes and bones
+ * Calls engine.setContinuum() directly for unified morph + bone handling.
  */
 const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
   negativeAU,
@@ -39,6 +38,14 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
   disabled = false
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
+  const negId = parseInt(negativeAU.id);
+  const posId = parseInt(positiveAU.id);
+
+  // Handle slider change - calls engine.setContinuum directly (like AUSlider calls setAU)
+  const handleSliderChange = (val: number) => {
+    onChange(val);
+    engine?.setContinuum(negId, posId, val);
+  };
 
   // Color: blue for negative, neutral in center, orange for positive
   const getSliderColor = (val: number): string => {
@@ -49,13 +56,6 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
       return `rgba(237, 137, 54, ${val})`; // orange
     }
   };
-
-  // Get the base AU id to match what applyCompositeMotion uses:
-  // - For yaw/horizontal axes: use the LEFT/negative AU (61 for eyes, 31 for head)
-  // - For pitch/vertical axes: use the UP/positive AU (63 for eyes, 33 for head)
-  // - For roll/tilt: use the LEFT/negative AU (55 for head)
-  const negId = parseInt(negativeAU.id);
-  const posId = parseInt(positiveAU.id);
 
   // Determine which AU is the "base" for mix weight:
   let baseAUId: number;
@@ -78,11 +78,12 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
     return mixValue;
   };
 
-  // Update mix weight in engine and local state
+  // Update mix weight in engine and local state - set for BOTH AUs in the pair
   const handleMixChange = (v: number) => {
     setMixValue(v);
-    if (engine && typeof baseAUId === 'number') {
-      engine.setAUMixWeight(baseAUId, v);
+    if (engine) {
+      engine.setAUMixWeight(negId, v);
+      engine.setAUMixWeight(posId, v);
     }
   };
 
@@ -107,7 +108,7 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
           max={1}
           step={0.01}
           isDisabled={disabled}
-          onChange={onChange}
+          onChange={handleSliderChange}
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
         >

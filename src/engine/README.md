@@ -76,17 +76,20 @@ These AUs support **blend weights** (mix ratio) to control the balance between m
 
 ### Key Methods
 
-#### High-Level Continuum Controls
+#### Unified AU Control
 
-These are the primary methods used by UI components:
+All facial animation goes through `setAU()`:
 
 ```typescript
-setEyesHorizontal(v: number)   // v ∈ [-1, 1]: left ↔ right
-setEyesVertical(v: number)     // v ∈ [-1, 1]: down ↔ up
-setHeadHorizontal(v: number)   // v ∈ [-1, 1]: left ↔ right
-setHeadVertical(v: number)     // v ∈ [-1, 1]: down ↔ up
-setHeadTilt(v: number)         // v ∈ [-1, 1]: left ↔ right
+setAU(auId: number, value: number)  // value ∈ [0, 1]
 ```
+
+For bidirectional axes (left/right, up/down), use AU pairs:
+- Eyes horizontal: AU 61 (left) / AU 62 (right)
+- Eyes vertical: AU 63 (up) / AU 64 (down)
+- Head horizontal: AU 31 (left) / AU 32 (right)
+- Head vertical: AU 33 (up) / AU 54 (down)
+- Head tilt: AU 55 (left) / AU 56 (right)
 
 #### Mix Weight Control
 
@@ -97,77 +100,70 @@ setAUMixWeight(id: number, weight: number)  // weight ∈ [0, 1]
 getAUMixWeight(id: number): number
 ```
 
+Mix weight only affects morph intensity. Bones are always applied at full intensity.
+
 ### Core Animation Flow
 
+Everything goes through `setAU()` with deferred bone application:
+
 ```
-UI Input
-  ↓
-setEyesHorizontal(v) / setHeadVertical(v) / etc
-  ↓
-Update tracked state (currentEyeYaw, currentHeadPitch, etc)
-  ↓
-applyEyeComposite() / applyHeadComposite()
-  ↓
-applyCompositeMotion(baseYawId, basePitchId, yaw, pitch, ...)
-  ↓
-┌─────────────────┬─────────────────┐
-│  applyBoneComposite()  │  applyMorphs()  │
-│  - Combines multi-axis │  - Scaled by    │
-│    bone rotations      │    mix weight   │
-│  - Always full intensity│  - Mix 0 → 1   │
-└─────────────────┴─────────────────┘
-  ↓
-3D Model Updated
+setAU(auId, value)
+    │
+    ├─► applyBothSides(auId, value)     // Morphs (scaled by mixWeight for MIXED_AUS)
+    │
+    └─► For composite AUs:
+        │
+        ├─► Calculate axisValue:
+        │   • Continuum: posValue - negValue (e.g., AU62 - AU61 for eyes yaw)
+        │   • Multi-AU: Math.max(...auValues) (e.g., max of AU25,26,27 for jaw pitch)
+        │
+        ├─► updateBoneRotation(nodeKey, axis, axisValue)
+        │       └─► rotations[nodeKey][axis] = clamp(axisValue, -1, 1)
+        │
+        └─► pendingCompositeNodes.add(nodeKey)
+                │
+                └─► flushPendingComposites() (called in update())
+                        │
+                        └─► applyCompositeRotation(nodeKey)
+                                • Gets rotState from this.rotations[nodeKey]
+                                • For each axis (yaw, pitch, roll):
+                                    - getBindingForAxis() picks AU based on direction
+                                    - Calculates radians from maxDegrees * |value| * scale
+                                    - Applies quaternion rotation
 ```
 
-### Composite Motion System
+### Deferred Composite Rotation System
 
-The `applyCompositeMotion()` method handles multi-axis movement (e.g., eyes looking up-left) by coordinating **both blend shapes (morphs) AND bone rotations** in a single operation.
+Multi-axis bone movements (e.g., eyes looking up-left) are handled by deferred composition:
 
-**Why This Matters:**
+**Why Deferred Apply:**
 - Eye/head movements need BOTH morphs (for eyelid deformation, brow movement) AND bones (for eyeball/head rotation)
-- Calling them separately would cause timing issues and incorrect blending
-- `applyCompositeMotion()` ensures they're applied together with proper intensity scaling
-
-**Base AU IDs (used for mix weight lookup):**
-- Eyes: `baseYawId=61` (horizontal), `basePitchId=63` (vertical up), `64` (vertical down)
-- Head: `baseYawId=31` (horizontal left), `32` (horizontal right), `basePitchId=33` (vertical up), `54` (vertical down)
+- Sequential bone updates would overwrite each other
+- By deferring to `flushPendingComposites()`, all axis values are captured before applying
 
 **Example:** Eyes looking up and to the right
 1. Animation service schedules AU 62 (yaw right) and AU 63 (pitch up) with curves
-2. `setAU(62, 0.5)` called → Updates tracked state, calls `applyCompositeMotion()`
-3. `setAU(63, 0.8)` called → Updates tracked state, calls `applyCompositeMotion()` again
-4. `applyCompositeMotion(61, 63, 0.5, 0.8, 64)` executes:
-   - **Bones:** Both eyes rotate `ry=0.5 * 25° = 12.5°` and `rx=0.8 * 20° = 16°` simultaneously
-   - **Morphs:** `Eye_L_Look_R`, `Eye_R_Look_R`, `Eye_L_Look_Up`, `Eye_R_Look_Up` applied
-   - **Mix Weight:** Morphs scaled by mix weight (0-1), bones always at full intensity
-5. Final result: Coordinated eyeball rotation + eyelid/brow morphs
-
-**Critical:** Both morphs and bones are applied in the SAME call to `applyCompositeMotion()`. This is how the continuum sliders work, and why animation scheduling must use the same real AU IDs (61-64, 31-33, 54-56).
+2. `setAU(62, 0.5)` called → Morph applied, `rotations.EYE_L.yaw = 0.5`, node marked pending
+3. `setAU(63, 0.8)` called → Morph applied, `rotations.EYE_L.pitch = 0.8`, node marked pending
+4. `update()` calls `flushPendingComposites()`
+5. `applyCompositeRotation('EYE_L')` composes both axes into single quaternion
+6. Final result: Coordinated eyeball rotation + eyelid/brow morphs
 
 ### Multi-Axis Preservation
 
-The engine tracks current position state to prevent axis-stomping:
+The engine tracks current rotation state in `this.rotations`:
 
 ```typescript
-private currentEyeYaw = 0;      // [-1, 1]
-private currentEyePitch = 0;    // [-1, 1]
-private currentHeadYaw = 0;     // [-1, 1]
-private currentHeadPitch = 0;   // [-1, 1]
-private currentHeadRoll = 0;    // [-1, 1]
+rotations: {
+  HEAD: { pitch: 0, yaw: 0, roll: 0 },
+  EYE_L: { pitch: 0, yaw: 0, roll: 0 },
+  EYE_R: { pitch: 0, yaw: 0, roll: 0 },
+  JAW: { pitch: 0, yaw: 0, roll: 0 },
+  TONGUE: { pitch: 0, yaw: 0, roll: 0 }
+}
 ```
 
-When `reapplyComposites()` is called (e.g., after changing a mix weight), these state variables ensure the current position is preserved.
-
-### Bone Composite System
-
-The `applyBoneComposite()` method combines multiple bone rotations in a single pass to avoid overwriting:
-
-**Problem it solves:** Sequential bone updates would overwrite each other
-- ❌ `setRotationX(pitch)` then `setRotationY(yaw)` → only yaw applied
-- ✓ `setRotation(pitch, yaw, roll)` → all axes applied simultaneously
-
-The method accumulates rotation deltas per bone node, then applies them all at once.
+This prevents axis-stomping when setting pitch and yaw separately.
 
 ### Eye Axis Overrides
 
@@ -194,19 +190,17 @@ This handles variations between different 3D model rigs.
 
 ### Adding a New Continuum Control
 
-1. Add state tracking variable (e.g., `private currentJawYaw = 0`)
-2. Create setter method (e.g., `setJawHorizontal(v)`)
-3. Create composite method (e.g., `applyJawComposite(yaw, pitch)`)
-4. Call `applyCompositeMotion()` with appropriate base AU IDs
-5. Update `reapplyComposites()` to include the new composite
+1. Add AU pair to `COMPOSITE_ROTATIONS` in shapeDict.ts (defines negative/positive AUs for the axis)
+2. Add bone bindings to `BONE_AU_TO_BINDINGS` for each AU
+3. Use `engine.setAU(auId, value)` to control it - the system handles the rest
 
 ## Debugging Tips
 
 ### Enable Console Logging
 
 Uncomment logging in:
-- `applyBoneComposite()` - See which AUs are being applied
-- `applyCompositeMotion()` - See mix weight values
+- `setAU()` - See AU values being set
+- `applyCompositeRotation()` - See quaternion composition
 - `setAUMixWeight()` - Track mix weight changes
 
 ### Common Issues
@@ -217,14 +211,11 @@ Uncomment logging in:
 
 **"Blend slider not working"**
 - Verify ContinuumSlider is using correct base AU ID
-- Check that mix weight is being read from the correct AU (baseYawId/basePitchId)
-
-**"Position resets when adjusting blend slider"**
-- Check that `reapplyComposites()` uses state variables, not `auValues`
+- Check that mix weight is being read from the correct AU
 
 **"Multi-axis movement resets one axis"**
-- Verify that state variables are being updated (e.g., `currentEyeYaw`)
-- Check that composite methods preserve other axes
+- Verify the `rotations` state is being updated via `updateBoneRotation()`
+- Check that `pendingCompositeNodes` is being populated
 
 ## Transition System
 
@@ -271,17 +262,17 @@ engine.getPaused(); // Check state
 
 ## Performance Notes
 
-- Morph updates are batched per render frame
-- Bone transforms are applied once per composite operation
-- Mix weight changes trigger immediate reapply via `reapplyComposites()`
+- Morph updates are applied immediately via `applyBothSides()`
+- Bone transforms are deferred to `flushPendingComposites()` in `update()`
+- Mix weight changes only reapply that specific AU's morph
 - Single RAF loop shared across all systems (no timer conflicts)
 - Transitions use elapsed time accumulation (no wall-clock drift)
 
 ## Animation Agency Integration
 
-- The animation agency (animation scheduler) never calls `setAU` directly for head/eye continuums; it routes through the continuum helpers (`setEyesHorizontal`, `transitionHeadVertical`, etc.). These helpers maintain composite yaw/pitch/roll state and keep bones + morphs synchronized.
-- Head/Eye tracking snippets are generated with canonical names (`eyeHeadTracking/eyeYaw`, `headYaw`, etc.). When they reach the scheduler, it samples AU pairs (31/32, 33/54, 55/56, 61/62, 63/64) and calls the corresponding transition helper with the sampled tween duration.
-- Mix weights continue to apply only to morph overlays. Agencies can expose UI sliders (e.g., `setHeadBlendWeight`) that forward to `engine.setAUMixWeight` for the relevant AU IDs so you can bias toward morphs or bones without touching scheduler code.
+- The animation agency uses `transitionContinuum(negAU, posAU, value, duration)` for smooth head/eye movements
+- Head/Eye tracking snippets are generated with canonical names (`eyeHeadTracking/eyeYaw`, `headYaw`, etc.). When they reach the scheduler, it samples AU pairs (31/32, 33/54, 55/56, 61/62, 63/64) and calls `transitionContinuum`
+- Mix weights only apply to morph overlays. UI sliders can call `engine.setAUMixWeight` to bias toward morphs or bones
 
 ## File Structure
 

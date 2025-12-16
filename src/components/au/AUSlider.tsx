@@ -12,7 +12,6 @@ import {
   HStack
 } from '@chakra-ui/react';
 import { EngineThree, MIXED_AUS } from '../../engine/EngineThree';
-import { EngineFour } from '../../engine/EngineFour';
 
 interface AUSliderProps {
   au: string | number;
@@ -21,7 +20,7 @@ interface AUSliderProps {
   onChange: (newIntensity: number) => void;
   muscularBasis?: string;
   links?: string[];
-  engine?: EngineThree | EngineFour; // Optional: for morph/bone blend control
+  engine?: EngineThree; // Optional: for morph/bone blend control
   disabled?: boolean;
   side?: 'L' | 'R' | 'both'; // Controls which side: Left, Right, or Both (bilateral)
 }

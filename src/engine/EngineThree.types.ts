@@ -64,6 +64,18 @@ export interface Engine {
   transitionMorph?: (name: string, value: number, durationMs?: number) => void;
 
   /**
+   * Transition a continuum AU pair (e.g., eyes left/right, head up/down).
+   * Takes a single value from -1 to +1 and internally manages both AU values.
+   * This ensures smooth interpolation through the full range without separate transitions.
+   *
+   * @param negAU - AU ID for negative direction (e.g., 61 for eyes left, 31 for head left)
+   * @param posAU - AU ID for positive direction (e.g., 62 for eyes right, 32 for head right)
+   * @param value - Target value from -1 (full negative) to +1 (full positive)
+   * @param durationMs - Transition duration in milliseconds (default: 200ms)
+   */
+  transitionContinuum?: (negAU: number, posAU: number, value: number, durationMs?: number) => void;
+
+  /**
    * Callback invoked when a non-looping snippet naturally completes
    * NOT called when user manually stops a snippet
    *

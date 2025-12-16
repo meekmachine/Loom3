@@ -89,11 +89,12 @@ export type BoneBinding = {
 
 export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
   // Head turn and tilt - use HEAD bone only (NECK should not rotate with head)
+  // Three.js Y rotation: positive = counter-clockwise from above = head turns LEFT (character POV)
   31: [
-    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 30 },  // Head turn left
+    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 },   // Head turn left
   ],
   32: [
-    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 },   // Head turn right
+    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 30 },  // Head turn right
   ],
   33: [
     { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 20 },  // Head up
@@ -107,13 +108,14 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
   56: [
     { node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 15 },   // Head tilt right
   ],
+  // Eyes horizontal (yaw) - CC4 rigs use rz for horizontal eye rotation
   61: [
-    { node: 'EYE_L', channel: 'ry', scale: -1, maxDegrees: 25 },
-    { node: 'EYE_R', channel: 'ry', scale: -1, maxDegrees: 25 },
+    { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 25 },   // Eyes look left
+    { node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 25 },
   ],
   62: [
-    { node: 'EYE_L', channel: 'ry', scale: 1, maxDegrees: 25 },
-    { node: 'EYE_R', channel: 'ry', scale: 1, maxDegrees: 25 },
+    { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 25 },  // Eyes look right
+    { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 25 },
   ],
   63: [
     { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 20 },
@@ -123,14 +125,14 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
     { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 20 },
     { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 20 },
   ],
-  // Single-eye (Left) — horizontal (ry) and vertical (rx)
-  65: [ { node: 'EYE_L', channel: 'ry', scale: -1, maxDegrees: 15 } ],
-  66: [ { node: 'EYE_L', channel: 'ry', scale:  1, maxDegrees: 15 } ],
+  // Single-eye (Left) — horizontal (rz for CC4) and vertical (rx)
+  65: [ { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 15 } ],
+  66: [ { node: 'EYE_L', channel: 'rz', scale:  1, maxDegrees: 15 } ],
   67: [ { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 12 } ],
   68: [ { node: 'EYE_L', channel: 'rx', scale:  1, maxDegrees: 12 } ],
-  // Single-eye (Right)
-  69: [ { node: 'EYE_R', channel: 'ry', scale: -1, maxDegrees: 15 } ],
-  70: [ { node: 'EYE_R', channel: 'ry', scale:  1, maxDegrees: 15 } ],
+  // Single-eye (Right) — horizontal (rz for CC4) and vertical (rx)
+  69: [ { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 15 } ],
+  70: [ { node: 'EYE_R', channel: 'rz', scale:  1, maxDegrees: 15 } ],
   71: [ { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 12 } ],
   72: [ { node: 'EYE_R', channel: 'rx', scale:  1, maxDegrees: 12 } ],
 
@@ -209,13 +211,13 @@ export const COMPOSITE_ROTATIONS: CompositeRotation[] = [
   {
     node: 'EYE_L',
     pitch: { aus: [64, 63], axis: 'rx', negative: 64, positive: 63 },  // Eyes down/up
-    yaw: { aus: [61, 62], axis: 'ry', negative: 61, positive: 62 },    // Eyes left/right
+    yaw: { aus: [61, 62], axis: 'rz', negative: 61, positive: 62 },    // Eyes left/right (rz for CC4)
     roll: null  // Eyes don't have roll
   },
   {
     node: 'EYE_R',
     pitch: { aus: [64, 63], axis: 'rx', negative: 64, positive: 63 },  // Eyes down/up
-    yaw: { aus: [61, 62], axis: 'ry', negative: 61, positive: 62 },    // Eyes left/right
+    yaw: { aus: [61, 62], axis: 'rz', negative: 61, positive: 62 },    // Eyes left/right (rz for CC4)
     roll: null  // Eyes don't have roll
   },
   {
@@ -366,16 +368,41 @@ export const CC4_MESHES: Record<string, { category: MeshCategory; morphCount: nu
 };
 
 /**
- * Classify a CC4 mesh name as hair, eyebrow, or other.
- * Used by EngineThree to set renderOrder for hair vs eyebrows.
+ * Continuum pair mappings - precomputed from COMPOSITE_ROTATIONS
+ * Maps AU ID to its continuum partner info for bidirectional axes
+ * (e.g., AU 31 "Head Left" is paired with AU 32 "Head Right")
  */
-export function classifyHairObject(name: string): 'hair' | 'eyebrow' | 'other' {
-  const entry = CC4_MESHES[name];
-  if (!entry) return 'other';
-  if (entry.category === 'hair') return 'hair';
-  if (entry.category === 'eyebrow') return 'eyebrow';
-  return 'other';
-}
+export const CONTINUUM_PAIRS_MAP: Record<number, {
+  pairId: number;
+  isNegative: boolean;
+  axis: 'pitch' | 'yaw' | 'roll';
+  node: 'JAW' | 'HEAD' | 'EYE_L' | 'EYE_R' | 'TONGUE';
+}> = {
+  // Eyes horizontal (yaw) - both eyes share same AUs
+  61: { pairId: 62, isNegative: true, axis: 'yaw', node: 'EYE_L' },
+  62: { pairId: 61, isNegative: false, axis: 'yaw', node: 'EYE_L' },
+  // Eyes vertical (pitch)
+  64: { pairId: 63, isNegative: true, axis: 'pitch', node: 'EYE_L' },
+  63: { pairId: 64, isNegative: false, axis: 'pitch', node: 'EYE_L' },
+  // Head yaw (turn left/right)
+  31: { pairId: 32, isNegative: true, axis: 'yaw', node: 'HEAD' },
+  32: { pairId: 31, isNegative: false, axis: 'yaw', node: 'HEAD' },
+  // Head pitch (up/down)
+  54: { pairId: 33, isNegative: true, axis: 'pitch', node: 'HEAD' },
+  33: { pairId: 54, isNegative: false, axis: 'pitch', node: 'HEAD' },
+  // Head roll (tilt left/right)
+  55: { pairId: 56, isNegative: true, axis: 'roll', node: 'HEAD' },
+  56: { pairId: 55, isNegative: false, axis: 'roll', node: 'HEAD' },
+  // Jaw yaw (left/right)
+  30: { pairId: 35, isNegative: true, axis: 'yaw', node: 'JAW' },
+  35: { pairId: 30, isNegative: false, axis: 'yaw', node: 'JAW' },
+  // Tongue yaw (left/right)
+  39: { pairId: 40, isNegative: true, axis: 'yaw', node: 'TONGUE' },
+  40: { pairId: 39, isNegative: false, axis: 'yaw', node: 'TONGUE' },
+  // Tongue pitch (up/down)
+  38: { pairId: 37, isNegative: true, axis: 'pitch', node: 'TONGUE' },
+  37: { pairId: 38, isNegative: false, axis: 'pitch', node: 'TONGUE' },
+};
 
 // ============================================================================
 // CC4 MORPH TARGETS

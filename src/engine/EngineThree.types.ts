@@ -45,13 +45,26 @@ export interface Engine {
 
   /**
    * Transition AU value smoothly over duration
-   * Preferred method - creates smooth interpolation using RAF
+   * Uses setAU() each tick - simple but does lookups every frame
    *
    * @param id - AU number (e.g., 12 for lip corner puller)
    * @param value - Target value in [0, 1]
    * @param durationMs - Transition duration in milliseconds (default: 120ms)
    */
   transitionAU?: (id: number | string, value: number, durationMs?: number) => void;
+
+  /**
+   * OPTIMIZED: Transition AU value with pre-resolved targets
+   * Resolves morph indices and bone references once at creation time,
+   * then applies values directly each tick without lookups.
+   *
+   * Use this for performance-critical transitions (e.g., eye/head tracking)
+   *
+   * @param id - AU number (e.g., 12 for lip corner puller)
+   * @param value - Target value in [0, 1]
+   * @param durationMs - Transition duration in milliseconds (default: 200ms)
+   */
+  transitionAUOptimized?: (id: number | string, value: number, durationMs?: number) => void;
 
   /**
    * Transition morph value smoothly over duration

@@ -35,9 +35,9 @@ export interface BlendedViseme {
 export class CoarticulationModel {
   private params: CoarticulationParams = {
     dominanceCurve: 'cosine',
-    anticipatoryWindow: 40, // 40ms anticipatory
-    carryoverWindow: 30, // 30ms carryover
-    blendStrength: 0.7,
+    anticipatoryWindow: 25, // 25ms anticipatory (reduced from 40)
+    carryoverWindow: 20, // 20ms carryover (reduced from 30)
+    blendStrength: 0.4, // Reduced from 0.7 for less overlap
     contextSensitive: true,
   };
 

@@ -18,9 +18,10 @@ import DockableAccordionItem from './DockableAccordionItem';
 interface BlinkSectionProps {
   blinkService: BlinkService | null;
   disabled?: boolean;
+  defaultExpanded?: boolean;
 }
 
-export default function BlinkSection({ blinkService, disabled = false }: BlinkSectionProps) {
+export default function BlinkSection({ blinkService, disabled = false, defaultExpanded = false }: BlinkSectionProps) {
   const [state, setState] = useState<BlinkState | null>(null);
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export default function BlinkSection({ blinkService, disabled = false }: BlinkSe
 
   if (!blinkService || !state) {
     return (
-      <DockableAccordionItem title="Blinking">
+      <DockableAccordionItem title="Blinking" isDefaultExpanded={defaultExpanded}>
         <Box p={2}>
           <Text fontSize="sm" color="gray.400">
             No blink service available
@@ -83,7 +84,7 @@ export default function BlinkSection({ blinkService, disabled = false }: BlinkSe
   };
 
   return (
-    <DockableAccordionItem title="Blinking">
+    <DockableAccordionItem title="Blinking" isDefaultExpanded={defaultExpanded}>
       <VStack spacing={4} align="stretch" p={2}>
         {/* Enable/Disable Toggle */}
         <HStack justify="space-between">

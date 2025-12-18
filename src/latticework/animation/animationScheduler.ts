@@ -1,7 +1,23 @@
 import type { Snippet, HostCaps, ScheduleOpts } from './types';
+import type { TransitionHandle } from '../../engine/EngineThree.types';
 import { VISEME_KEYS, COMPOSITE_ROTATIONS } from '../../engine/arkit/shapeDict';
 
 type RuntimeSched = { name: string; startsAt: number; offset: number; enabled: boolean };
+
+/**
+ * Active playback runner for a snippet.
+ * Tracks the async playback loop and active TransitionHandles.
+ */
+type PlaybackRunner = {
+  /** Name of the snippet this runner belongs to */
+  snippetName: string;
+  /** Set to false to stop the playback loop */
+  active: boolean;
+  /** Currently active TransitionHandles (for pause/resume) */
+  handles: TransitionHandle[];
+  /** Promise that resolves when the runner completes or is stopped */
+  promise: Promise<void>;
+};
 
 const isNum = (s: string) => /^\d+$/.test(s);
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -116,28 +132,8 @@ export class AnimationScheduler {
   private currentValues = new Map<string, number>();
   /** Track last sampled local times per snippet to detect loop wrap events. */
   private loopLocalTimes = new Map<string, { local: number; loopCount: number }>();
-  /** Detect and handle natural snippet completions (non-looping). Uses wall-clock anchoring. */
-  private checkCompletions(tPlay: number) {
-    const snippets = this.currentSnippets();
-    for (const sn of snippets) {
-      const name = sn.name || '';
-      if (!name || this.ended.has(name)) continue;
-      const info = this.computeLocalInfo(sn, tPlay);
-      if (!info) continue;
-      if (!sn.loop && info.duration > 0 && info.rawLocal >= info.duration) {
-        this.ended.add(name);
-        info.rt.enabled = false;
-        this.loopLocalTimes.delete(name);
-        try {
-          const st = this.machine.getSnapshot?.();
-          const arr = st?.context?.animations as any[] || [];
-          const snippet = arr.find((s:any) => s?.name === name);
-          if (snippet) snippet.isPlaying = false;
-        } catch {}
-        try { this.host.onSnippetEnd?.(name); } catch {}
-      }
-    }
-  }
+  /** Active playback runners per snippet - each runner awaits TransitionHandle promises */
+  private playbackRunners = new Map<string, PlaybackRunner>();
 
   // Defensive: ensure actor is running before any send, recover if stopped
   private ensureActorRunning() {
@@ -160,6 +156,275 @@ export class AnimationScheduler {
     this.machine = machine;
     this.host = host;
     this.ensureActorRunning();
+  }
+
+  // ============================================================================
+  // PROMISE-BASED PLAYBACK SYSTEM
+  // Each playing snippet gets an async runner that:
+  // 1. Extracts keyframe times from curves
+  // 2. Fires transitions at each keyframe boundary
+  // 3. Awaits TransitionHandle.promise to know when to fire next
+  // 4. Loops or completes based on snippet.loop
+  // ============================================================================
+
+  /**
+   * Start an async playback runner for a snippet.
+   * The runner fires transitions at keyframe boundaries and awaits their promises.
+   */
+  private startPlaybackRunner(snippetName: string) {
+    // Stop any existing runner for this snippet
+    this.stopPlaybackRunner(snippetName);
+
+    // Create runner and add to map BEFORE starting the async loop
+    // This ensures runPlaybackLoop can find the runner when it starts
+    const runner: PlaybackRunner = {
+      snippetName,
+      active: true,
+      handles: [],
+      promise: Promise.resolve(), // Placeholder, will be replaced
+    };
+
+    this.playbackRunners.set(snippetName, runner);
+
+    // NOW start the async loop (runner is already in map)
+    runner.promise = this.runPlaybackLoop(snippetName);
+
+    console.log(`[Scheduler] Started playback runner for: ${snippetName}`);
+  }
+
+  /**
+   * Stop the playback runner for a snippet.
+   * Cancels all active transitions and marks the runner as inactive.
+   */
+  private stopPlaybackRunner(snippetName: string) {
+    const runner = this.playbackRunners.get(snippetName);
+    if (!runner) return;
+
+    runner.active = false;
+    // Cancel all active handles
+    for (const handle of runner.handles) {
+      try { handle.cancel(); } catch {}
+    }
+    runner.handles = [];
+    this.playbackRunners.delete(snippetName);
+    console.log(`[Scheduler] Stopped playback runner for: ${snippetName}`);
+  }
+
+  /**
+   * Pause the playback runner for a snippet.
+   * Pauses all active TransitionHandles.
+   */
+  private pausePlaybackRunner(snippetName: string) {
+    const runner = this.playbackRunners.get(snippetName);
+    if (!runner) return;
+
+    for (const handle of runner.handles) {
+      try { handle.pause(); } catch {}
+    }
+    console.log(`[Scheduler] Paused playback runner for: ${snippetName}`);
+  }
+
+  /**
+   * Resume the playback runner for a snippet.
+   * Resumes all active TransitionHandles.
+   */
+  private resumePlaybackRunner(snippetName: string) {
+    const runner = this.playbackRunners.get(snippetName);
+    if (!runner) return;
+
+    for (const handle of runner.handles) {
+      try { handle.resume(); } catch {}
+    }
+    console.log(`[Scheduler] Resumed playback runner for: ${snippetName}`);
+  }
+
+  /**
+   * The main async playback loop for a snippet.
+   * Fires transitions at keyframe boundaries and awaits their completion.
+   */
+  private async runPlaybackLoop(snippetName: string): Promise<void> {
+    const runner = this.playbackRunners.get(snippetName);
+    if (!runner) return;
+
+    // Get snippet from machine context
+    const getSnippet = () => {
+      try {
+        const st = this.machine.getSnapshot?.();
+        const arr = st?.context?.animations as any[] || [];
+        return arr.find((s: any) => s?.name === snippetName);
+      } catch { return null; }
+    };
+
+    let loopIteration = 0;
+
+    // Main playback loop (handles looping)
+    while (runner.active) {
+      const sn = getSnippet();
+      if (!sn || !sn.curves) {
+        console.log(`[Scheduler] Runner ${snippetName}: snippet not found, stopping`);
+        break;
+      }
+
+      const curves = sn.curves as Record<string, SchedulerCurvePoint[]>;
+      const rate = sn.snippetPlaybackRate ?? 1;
+      const scale = sn.snippetIntensityScale ?? 1;
+
+      // Extract all unique keyframe times across all curves, sorted
+      const allTimes = new Set<number>();
+      for (const arr of Object.values(curves)) {
+        for (const kf of arr) {
+          allTimes.add(kf.time);
+        }
+      }
+      const keyframeTimes = Array.from(allTimes).sort((a, b) => a - b);
+
+      if (keyframeTimes.length === 0) {
+        console.log(`[Scheduler] Runner ${snippetName}: no keyframes, stopping`);
+        break;
+      }
+
+      console.log(`[Scheduler] Runner ${snippetName}: starting loop ${loopIteration}, ${keyframeTimes.length} keyframe times`);
+
+      // Iterate through keyframe boundaries
+      for (let i = 0; i < keyframeTimes.length; i++) {
+        if (!runner.active) break;
+
+        const currentTime = keyframeTimes[i];
+        const nextTime = keyframeTimes[i + 1] ?? keyframeTimes[keyframeTimes.length - 1];
+        // Calculate duration with a minimum of 30ms for smoother transitions
+        const rawDurationMs = i < keyframeTimes.length - 1
+          ? ((nextTime - currentTime) / rate) * 1000
+          : 50; // Last keyframe gets a short duration
+        const durationMs = Math.max(30, rawDurationMs);
+
+        // Collect all curve values at nextTime and fire transitions
+        const handles: TransitionHandle[] = [];
+
+        // Get snippet category for viseme detection
+        const snippetCategory = (sn as any).snippetCategory ?? 'default';
+        const isVisemeCategory = snippetCategory === 'visemeSnippet' || snippetCategory === 'combined';
+
+        for (const [curveId, arr] of Object.entries(curves)) {
+          const targetValue = clamp01(applyIntensityScale(sampleAt(arr, nextTime), scale));
+          this.currentValues.set(curveId, targetValue);
+
+          // Check if this is a viseme index (numeric 0-14 in viseme/combined snippets)
+          const numericId = Number(curveId);
+          const isVisemeIndex = isVisemeCategory && !Number.isNaN(numericId) && numericId >= 0 && numericId < VISEME_KEYS.length;
+
+          if (isVisemeIndex) {
+            // Convert viseme index to morph name
+            const morphName = VISEME_KEYS[numericId];
+            if (this.host.transitionMorph) {
+              const handle = this.host.transitionMorph(morphName, targetValue, durationMs);
+              handles.push(handle);
+            } else {
+              this.host.setMorph(morphName, targetValue);
+            }
+            continue;
+          }
+
+          // Determine if this is a continuum pair
+          const continuumInfo = this.getContinuumInfo(curveId);
+
+          if (continuumInfo && this.host.transitionContinuum) {
+            // Skip - will be handled by the other AU in the pair
+            if (curveId === String(continuumInfo.posAU)) continue;
+
+            // Get the other AU's value
+            const otherCurve = curves[String(continuumInfo.posAU)];
+            const otherValue = otherCurve
+              ? clamp01(applyIntensityScale(sampleAt(otherCurve, nextTime), scale))
+              : 0;
+
+            const continuumValue = otherValue - targetValue;
+            const handle = this.host.transitionContinuum(
+              continuumInfo.negAU,
+              continuumInfo.posAU,
+              continuumValue,
+              durationMs
+            );
+            handles.push(handle);
+          } else if (isNum(curveId)) {
+            // Regular AU transition
+            if (this.host.transitionAU) {
+              const handle = this.host.transitionAU(parseInt(curveId, 10), targetValue, durationMs);
+              handles.push(handle);
+            } else {
+              this.host.applyAU(parseInt(curveId, 10), targetValue);
+            }
+          } else {
+            // Morph/viseme transition (by name)
+            if (this.host.transitionMorph) {
+              const handle = this.host.transitionMorph(curveId, targetValue, durationMs);
+              handles.push(handle);
+            } else {
+              this.host.setMorph(curveId, targetValue);
+            }
+          }
+        }
+
+        // Store handles for pause/resume
+        runner.handles = handles;
+
+        // Await all transitions to complete
+        if (handles.length > 0) {
+          await Promise.all(handles.map(h => h.promise));
+        }
+
+        runner.handles = [];
+
+        // Check if still active after awaiting
+        if (!runner.active) break;
+      }
+
+      // Loop complete - check if we should loop again
+      if (!runner.active) break;
+
+      const snCheck = getSnippet();
+      if (!snCheck?.loop) {
+        // Non-looping snippet completed
+        console.log(`[Scheduler] Runner ${snippetName}: completed (non-looping)`);
+        this.ended.add(snippetName);
+        // Mark snippet as not playing so UI can show play button for replay
+        if (snCheck) snCheck.isPlaying = false;
+        try { this.host.onSnippetEnd?.(snippetName); } catch {}
+        break;
+      }
+
+      // Looping - increment and continue
+      loopIteration++;
+      this.safeSend({
+        type: 'SNIPPET_LOOPED',
+        name: snippetName,
+        iteration: loopIteration,
+        localTime: 0
+      });
+    }
+
+    // Cleanup
+    this.playbackRunners.delete(snippetName);
+    console.log(`[Scheduler] Runner ${snippetName}: exited`);
+  }
+
+  /**
+   * Check if a curve ID is part of a continuum pair.
+   * Returns the pair info if found, null otherwise.
+   */
+  private getContinuumInfo(curveId: string): { negAU: number; posAU: number } | null {
+    if (!isNum(curveId)) return null;
+    const auId = parseInt(curveId, 10);
+
+    for (const composite of COMPOSITE_ROTATIONS) {
+      for (const axisName of ['pitch', 'yaw', 'roll'] as const) {
+        const axis = composite[axisName];
+        if (!axis || axis.negative === undefined || axis.positive === undefined) continue;
+        if (auId === axis.negative || auId === axis.positive) {
+          return { negAU: axis.negative, posAU: axis.positive };
+        }
+      }
+    }
+    return null;
   }
 
   private now() {
@@ -315,8 +580,11 @@ export class AnimationScheduler {
    * Detects AU pairs that form continuums (e.g., eyes left/right, head up/down)
    * and calls transitionAU for each AU directly. The engine's setAU() handles
    * composite bone rotations automatically through AU_TO_COMPOSITE_MAP.
+   *
+   * @param immediate - If true, use applyAU/setMorph for instant updates (scrubbing).
+   *                    If false, use transitionAU/transitionMorph for smooth animation.
    */
-  private applyContinuumTargets(targets: Map<string, { v: number; pri: number; durMs: number; category: string }>) {
+  private applyContinuumTargets(targets: Map<string, { v: number; pri: number; durMs: number; category: string }>, immediate = false) {
     const processedAUs = new Set<string>();
     const processedContinuums = new Set<string>(); // Track which continuum pairs we've already processed
 
@@ -362,15 +630,19 @@ export class AnimationScheduler {
           // Calculate continuum value: -1 (full negative) to +1 (full positive)
           const continuumValue = posValue - negValue;
 
-          // Use transitionContinuum if available (handles both AUs as a single animated value)
-          // This ensures smooth interpolation through the full -1 to +1 range
-          if (this.host.transitionContinuum) {
+          if (immediate) {
+            // Immediate mode (scrubbing): apply values directly without animation
+            this.host.applyAU(negAU, negValue);
+            this.host.applyAU(posAU, posValue);
+          } else if (this.host.transitionContinuum) {
+            // Use transitionContinuum if available (handles both AUs as a single animated value)
+            // This ensures smooth interpolation through the full -1 to +1 range
             this.host.transitionContinuum(negAU, posAU, continuumValue, durationMs);
           } else if (this.host.transitionAU) {
             // Fallback: transition individual AUs (less smooth for continuums)
             this.host.transitionAU(negAU, negValue, durationMs);
             this.host.transitionAU(posAU, posValue, durationMs);
-          } else if (this.host.applyAU) {
+          } else {
             this.host.applyAU(negAU, negValue);
             this.host.applyAU(posAU, posValue);
           }
@@ -401,15 +673,25 @@ export class AnimationScheduler {
       this.currentValues.set(curveId, v);
 
       if (isNum(curveId)) {
-        (this.host.transitionAU ?? this.host.applyAU)(parseInt(curveId, 10), v, 120);
+        if (immediate) {
+          this.host.applyAU(parseInt(curveId, 10), v);
+        } else {
+          (this.host.transitionAU ?? this.host.applyAU)(parseInt(curveId, 10), v, 120);
+        }
       } else {
-        (this.host.transitionMorph ?? this.host.setMorph)(curveId, v, 80);
+        if (immediate) {
+          this.host.setMorph(curveId, v);
+        } else {
+          (this.host.transitionMorph ?? this.host.setMorph)(curveId, v, 80);
+        }
       }
     });
   }
 
-  /** Apply morph targets that correspond to visemes so continuum logic only sees AU targets. */
-  private applyVisemeTargets(targets: Map<string, { v: number; pri: number; durMs: number; category: string }>) {
+  /** Apply morph targets that correspond to visemes so continuum logic only sees AU targets.
+   * @param immediate - If true, use setMorph for instant updates (scrubbing).
+   */
+  private applyVisemeTargets(targets: Map<string, { v: number; pri: number; durMs: number; category: string }>, immediate = false) {
     const processedIds: string[] = [];
 
     targets.forEach((entry, curveId) => {
@@ -426,7 +708,11 @@ export class AnimationScheduler {
       if (!morphName) return; // Combined snippets can carry AU ids too - leave them for continuum logic
 
       const v = clamp01(entry.v);
-      (this.host.transitionMorph ?? this.host.setMorph)?.(morphName, v, entry.durMs);
+      if (immediate) {
+        this.host.setMorph(morphName, v);
+      } else {
+        (this.host.transitionMorph ?? this.host.setMorph)?.(morphName, v, entry.durMs);
+      }
       processedIds.push(curveId);
     });
 
@@ -538,6 +824,8 @@ export class AnimationScheduler {
   }
 
   remove(name: string) {
+    // Stop any active playback runner for this snippet
+    this.stopPlaybackRunner(name);
     this.safeSend({ type: 'REMOVE_ANIMATION', name });
     this.loopLocalTimes.delete(name);
     this.ended.delete(name);
@@ -559,6 +847,12 @@ export class AnimationScheduler {
     rt.offset = opts.offsetSec ?? 0;
     rt.enabled = true;
     this.sched.set(sn.name || '', rt);
+
+    // If already playing, start a playback runner for the new snippet immediately
+    if (this.playing && sn.name) {
+      this.startPlaybackRunner(sn.name);
+    }
+
     return sn.name;
   }
 
@@ -573,22 +867,43 @@ export class AnimationScheduler {
     } catch {}
   }
 
+  /**
+   * Seek to a specific time in a snippet and immediately apply the values.
+   * This is used for scrubbing - values are applied instantly (no transitions).
+   */
   seek(name: string, offsetSec: number) {
-    try {
-      const st = this.machine.getSnapshot?.();
-      const arr = st?.context?.animations as any[] || [];
-      const sn = arr.find((s:any) => s?.name === name);
-      if (!sn) return;
+    const seekTime = Math.max(0, offsetSec);
 
-      const rt = this.ensureSched(name);
-      rt.startsAt = this.playTimeSec;
-      rt.offset = Math.max(0, offsetSec);
-      rt.enabled = true;
-      sn.currentTime = Math.max(0, offsetSec);
-      this.ended.delete(name);
-      sn.isPlaying = true;
-      console.log('[Scheduler] seek()', name, 'to', offsetSec.toFixed(3));
-    } catch {}
+    // Update runtime schedule
+    const rt = this.ensureSched(name);
+    rt.startsAt = this.playTimeSec;
+    rt.offset = seekTime;
+    rt.enabled = true;
+    this.ended.delete(name);
+
+    console.log('[Scheduler] seek()', name, 'to', seekTime.toFixed(3));
+
+    // Send SEEK_SNIPPET event to machine - this creates new state and triggers UI updates
+    this.safeSend({ type: 'SEEK_SNIPPET', name, time: seekTime });
+
+    // Immediately apply values at the seeked position (for scrubbing)
+    this.applyAtCurrentTime();
+  }
+
+  /**
+   * Apply animation values at the current time immediately (no transitions).
+   * Used internally by seek() for scrubbing visual feedback.
+   */
+  private applyAtCurrentTime() {
+    const tPlay = this.playTimeSec;
+    const snippets = this.currentSnippets();
+    this.refreshSnippetTimes(snippets, tPlay);
+    // Ignore playing state - we want to show the scrubbed position even for paused snippets
+    const targets = this.buildTargetMap(snippets, tPlay, true);
+
+    // Apply immediately (no transitions) for instant visual feedback
+    this.applyVisemeTargets(targets, true);
+    this.applyContinuumTargets(targets, true);
   }
 
   play() {
@@ -596,59 +911,38 @@ export class AnimationScheduler {
     this.playing = true;
     // Ensure state machine is playing before any tick
     this.safeSend({ type: 'PLAY_ALL' });
+
+    // Start playback runners for all snippets marked as playing
+    const snippets = this.currentSnippets();
+    for (const sn of snippets) {
+      if (sn.name && (sn as any).isPlaying !== false) {
+        this.startPlaybackRunner(sn.name);
+      }
+    }
   }
 
   pause() {
     if (!this.playing) return;
     this.playing = false;
     this.safeSend({ type: 'PAUSE_ALL' });
+
+    // Pause all playback runners
+    for (const [name] of this.playbackRunners) {
+      this.pausePlaybackRunner(name);
+    }
   }
 
   stop() {
     this.playing = false;
     this.playTimeSec = 0;
+    // Stop all playback runners
+    for (const [name] of this.playbackRunners) {
+      this.stopPlaybackRunner(name);
+    }
     // Clear all scheduled snippets
     this.sched.forEach((r) => { r.enabled = false; r.startsAt = 0; r.offset = 0; });
     this.loopLocalTimes.clear();
     this.safeSend({ type: 'STOP_ALL' });
-  }
-
-  flushOnce() {
-    // Use current playback time for correct sampling
-    const tPlay = this.playTimeSec;
-    console.log('[Scheduler] flushOnce() tPlay:', (tPlay ?? 0).toFixed(3));
-    const snippets = this.currentSnippets();
-    this.refreshSnippetTimes(snippets, tPlay);
-    // Ignore playing state when flushing - we want to show the scrubbed position even for paused snippets
-    const targets = this.buildTargetMap(snippets, tPlay, true);
-    console.log('[Scheduler] flushOnce() targets:', targets.size);
-    targets.forEach((entry, curveId) => {
-      console.log('  -', curveId, '=', (entry.v ?? 0).toFixed(3), 'pri:', entry.pri, 'dur:', (entry.durMs ?? 0).toFixed(1), 'ms');
-    });
-
-    // Apply using the same flow as realtime playback so debugging reflects true behavior
-    this.applyVisemeTargets(targets);
-    this.applyContinuumTargets(targets);
-  }
-
-  /** Drive the scheduler from the external Three.js clock. */
-  step(dtSec: number){
-    if (!this.playing) return;
-    const dt = Math.max(0, dtSec || 0);
-    if (!Number.isFinite(dt) || dt <= 0) return;
-
-    const snippets = this.currentSnippets();
-    if (!snippets.length) return;
-
-    this.playTimeSec += dt;
-    const tPlay = this.playTimeSec;
-    this.checkCompletions(tPlay);
-    this.refreshSnippetTimes(snippets, tPlay);
-    if (!this.playing) return;
-
-    const targets = this.buildTargetMap(snippets, tPlay);
-    this.applyVisemeTargets(targets);
-    this.applyContinuumTargets(targets);
   }
 
   /** Return playing state for external checks */
@@ -657,6 +951,10 @@ export class AnimationScheduler {
   }
 
   dispose() {
+    // Stop all playback runners first
+    for (const [name] of this.playbackRunners) {
+      try { this.stopPlaybackRunner(name); } catch {}
+    }
     try { this.stop(); } catch {}
     try { this.machine?.stop?.(); } catch {}
   }
@@ -664,6 +962,8 @@ export class AnimationScheduler {
   pauseSnippet(name: string) {
     const rt = this.sched.get(name);
     if (rt) rt.enabled = false;
+    // Pause the playback runner (pauses active TransitionHandles)
+    this.pausePlaybackRunner(name);
     try {
       const st = this.machine.getSnapshot?.();
       const arr = st?.context?.animations as any[] || [];
@@ -676,6 +976,13 @@ export class AnimationScheduler {
   resumeSnippet(name: string) {
     const rt = this.sched.get(name) || this.ensureSched(name);
     rt.enabled = true;
+    // Resume the playback runner (resumes active TransitionHandles)
+    // If no runner exists, start a new one
+    if (this.playbackRunners.has(name)) {
+      this.resumePlaybackRunner(name);
+    } else if (this.playing) {
+      this.startPlaybackRunner(name);
+    }
     try {
       const st = this.machine.getSnapshot?.();
       const arr = st?.context?.animations as any[] || [];
@@ -688,6 +995,8 @@ export class AnimationScheduler {
   stopSnippet(name: string) {
     const rt = this.sched.get(name);
     if (rt) { rt.enabled = false; rt.startsAt = 0; rt.offset = 0; }
+    // Stop the playback runner (cancels active TransitionHandles)
+    this.stopPlaybackRunner(name);
     try { this.remove(name); } catch {}
     // Do not call onSnippetEnd here — this is an explicit user stop, not a natural completion.
     this.ended.add(name);

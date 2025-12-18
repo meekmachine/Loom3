@@ -9,6 +9,24 @@
  */
 
 /**
+ * TransitionHandle - returned from transitionAU/transitionMorph/transitionContinuum
+ * Provides promise-based completion notification plus fine-grained control.
+ *
+ * The animation agency uses these handles to await keyframe transitions,
+ * then schedule the next keyframe when the promise resolves.
+ */
+export type TransitionHandle = {
+  /** Resolves when the transition completes (or is cancelled) */
+  promise: Promise<void>;
+  /** Pause this transition (holds at current value) */
+  pause: () => void;
+  /** Resume this transition after pause */
+  resume: () => void;
+  /** Cancel this transition immediately (resolves promise) */
+  cancel: () => void;
+};
+
+/**
  * Engine - The 3D rendering engine interface (EngineThree)
  *
  * The Animation Agency delegates rendering to the Engine, which handles:
@@ -45,13 +63,14 @@ export interface Engine {
 
   /**
    * Transition AU value smoothly over duration
-   * Uses setAU() each tick - simple but does lookups every frame
+   * Returns a TransitionHandle with promise for completion + pause/resume/cancel
    *
    * @param id - AU number (e.g., 12 for lip corner puller)
    * @param value - Target value in [0, 1]
    * @param durationMs - Transition duration in milliseconds (default: 120ms)
+   * @returns TransitionHandle with { promise, pause, resume, cancel }
    */
-  transitionAU?: (id: number | string, value: number, durationMs?: number) => void;
+  transitionAU?: (id: number | string, value: number, durationMs?: number) => TransitionHandle;
 
   /**
    * OPTIMIZED: Transition AU value with pre-resolved targets
@@ -63,8 +82,9 @@ export interface Engine {
    * @param id - AU number (e.g., 12 for lip corner puller)
    * @param value - Target value in [0, 1]
    * @param durationMs - Transition duration in milliseconds (default: 200ms)
+   * @returns TransitionHandle with { promise, pause, resume, cancel }
    */
-  transitionAUOptimized?: (id: number | string, value: number, durationMs?: number) => void;
+  transitionAUOptimized?: (id: number | string, value: number, durationMs?: number) => TransitionHandle;
 
   /**
    * Transition morph value smoothly over duration
@@ -73,8 +93,9 @@ export interface Engine {
    * @param name - Morph target name (e.g., 'jawOpen', 'aa', 'ee')
    * @param value - Target value in [0, 1]
    * @param durationMs - Transition duration in milliseconds (default: 80ms)
+   * @returns TransitionHandle with { promise, pause, resume, cancel }
    */
-  transitionMorph?: (name: string, value: number, durationMs?: number) => void;
+  transitionMorph?: (name: string, value: number, durationMs?: number) => TransitionHandle;
 
   /**
    * Transition a continuum AU pair (e.g., eyes left/right, head up/down).
@@ -85,8 +106,9 @@ export interface Engine {
    * @param posAU - AU ID for positive direction (e.g., 62 for eyes right, 32 for head right)
    * @param value - Target value from -1 (full negative) to +1 (full positive)
    * @param durationMs - Transition duration in milliseconds (default: 200ms)
+   * @returns TransitionHandle with { promise, pause, resume, cancel }
    */
-  transitionContinuum?: (negAU: number, posAU: number, value: number, durationMs?: number) => void;
+  transitionContinuum?: (negAU: number, posAU: number, value: number, durationMs?: number) => TransitionHandle;
 
   /**
    * Callback invoked when a non-looping snippet naturally completes

@@ -19,9 +19,10 @@ import { useWebcamEyeTracking } from '../../hooks/useWebcamEyeTracking';
 interface EyeHeadTrackingSectionProps {
   engine?: any;
   disabled?: boolean;
+  defaultExpanded?: boolean;
 }
 
-export default function EyeHeadTrackingSection({ engine, disabled = false }: EyeHeadTrackingSectionProps) {
+export default function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = false }: EyeHeadTrackingSectionProps) {
   const { eyeHeadTrackingService } = useModulesContext();
   const [trackingMode, setTrackingMode] = useState<'manual' | 'mouse' | 'webcam'>('manual');
   const [gazeX, setGazeX] = useState(0);
@@ -178,7 +179,7 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
 
   if (!eyeHeadTrackingService) {
     return (
-      <DockableAccordionItem title="Eye & Head Tracking">
+      <DockableAccordionItem title="Eye & Head Tracking" isDefaultExpanded={defaultExpanded}>
         <VStack align="stretch" spacing={4}>
           <Text fontSize="sm" color="gray.500">
             Eye/head tracking service initializing...
@@ -189,7 +190,7 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
   }
 
   return (
-    <DockableAccordionItem title="Eye & Head Tracking">
+    <DockableAccordionItem title="Eye & Head Tracking" isDefaultExpanded={defaultExpanded}>
       <VStack align="stretch" spacing={4}>
         {/* Mode Selection */}
         <Box>

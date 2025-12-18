@@ -12,7 +12,6 @@ import './styles.css';
 import { setupGLBCacheDebug } from './utils/glbCacheDebug';
 
 import { AU_TO_MORPHS } from './engine/arkit/shapeDict';
-import { EngineFour } from './engine/EngineFour';
 
 function AppContent() {
   const { engine, anim } = useEngineState();
@@ -154,7 +153,6 @@ function AppContent() {
   // Use BASE_URL for all assets to work with GitHub Pages base path
   const glbSrc = import.meta.env.BASE_URL + "characters/jonathan_new.glb";
   const skyboxUrl = import.meta.env.BASE_URL + "skyboxes/3BR2D07.jpg";
-  const isEngineFour = engine instanceof EngineFour;
 
   return (
     <div className="fullscreen-scene">

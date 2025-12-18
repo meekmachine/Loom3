@@ -228,6 +228,15 @@ export const COMPOSITE_ROTATIONS: CompositeRotation[] = [
   }
 ];
 
+/**
+ * Eye axis configuration for CC4 rigs.
+ * CC4 eyes rotate around Z for horizontal (yaw) movement, not Y.
+ */
+export const EYE_AXIS = {
+  yaw: 'rz' as const,
+  pitch: 'rx' as const,
+} as const;
+
 // Candidate node names to resolve placeholders per-side on common CC/GLB exports.
 // Canonical CC4 bone + mesh names. Since we only target CC4 rigs now, the mapping is explicit.
 export const CC4_BONE_NODES = {

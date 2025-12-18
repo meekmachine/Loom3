@@ -96,6 +96,8 @@ export default function CharacterGLBScene({
             // Enable texture wrapping for rotation offset to work
             texture.wrapS = THREE.RepeatWrapping;
             skyboxTexture = texture;
+            // Notify engine that skybox texture is ready
+            engine?.setSkyboxTexture(texture);
 
             pmremGenerator.dispose();
           }
@@ -115,6 +117,8 @@ export default function CharacterGLBScene({
             // Enable texture wrapping for rotation offset to work
             texture.wrapS = THREE.RepeatWrapping;
             skyboxTexture = texture;
+            // Notify engine that skybox texture is ready
+            engine?.setSkyboxTexture(texture);
           }
         );
       }

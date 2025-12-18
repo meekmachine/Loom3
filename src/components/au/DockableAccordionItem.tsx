@@ -1,17 +1,14 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import {
-  AccordionItem,
-  AccordionButton,
-  AccordionPanel,
-  AccordionIcon,
   Box,
   HStack,
   Portal,
   IconButton,
-  Text
+  Text,
+  Collapse
 } from '@chakra-ui/react';
 import Draggable from 'react-draggable';
-import { CloseIcon, DragHandleIcon } from '@chakra-ui/icons';
+import { CloseIcon, DragHandleIcon, ChevronDownIcon, ChevronRightIcon } from '@chakra-ui/icons';
 
 interface DockableAccordionItemProps {
   title: string;
@@ -20,7 +17,8 @@ interface DockableAccordionItemProps {
 }
 
 /**
- * DockableAccordionItem - Accordion item that can be undocked into a draggable window
+ * DockableAccordionItem - Standalone collapsible panel that can be undocked into a draggable window
+ * No longer requires parent Accordion - works standalone or inside an Accordion
  */
 // Track panel count for positioning
 let panelCount = 0;
@@ -57,58 +55,67 @@ function DockableAccordionItem({
     setPos({ x: data.x, y: data.y });
   };
 
-  // If docked => standard Chakra Accordion usage
+  // If docked => standalone collapsible panel (no parent Accordion needed)
   if (isDocked) {
     return (
-      <AccordionItem border="none" borderBottom="1px solid" borderColor="gray.700">
-        <h2>
-          <AccordionButton
-            onClick={() => setIsExpanded(!isExpanded)}
-            bg="gray.750"
-            color="gray.50"
-            _hover={{ bg: 'gray.700' }}
-            _expanded={{ bg: 'gray.700', borderBottom: '2px solid', borderColor: 'brand.500' }}
-            py={3}
+      <Box border="none" borderBottom="1px solid" borderColor="gray.700">
+        <Box
+          as="button"
+          width="100%"
+          display="flex"
+          alignItems="center"
+          onClick={() => setIsExpanded(!isExpanded)}
+          bg={isExpanded ? 'gray.700' : 'gray.750'}
+          color="gray.50"
+          _hover={{ bg: 'gray.700' }}
+          py={3}
+          px={4}
+          borderBottom={isExpanded ? '2px solid' : 'none'}
+          borderColor={isExpanded ? 'brand.500' : 'transparent'}
+          textAlign="left"
+        >
+          <Box flex="1" fontWeight="semibold" color="brand.600">
+            {title}
+          </Box>
+
+          <HStack
+            spacing={2}
+            _hover={{ '.drag-trigger': { opacity: 1, visibility: 'visible' } }}
           >
-            <Box flex="1" textAlign="left" fontWeight="semibold" color="brand.600">
-              {title}
+            <Box
+              className="drag-trigger"
+              display="inline-flex"
+              alignItems="center"
+              justifyContent="center"
+              w="24px"
+              h="24px"
+              opacity={0}
+              visibility="hidden"
+              cursor="pointer"
+              color="brand.400"
+              transition="all 0.2s"
+              _hover={{ color: 'brand.300', transform: 'scale(1.1)' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDocked(false);
+              }}
+            >
+              <DragHandleIcon boxSize={4} />
             </Box>
 
-            <HStack
-              spacing={2}
-              _hover={{ '.drag-trigger': { opacity: 1, visibility: 'visible' } }}
-            >
-              <Box
-                className="drag-trigger"
-                display="inline-flex"
-                alignItems="center"
-                justifyContent="center"
-                w="24px"
-                h="24px"
-                opacity={0}
-                visibility="hidden"
-                cursor="pointer"
-                color="brand.400"
-                transition="all 0.2s"
-                _hover={{ color: 'brand.300', transform: 'scale(1.1)' }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsDocked(false);
-                }}
-              >
-                <DragHandleIcon boxSize={4} />
-              </Box>
-
-              <AccordionIcon color="gray.400" />
-            </HStack>
-          </AccordionButton>
-        </h2>
-        {isExpanded && (
-          <AccordionPanel pb={4} pt={4} bg="gray.800">
+            {isExpanded ? (
+              <ChevronDownIcon color="gray.400" boxSize={5} />
+            ) : (
+              <ChevronRightIcon color="gray.400" boxSize={5} />
+            )}
+          </HStack>
+        </Box>
+        <Collapse in={isExpanded} animateOpacity>
+          <Box pb={4} pt={4} px={4} bg="gray.800">
             {children}
-          </AccordionPanel>
-        )}
-      </AccordionItem>
+          </Box>
+        </Collapse>
+      </Box>
     );
   }
 

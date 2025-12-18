@@ -12,6 +12,7 @@ import DockableAccordionItem from './DockableAccordionItem';
 
 interface MeshPanelProps {
   engine: EngineThree | null;
+  defaultExpanded?: boolean;
 }
 
 interface MeshInfo {
@@ -35,7 +36,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   other: 'gray',
 };
 
-export default function MeshPanel({ engine }: MeshPanelProps) {
+export default function MeshPanel({ engine, defaultExpanded = false }: MeshPanelProps) {
   const [meshes, setMeshes] = useState<MeshInfo[]>([]);
   const [categoryVisibility, setCategoryVisibility] = useState<Record<string, boolean>>({});
 
@@ -74,7 +75,7 @@ export default function MeshPanel({ engine }: MeshPanelProps) {
 
   if (!engine || meshes.length === 0) {
     return (
-      <DockableAccordionItem title="Meshes">
+      <DockableAccordionItem title="Meshes" isDefaultExpanded={defaultExpanded}>
         <Box p={2}>
           <Text fontSize="sm" color="gray.400">No meshes loaded</Text>
         </Box>
@@ -92,7 +93,7 @@ export default function MeshPanel({ engine }: MeshPanelProps) {
   const categories = Object.keys(byCategory).sort();
 
   return (
-    <DockableAccordionItem title="Meshes">
+    <DockableAccordionItem title="Meshes" isDefaultExpanded={defaultExpanded}>
       <VStack align="stretch" spacing={3} p={2}>
         <Text fontSize="xs" color="gray.400">{meshes.length} meshes loaded</Text>
 

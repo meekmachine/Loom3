@@ -8,8 +8,11 @@ import {
   CC4_EYE_MESH_NODES,
   CC4_MESHES,
   CONTINUUM_PAIRS_MAP,
+  EYE_AXIS,
   type CompositeRotation,
 } from './arkit/shapeDict';
+import { createAnimationService } from '../latticework/animation/animationService';
+import type { Engine } from './EngineThree.types';
 
 // ============================================================================
 // DERIVED CONSTANTS - computed from shapeDict core data
@@ -18,11 +21,8 @@ import {
 /** All AU IDs that have bone bindings */
 export const BONE_DRIVEN_AUS = new Set(Object.keys(BONE_AU_TO_BINDINGS).map(Number));
 
-/** Eye axis override for CC rigs (eyes rotate around Z for yaw) */
-export const EYE_AXIS = {
-  yaw: 'rz' as 'ry' | 'rz',
-  pitch: 'rx' as 'rx' | 'ry' | 'rz'
-};
+// Re-export from shapeDict for backwards compatibility
+export { EYE_AXIS, CONTINUUM_PAIRS_MAP };
 
 /** AUs that have both morphs and bones - can blend between them */
 export const MIXED_AUS = new Set(
@@ -107,6 +107,25 @@ type Transition = {
   apply: (value: number) => void;
   easing: (t: number) => number;
   resolve?: () => void;  // Called when transition completes
+  paused: boolean;       // Individual pause state
+};
+
+/**
+ * TransitionHandle - returned from transitionAU/transitionMorph/transitionContinuum
+ * Provides promise-based completion notification plus fine-grained control.
+ *
+ * The animation agency uses these handles to await keyframe transitions,
+ * then schedule the next keyframe when the promise resolves.
+ */
+export type TransitionHandle = {
+  /** Resolves when the transition completes (or is cancelled) */
+  promise: Promise<void>;
+  /** Pause this transition (holds at current value) */
+  pause: () => void;
+  /** Resume this transition after pause */
+  resume: () => void;
+  /** Cancel this transition immediately (resolves promise) */
+  cancel: () => void;
 };
 
 // Optimized transition types - pre-resolved targets for direct access
@@ -175,6 +194,110 @@ export class EngineThree {
   private pendingCompositeNodes = new Set<string>();
   private isPaused: boolean = false;
   private easeInOutQuad = (t:number) => (t<0.5? 2*t*t : -1+(4-2*t)*t);
+
+  // ============================================================================
+  // INTERNAL RAF LOOP - EngineThree owns the frame loop
+  // ============================================================================
+  private clock = new THREE.Clock();
+  private rafId: number | null = null;
+  private running = false;
+  private frameListeners = new Set<(dt: number) => void>();
+
+  /** Animation service - created lazily when start() is called */
+  private _anim: ReturnType<typeof createAnimationService> | null = null;
+
+  /** Get the animation service (creates it if needed) */
+  get anim(): ReturnType<typeof createAnimationService> {
+    if (!this._anim) {
+      this._anim = this.createAnimService();
+    }
+    return this._anim;
+  }
+
+  /** Create the animation service with this engine as the host */
+  private createAnimService(): ReturnType<typeof createAnimationService> {
+    const host: Engine = {
+      applyAU: (id, v) => this.setAU(id as number, v),
+      setMorph: (key, v) => this.setMorph(key, v),
+      transitionAU: (id, v, dur) => this.transitionAU(id, v, dur),
+      transitionMorph: (key, v, dur) => this.transitionMorph(key, v, dur),
+      transitionContinuum: (negAU, posAU, v, dur) => this.transitionContinuum(negAU, posAU, v, dur),
+      onSnippetEnd: (name) => {
+        try {
+          window.dispatchEvent(new CustomEvent('visos:snippetEnd', { detail: { name } }));
+        } catch {}
+        try {
+          (window as any).__lastSnippetEnded = name;
+        } catch {}
+      }
+    };
+    const svc = createAnimationService(host);
+    (window as any).anim = svc; // dev handle
+    return svc;
+  }
+
+  /** Subscribe to frame updates. Returns an unsubscribe function. */
+  addFrameListener(callback: (dt: number) => void): () => void {
+    this.frameListeners.add(callback);
+    return () => this.frameListeners.delete(callback);
+  }
+
+  /** Start the internal RAF loop */
+  start() {
+    if (this.running) return;
+    this.running = true;
+    this.clock.start();
+
+    // Ensure anim service exists (initializes scheduler and machine)
+    this.anim;
+
+    const tick = () => {
+      if (!this.running) return;
+      const dt = this.clock.getDelta();
+
+      // NOTE: step(dt) polling is DISABLED - promise-based playback runners now handle
+      // keyframe transitions. The runners fire transitions at keyframe boundaries and
+      // await TransitionHandle.promise before scheduling the next keyframe.
+      // The step(dt) method still exists in scheduler for backwards compatibility
+      // (e.g., flushOnce for scrubbing) but is not called from the RAF loop.
+
+      // Notify frame listeners
+      this.frameListeners.forEach((fn) => {
+        try { fn(dt); } catch {}
+      });
+
+      // Update transitions, mixers, mouse tracking
+      this.update(dt);
+
+      this.rafId = requestAnimationFrame(tick);
+    };
+
+    this.rafId = requestAnimationFrame(tick);
+  }
+
+  /** Stop the internal RAF loop */
+  stop() {
+    this.running = false;
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    this.clock.stop();
+  }
+
+  /** Check if the engine loop is running */
+  isRunning(): boolean {
+    return this.running;
+  }
+
+  /** Dispose the engine and animation service */
+  dispose() {
+    this.stop();
+    try {
+      this._anim?.dispose?.();
+    } catch {}
+    this._anim = null;
+  }
 
   // ============================================================================
   // OPTIMIZED TRANSITION SYSTEM
@@ -264,7 +387,7 @@ export class EngineThree {
    * Morph indices and bone references are resolved once at creation time,
    * then applied directly each tick without lookups.
    */
-  transitionAUOptimized = (id: number | string, to: number, durationMs = 200): Promise<void> => {
+  transitionAUOptimized = (id: number | string, to: number, durationMs = 200): TransitionHandle => {
     const numId = typeof id === 'string' ? Number(id.replace(/[^\d]/g, '')) : id;
     const transitionKey = `au_opt_${numId}`;
     const from = this.auValues[numId] ?? 0;
@@ -274,7 +397,7 @@ export class EngineThree {
     const resolved = this.resolveAUTargets(numId);
     if (!resolved) {
       console.warn(`[EngineThree] Could not resolve targets for AU ${numId}`);
-      return Promise.resolve();
+      return { promise: Promise.resolve(), pause: () => {}, resume: () => {}, cancel: () => {} };
     }
 
     // Create the optimized apply function that uses direct references
@@ -371,7 +494,7 @@ export class EngineThree {
     return 0;
   }
   /** Smoothly tween an AU to a target value */
-  transitionAU = (id: number | string, to: number, durationMs = 200): Promise<void> => {
+  transitionAU = (id: number | string, to: number, durationMs = 200): TransitionHandle => {
     const numId = typeof id === 'string' ? Number(id.replace(/[^\d]/g, '')) : id;
     const transitionKey = `au_${numId}`;
     const from = this.auValues[numId] ?? 0;
@@ -386,7 +509,7 @@ export class EngineThree {
   };
 
   /** Smoothly tween a morph to a target value */
-  transitionMorph = (key: string, to: number, durationMs = 120): Promise<void> => {
+  transitionMorph = (key: string, to: number, durationMs = 120): TransitionHandle => {
     const transitionKey = `morph_${key}`;
     const from = this.getMorphValue(key);
     const target = clamp01(to);
@@ -439,7 +562,7 @@ export class EngineThree {
    * @param continuumValue - Target value from -1 (full negative) to +1 (full positive)
    * @param durationMs - Transition duration in milliseconds
    */
-  transitionContinuum = (negAU: number, posAU: number, continuumValue: number, durationMs = 200): Promise<void> => {
+  transitionContinuum = (negAU: number, posAU: number, continuumValue: number, durationMs = 200): TransitionHandle => {
     const target = Math.max(-1, Math.min(1, continuumValue));
     const driverKey = `continuum_${negAU}_${posAU}`;
 
@@ -493,11 +616,15 @@ export class EngineThree {
   /**
    * Tick all active transitions by dt seconds.
    * Applies eased interpolation and removes completed transitions.
+   * Respects individual transition pause state.
    */
   private tickTransitions(dt: number) {
     const completed: string[] = [];
 
     this.transitions.forEach((t, key) => {
+      // Skip paused transitions
+      if (t.paused) return;
+
       t.elapsed += dt;
       const progress = Math.min(t.elapsed / t.duration, 1.0);
       const easedProgress = t.easing(progress);
@@ -520,7 +647,7 @@ export class EngineThree {
   /**
    * Add or replace a transition for the given key.
    * If a transition with the same key exists, it is cancelled and replaced.
-   * @returns Promise that resolves when the transition completes
+   * @returns TransitionHandle with { promise, pause, resume, cancel }
    */
   private addTransition(
     key: string,
@@ -529,7 +656,7 @@ export class EngineThree {
     durationSec: number,
     apply: (value: number) => void,
     easing: (t: number) => number = this.easeInOutQuad
-  ): Promise<void> {
+  ): TransitionHandle {
     // Cancel existing transition for this key
     const existing = this.transitions.get(key);
     if (existing?.resolve) {
@@ -539,11 +666,18 @@ export class EngineThree {
     // Instant transition if duration is 0 or values are equal
     if (durationSec <= 0 || Math.abs(to - from) < 1e-6) {
       apply(to);
-      return Promise.resolve();
+      return {
+        promise: Promise.resolve(),
+        pause: () => {},
+        resume: () => {},
+        cancel: () => {},
+      };
     }
 
-    return new Promise<void>((resolve) => {
-      this.transitions.set(key, {
+    let transitionObj: Transition | null = null;
+
+    const promise = new Promise<void>((resolve) => {
+      transitionObj = {
         key,
         from,
         to,
@@ -552,8 +686,29 @@ export class EngineThree {
         apply,
         easing,
         resolve,
-      });
+        paused: false,
+      };
+      this.transitions.set(key, transitionObj);
     });
+
+    return {
+      promise,
+      pause: () => {
+        const t = this.transitions.get(key);
+        if (t) t.paused = true;
+      },
+      resume: () => {
+        const t = this.transitions.get(key);
+        if (t) t.paused = false;
+      },
+      cancel: () => {
+        const t = this.transitions.get(key);
+        if (t) {
+          t.resolve?.();
+          this.transitions.delete(key);
+        }
+      },
+    };
   }
 
   /** Clear all running transitions (used when playback rate changes to prevent timing conflicts). */
@@ -2376,9 +2531,14 @@ export class EngineThree {
     }
   };
 
-  /** Check if skybox is ready */
+  /** Check if skybox is ready - checks if scene has a background set */
   isSkyboxReady = (): boolean => {
-    return this.skyboxTexture !== null && this.scene !== null;
+    return this.scene !== null && this.scene.background !== null;
+  };
+
+  /** Set skybox texture reference (called when texture finishes loading) */
+  setSkyboxTexture = (texture: THREE.Texture) => {
+    this.skyboxTexture = texture;
   };
 
   // ========================================

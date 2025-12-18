@@ -4,7 +4,6 @@ import { AddIcon } from '@chakra-ui/icons';
 import DockableAccordionItem from './DockableAccordionItem';
 import { CurveEditor } from '../CurveEditor';
 import { EngineThree } from '../../engine/EngineThree';
-import { EngineFour } from '../../engine/EngineFour';
 import { VISEME_KEYS } from '../../engine/arkit/shapeDict';
 import type { NormalizedSnippet } from '../../latticework/animation/types';
 import { useEngineState } from '../../context/engineContext';
@@ -18,12 +17,13 @@ type SnippetCurveData = {
 };
 
 interface VisemeSectionProps {
-  engine?: EngineThree | EngineFour | null;
+  engine?: EngineThree | null;
   visemeStates: Record<string, number>;
   onVisemeChange: (key: string, value: number) => void;
   disabled?: boolean;
   useCurveEditor?: boolean;
   visemeSnippetCurves?: Record<string, SnippetCurveData[]>;
+  defaultExpanded?: boolean;
 }
 
 /**
@@ -38,7 +38,8 @@ export default function VisemeSection({
   onVisemeChange,
   disabled = false,
   useCurveEditor = false,
-  visemeSnippetCurves = {}
+  visemeSnippetCurves = {},
+  defaultExpanded = false
 }: VisemeSectionProps) {
   const { anim } = useEngineState();
   const toast = useToast();
@@ -123,7 +124,7 @@ export default function VisemeSection({
   // If curve editor mode, render curve editors for all visemes (one per snippet)
   if (useCurveEditor) {
     return (
-      <DockableAccordionItem title="Visemes (Speech)">
+      <DockableAccordionItem title="Visemes (Speech)" isDefaultExpanded={defaultExpanded}>
         <VStack spacing={4} mt={2} align="stretch">
           {VISEME_KEYS.map((key, index) => {
             // Viseme snippets use numeric indices (0-21) as curve IDs
@@ -185,7 +186,7 @@ export default function VisemeSection({
 
   // Otherwise, render sliders (existing behavior)
   return (
-    <DockableAccordionItem title="Visemes (Speech)">
+    <DockableAccordionItem title="Visemes (Speech)" isDefaultExpanded={defaultExpanded}>
       <VStack spacing={4} mt={2} align="stretch">
         {VISEME_KEYS.map((key) => {
           const value = visemeStates[key] ?? 0;

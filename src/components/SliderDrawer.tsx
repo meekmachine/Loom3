@@ -1,8 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Drawer,
   DrawerBody,
-  DrawerHeader,
   DrawerContent,
   DrawerCloseButton,
   VStack,
@@ -12,9 +11,10 @@ import {
   Button,
   HStack,
   Switch,
-  Text
+  Text,
+  Tooltip
 } from '@chakra-ui/react';
-import { FaBars } from 'react-icons/fa';
+import { FaBars, FaPlay, FaSmile, FaComment, FaEye, FaCut, FaCubes, FaMicrophone, FaRegEyeSlash, FaGlobe } from 'react-icons/fa';
 import { AU_INFO, AUInfo } from '../engine/arkit/shapeDict';
 import AUSection from './au/AUSection';
 import VisemeSection from './au/VisemeSection';
@@ -24,6 +24,29 @@ import HairSection from './au/HairSection';
 import BlinkSection from './au/BlinkSection';
 import DockableAccordionItem from './au/DockableAccordionItem';
 import PlaybackControls from './PlaybackControls';
+import MeshPanel from './au/MeshPanel';
+import SkyboxSection from './au/SkyboxSection';
+
+// Tab definitions
+type TabId = 'animation' | 'speech' | 'blink' | 'aus' | 'visemes' | 'tracking' | 'hair' | 'meshes' | 'skybox';
+
+interface TabDef {
+  id: TabId;
+  icon: React.ElementType;
+  label: string;
+}
+
+const TABS: TabDef[] = [
+  { id: 'animation', icon: FaPlay, label: 'Animation' },
+  { id: 'speech', icon: FaMicrophone, label: 'Speech' },
+  { id: 'blink', icon: FaRegEyeSlash, label: 'Blink' },
+  { id: 'aus', icon: FaSmile, label: 'Action Units' },
+  { id: 'visemes', icon: FaComment, label: 'Visemes' },
+  { id: 'tracking', icon: FaEye, label: 'Eye & Head' },
+  { id: 'hair', icon: FaCut, label: 'Hair' },
+  { id: 'meshes', icon: FaCubes, label: 'Meshes' },
+  { id: 'skybox', icon: FaGlobe, label: 'Skybox' },
+];
 import { useThreeState } from '../context/threeContext';
 import type { NormalizedSnippet, CurvePoint } from '../latticework/animation/types';
 import { HairService } from '../latticework/hair/hairService';
@@ -63,6 +86,9 @@ export default function SliderDrawer({
 }: SliderDrawerProps) {
   const { engine, anim, addFrameListener } = useThreeState();
 
+  // Active tab state
+  const [activeTab, setActiveTab] = useState<TabId>('animation');
+
   // Track AU intensities in local state for UI
   const [auStates, setAuStates] = useState<Record<string, number>>({});
   const [visemeStates, setVisemeStates] = useState<Record<string, number>>({});
@@ -76,9 +102,7 @@ export default function SliderDrawer({
   const [auSnippetCurves, setAuSnippetCurves] = useState<Record<string, SnippetCurveData[]>>({});
   const [visemeSnippetCurves, setVisemeSnippetCurves] = useState<Record<string, SnippetCurveData[]>>({});
 
-  // Animation snippets from animation service
-  const [snippets, setSnippets] = useState<NormalizedSnippet[]>([]);
-
+  
   // Poll machine state using Three.js frame listener
   // NOTE: Can't use onTransition because animationScheduler mutates state directly
   useEffect(() => {
@@ -89,7 +113,7 @@ export default function SliderDrawer({
     // Track animation list to detect changes
     let lastAnimationNames: string[] = [];
 
-    const listener = (dt: number) => {
+    const listener = () => {
       const state = anim.getState?.();
       const animations = (state?.context?.animations as NormalizedSnippet[]) || [];
 
@@ -227,6 +251,136 @@ export default function SliderDrawer({
     setVisemeStates(prev => ({ ...prev, [key]: value }));
   };
 
+  // Render tab content based on active tab
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'animation':
+        return (
+          <DockableAccordionItem title="Playback Controls" isDefaultExpanded>
+            <PlaybackControls />
+          </DockableAccordionItem>
+        );
+
+      case 'speech':
+        return (
+          <TTSSection engine={engine} disabled={disabled} defaultExpanded />
+        );
+
+      case 'blink':
+        return (
+          <BlinkSection blinkService={blinkService} disabled={disabled} defaultExpanded />
+        );
+
+      case 'aus':
+        return (
+          <VStack spacing={4} align="stretch">
+            {/* AU Controls */}
+            <Box p={3} bg="gray.750" borderRadius="md">
+              <VStack spacing={2} align="stretch">
+                <Button size="sm" onClick={setFaceToNeutral} colorScheme="red" fontWeight="semibold">
+                  Reset to Neutral
+                </Button>
+                <HStack justify="space-between">
+                  <Text fontSize="sm" color="gray.300">Use curve editor</Text>
+                  <Switch
+                    isChecked={useCurveEditor}
+                    onChange={(e) => setUseCurveEditor(e.target.checked)}
+                    size="sm"
+                    colorScheme="brand"
+                  />
+                </HStack>
+                {useCurveEditor && (
+                  <HStack justify="space-between">
+                    <Text fontSize="sm" color="gray.300">Show only playing</Text>
+                    <Switch
+                      isChecked={showOnlyPlayingSnippets}
+                      onChange={(e) => setShowOnlyPlayingSnippets(e.target.checked)}
+                      size="sm"
+                      colorScheme="green"
+                    />
+                  </HStack>
+                )}
+                <HStack justify="space-between">
+                  <Text fontSize="sm" color="gray.300">Show unused sliders</Text>
+                  <Switch
+                    isChecked={showUnusedSliders}
+                    onChange={(e) => setShowUnusedSliders(e.target.checked)}
+                    size="sm"
+                    colorScheme="brand"
+                  />
+                </HStack>
+                <HStack justify="space-between">
+                  <Text fontSize="sm" color="gray.300">Group by</Text>
+                  <Button
+                    size="xs"
+                    onClick={() => setSegmentationMode(prev =>
+                      prev === 'facePart' ? 'faceArea' : 'facePart'
+                    )}
+                    colorScheme="brand"
+                    variant="outline"
+                  >
+                    {segmentationMode === 'facePart' ? 'Face Part' : 'Face Area'}
+                  </Button>
+                </HStack>
+              </VStack>
+            </Box>
+            <Accordion allowMultiple>
+              {filteredSections.map(([section, aus]) => (
+                <AUSection
+                  key={section}
+                  section={section}
+                  aus={aus}
+                  auStates={auStates}
+                  engine={engine}
+                  showUnusedSliders={showUnusedSliders}
+                  onAUChange={handleAUChange}
+                  disabled={disabled}
+                  useCurveEditor={useCurveEditor}
+                  auSnippetCurves={auSnippetCurves}
+                />
+              ))}
+            </Accordion>
+          </VStack>
+        );
+
+      case 'visemes':
+        return (
+          <VisemeSection
+            engine={engine}
+            visemeStates={visemeStates}
+            onVisemeChange={handleVisemeChange}
+            disabled={disabled}
+            useCurveEditor={useCurveEditor}
+            visemeSnippetCurves={visemeSnippetCurves}
+            defaultExpanded
+          />
+        );
+
+      case 'tracking':
+        return (
+          <EyeHeadTrackingSection engine={engine} disabled={disabled} defaultExpanded />
+        );
+
+      case 'hair':
+        return (
+          <HairSection hairService={hairService} disabled={disabled} defaultExpanded />
+        );
+
+      case 'meshes':
+        return (
+          <MeshPanel engine={engine} defaultExpanded />
+        );
+
+      case 'skybox':
+        return (
+          <SkyboxSection engine={engine} disabled={disabled} defaultExpanded />
+        );
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
       <IconButton
@@ -259,123 +413,54 @@ export default function SliderDrawer({
           }}
         >
           <DrawerCloseButton color="gray.400" _hover={{ color: 'gray.200', bg: 'gray.700' }} />
-          <DrawerHeader borderBottomWidth="1px" borderColor="gray.700" bg="gray.800" color="gray.50" fontWeight="bold">
-            Action Units
-          </DrawerHeader>
 
-          {/* Controls Panel */}
-          <Box p={4} borderBottomWidth="1px" borderColor="gray.700" bg="gray.800">
-            <VStack spacing={3} align="stretch">
-              <Button size="sm" onClick={setFaceToNeutral} colorScheme="red" fontWeight="semibold">
-                Reset to Neutral
-              </Button>
-
-              <HStack justify="space-between">
-                <Text fontSize="sm" color="gray.300">Use curve editor</Text>
-                <Switch
-                  isChecked={useCurveEditor}
-                  onChange={(e) => setUseCurveEditor(e.target.checked)}
-                  size="sm"
-                  colorScheme="brand"
-                />
-              </HStack>
-
-              {useCurveEditor && (
-                <HStack justify="space-between">
-                  <Text fontSize="sm" color="gray.300">Show only playing</Text>
-                  <Switch
-                    isChecked={showOnlyPlayingSnippets}
-                    onChange={(e) => setShowOnlyPlayingSnippets(e.target.checked)}
-                    size="sm"
-                    colorScheme="green"
-                  />
-                </HStack>
-              )}
-
-              <HStack justify="space-between">
-                <Text fontSize="sm" color="gray.300">Show unused sliders</Text>
-                <Switch
-                  isChecked={showUnusedSliders}
-                  onChange={(e) => setShowUnusedSliders(e.target.checked)}
-                  size="sm"
-                  colorScheme="brand"
-                />
-              </HStack>
-
-              <HStack justify="space-between">
-                <Text fontSize="sm" color="gray.300">Group by</Text>
-                <Button
-                  size="xs"
-                  onClick={() => setSegmentationMode(prev =>
-                    prev === 'facePart' ? 'faceArea' : 'facePart'
-                  )}
-                  colorScheme="brand"
-                  variant="outline"
-                >
-                  {segmentationMode === 'facePart' ? 'Face Part' : 'Face Area'}
-                </Button>
-              </HStack>
+          {/* Main layout: vertical tabs on left, content on right */}
+          <HStack align="stretch" h="100%" spacing={0}>
+            {/* Vertical Tab Bar */}
+            <VStack
+              spacing={1}
+              py={4}
+              px={2}
+              bg="gray.900"
+              borderRight="1px solid"
+              borderColor="gray.700"
+              align="center"
+            >
+              {TABS.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <Tooltip key={tab.id} label={tab.label} placement="right" hasArrow>
+                    <IconButton
+                      aria-label={tab.label}
+                      icon={<Icon />}
+                      onClick={() => setActiveTab(tab.id)}
+                      variant={isActive ? 'solid' : 'ghost'}
+                      colorScheme={isActive ? 'brand' : 'gray'}
+                      size="lg"
+                      fontSize="xl"
+                      color={isActive ? 'white' : 'gray.300'}
+                      bg={isActive ? 'brand.500' : 'transparent'}
+                      _hover={{
+                        bg: isActive ? 'brand.400' : 'gray.700',
+                        color: 'white',
+                        transform: 'scale(1.1)',
+                      }}
+                      transition="all 0.2s"
+                    />
+                  </Tooltip>
+                );
+              })}
             </VStack>
-          </Box>
 
-          <DrawerBody bg="transparent">
-            <Accordion allowMultiple>
-              {/* Text-to-Speech Section */}
-              <TTSSection
-                engine={engine}
-                disabled={disabled}
-              />
-
-              {/* Playback Controls Section */}
-              <DockableAccordionItem title="Playback Controls">
-                <PlaybackControls />
-              </DockableAccordionItem>
-
-              {/* Eye and Head Tracking Section */}
-              <EyeHeadTrackingSection
-                engine={engine}
-                disabled={disabled}
-              />
-
-              {/* Hair & Eyebrows Section */}
-              <HairSection
-                hairService={hairService}
-                disabled={disabled}
-              />
-
-              {/* Blinking Section */}
-              <BlinkSection
-                blinkService={blinkService}
-                disabled={disabled}
-              />
-
-              {/* Viseme Section */}
-              <VisemeSection
-                engine={engine}
-                visemeStates={visemeStates}
-                onVisemeChange={handleVisemeChange}
-                disabled={disabled}
-                useCurveEditor={useCurveEditor}
-                visemeSnippetCurves={visemeSnippetCurves}
-              />
-
-              {/* AU Sections (continuum sliders appear inline with their sections) */}
-              {filteredSections.map(([section, aus]) => (
-                <AUSection
-                  key={section}
-                  section={section}
-                  aus={aus}
-                  auStates={auStates}
-                  engine={engine}
-                  showUnusedSliders={showUnusedSliders}
-                  onAUChange={handleAUChange}
-                  disabled={disabled}
-                  useCurveEditor={useCurveEditor}
-                  auSnippetCurves={auSnippetCurves}
-                />
-              ))}
-            </Accordion>
-          </DrawerBody>
+            {/* Content Area */}
+            <Box flex={1} display="flex" flexDirection="column" overflow="hidden">
+              {/* Scrollable Content */}
+              <DrawerBody bg="transparent" flex={1} overflowY="auto" pt={0}>
+                {renderTabContent()}
+              </DrawerBody>
+            </Box>
+          </HStack>
         </DrawerContent>
       </Drawer>
     </>

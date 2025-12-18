@@ -3,28 +3,52 @@ import { AnimationScheduler } from '../animationScheduler';
 import { createActor } from 'xstate';
 import { animationMachine } from '../animationMachine';
 import type { HostCaps } from '../types';
+import type { TransitionHandle } from '../../../engine/EngineThree.types';
 
+/**
+ * Tests for AnimationScheduler core functionality.
+ *
+ * Note: The scheduler now uses promise-based playback. These tests focus on:
+ * - Loading/removing snippets
+ * - Seek functionality (now includes immediate value application for scrubbing)
+ * - Schedule snapshot
+ * - Priority resolution
+ *
+ * For playback and transition tests, see promisePlayback.test.ts and scrubberAndReplay.test.ts
+ */
 describe('AnimationScheduler', () => {
   let scheduler: AnimationScheduler;
   let mockHost: HostCaps;
   let appliedAUs: Array<{ id: number | string; value: number; duration?: number }>;
   let machine: any;
+  let firedTransitions: Array<{ resolve: () => void }>;
 
   beforeEach(() => {
-    // Use fake timers for deterministic time control
     vi.useFakeTimers();
 
-    // Mock performance.now() to use Date.now() so fake timers work
     const originalPerformance = globalThis.performance;
     vi.stubGlobal('performance', {
       ...originalPerformance,
       now: () => Date.now()
     });
 
-    // Reset mocks
     appliedAUs = [];
+    firedTransitions = [];
 
-    // Create mock host
+    const createHandle = (): TransitionHandle => {
+      let resolvePromise: () => void = () => {};
+      const promise = new Promise<void>((resolve) => {
+        resolvePromise = resolve;
+      });
+      firedTransitions.push({ resolve: resolvePromise });
+      return {
+        promise,
+        pause: vi.fn(),
+        resume: vi.fn(),
+        cancel: vi.fn(() => resolvePromise()),
+      };
+    };
+
     mockHost = {
       applyAU: vi.fn((id, v) => {
         appliedAUs.push({ id, value: v });
@@ -32,15 +56,14 @@ describe('AnimationScheduler', () => {
       setMorph: vi.fn(),
       transitionAU: vi.fn((id, v, dur) => {
         appliedAUs.push({ id, value: v, duration: dur });
+        return createHandle();
       }),
-      transitionMorph: vi.fn(),
+      transitionMorph: vi.fn(() => createHandle()),
+      transitionContinuum: vi.fn(() => createHandle()),
       onSnippetEnd: vi.fn()
     };
 
-    // Create fresh machine instance
     machine = createActor(animationMachine).start();
-
-    // Create scheduler
     scheduler = new AnimationScheduler(machine, mockHost);
   });
 
@@ -49,7 +72,7 @@ describe('AnimationScheduler', () => {
     vi.useRealTimers();
   });
 
-  describe('Basic Loading and Playback', () => {
+  describe('Loading and Machine State', () => {
     it('should load a snippet with curves', () => {
       const snippet = {
         name: 'test_snippet',
@@ -93,7 +116,7 @@ describe('AnimationScheduler', () => {
       expect(snapshot[0].duration).toBe(5);
     });
 
-    it('should start playing when play() is called', () => {
+    it('should return isPlaying true when play() is called', () => {
       const snippet = {
         name: 'test_play',
         curves: {
@@ -106,172 +129,41 @@ describe('AnimationScheduler', () => {
 
       expect(scheduler.isPlaying()).toBe(true);
     });
-  });
 
-  describe('Time stepping', () => {
-    it('clamps non-looping snippets at the end of their curve', () => {
+    it('should remove snippet by name', () => {
       const snippet = {
-        name: 'clamp_test',
-        loop: false,
-        curves: {
-          '1': [
-            { time: 0, intensity: 0 },
-            { time: 1, intensity: 1 }
-          ]
-        }
+        name: 'to_remove',
+        curves: { '1': [{ time: 0, intensity: 0 }] }
       };
 
       scheduler.loadFromJSON(snippet);
-      scheduler.play();
 
-      scheduler.seek('clamp_test', 2);
+      let state = machine.getSnapshot();
+      expect(state.context.animations).toHaveLength(1);
 
-      scheduler.step(0.016);
+      scheduler.remove('to_remove');
 
-      const fresh = machine.getSnapshot();
-      expect(fresh.context.animations[0].currentTime).toBe(1);
+      state = machine.getSnapshot();
+      expect(state.context.animations).toHaveLength(0);
     });
 
-    it('wraps looping snippets after completing duration', () => {
-      const snippet = {
-        name: 'loop_test',
-        loop: true,
-        curves: {
-          '1': [
-            { time: 0, intensity: 0 },
-            { time: 1, intensity: 1 }
-          ]
-        }
+    it('should normalize old-format snippets with au/viseme arrays', () => {
+      const oldFormatSnippet = {
+        name: 'old_format',
+        au: [
+          { id: 1, t: 0, v: 0 },
+          { id: 1, t: 1, v: 100 } // percentage format
+        ]
       };
 
-      scheduler.loadFromJSON(snippet);
-      scheduler.play();
-
-      scheduler.seek('loop_test', 1.25);
-
-      scheduler.step(0.016);
-
-      const fresh = machine.getSnapshot();
-      expect(fresh.context.animations[0].currentTime).toBeCloseTo(0.25, 2);
-    });
-  });
-
-
-  describe('Playback Rate', () => {
-    it('should respect snippetPlaybackRate', () => {
-      const snippet = {
-        name: 'test_rate',
-        snippetPlaybackRate: 2.0, // 2x speed
-        curves: {
-          '1': [
-            { time: 0, intensity: 0 },
-            { time: 4, intensity: 1 }
-          ]
-        }
-      };
-
-      scheduler.loadFromJSON(snippet);
-      scheduler.play();
-
-      // Simulate one second of real time by moving the wall-clock anchor
+      scheduler.loadFromJSON(oldFormatSnippet);
       const state = machine.getSnapshot();
       const sn = state.context.animations[0];
-      sn.startWallTime = (performance.now() - 1000);
 
-      scheduler.step(0.016);
-
-      expect(sn.currentTime).toBeCloseTo(2.0, 1);
-    });
-  });
-
-  describe('Intensity Scale', () => {
-    it('should apply intensity scale to sampled values', () => {
-      const snippet = {
-        name: 'test_intensity',
-        snippetIntensityScale: 0.5, // 50% intensity
-        curves: {
-          '1': [
-            { time: 0.01, intensity: 1.0 } // avoid continuity override
-          ]
-        }
-      };
-
-      scheduler.loadFromJSON(snippet);
-      scheduler.play();
-      appliedAUs = [];
-
-      // Step once to apply values
-      scheduler.step(0.016);
-
-      // Should have applied AU with scaled value
-      expect(appliedAUs.length).toBeGreaterThan(0);
-
-      // Value should be scaled to 0.5
-      const au1 = appliedAUs.find(au => au.id === 1);
-      expect(au1).toBeDefined();
-      expect(au1!.value).toBeCloseTo(0.25, 2);
-    });
-  });
-
-  describe('Priority Resolution', () => {
-    it('should resolve conflicts by priority', () => {
-      const highPriority = {
-        name: 'high',
-        snippetPriority: 10,
-        curves: {
-          '1': [{ time: 0.01, intensity: 0.3 }]
-        }
-      };
-
-      const lowPriority = {
-        name: 'low',
-        snippetPriority: 1,
-        curves: {
-          '1': [{ time: 0.01, intensity: 0.8 }]
-        }
-      };
-
-      scheduler.loadFromJSON(lowPriority);
-      scheduler.loadFromJSON(highPriority);
-      scheduler.play();
-      appliedAUs = [];
-
-      scheduler.step(0.016);
-
-      // High priority should win even with lower value
-      const au1 = appliedAUs.find(au => au.id === 1);
-      expect(au1).toBeDefined();
-      expect(au1!.value).toBeCloseTo(0.3, 2);
-    });
-
-    it('should use higher value for same priority', () => {
-      const snippet1 = {
-        name: 's1',
-        snippetPriority: 5,
-        curves: {
-          '1': [{ time: 0.01, intensity: 0.3 }]
-        }
-      };
-
-      const snippet2 = {
-        name: 's2',
-        snippetPriority: 5,
-        curves: {
-          '1': [{ time: 0.01, intensity: 0.8 }]
-        }
-      };
-
-      scheduler.loadFromJSON(snippet1);
-      scheduler.loadFromJSON(snippet2);
-      scheduler.play();
-      appliedAUs = [];
-
-      scheduler.step(0.016);
-
-      // Same priority, higher value wins
-      const au1 = appliedAUs.find(au => au.id === 1);
-      expect(au1).toBeDefined();
-      expect(au1!.value).toBeCloseTo(0.8, 2);
+      // Should have converted to curves format
+      expect(sn.curves).toBeDefined();
+      expect(sn.curves['1']).toBeDefined();
+      expect(sn.curves['1'][1].intensity).toBe(1); // normalized from 100
     });
   });
 
@@ -296,160 +188,243 @@ describe('AnimationScheduler', () => {
       expect(sn.currentTime).toBe(2.5);
     });
 
-    it('should adjust startWallTime correctly when seeking', () => {
+    it('should clamp seek to non-negative', () => {
       const snippet = {
-        name: 'test_seek_anchor',
-        snippetPlaybackRate: 2.0,
+        name: 'test_seek_negative',
         curves: {
-          '1': [
-            { time: 0, intensity: 0 },
-            { time: 4, intensity: 1 }
-          ]
+          '1': [{ time: 0, intensity: 0 }, { time: 1, intensity: 1 }]
         }
       };
 
       scheduler.loadFromJSON(snippet);
-      scheduler.seek('test_seek_anchor', 2.0);
+      scheduler.seek('test_seek_negative', -5);
 
       const state = machine.getSnapshot();
       const sn = state.context.animations[0];
 
-      // After seek, the current wall time should match the seek position
-      const now = performance.now();
-      const expectedLocal = ((now - sn.startWallTime) / 1000) * 2.0;
-
-      expect(expectedLocal).toBeCloseTo(2.0, 1);
+      expect(sn.currentTime).toBe(0);
     });
-  });
 
-  describe('Snippet Removal', () => {
-    it('should remove snippet by name', () => {
+    it('should clear ended flag when seeking', () => {
       const snippet = {
-        name: 'to_remove',
-        curves: { '1': [{ time: 0, intensity: 0 }] }
-      };
-
-      scheduler.loadFromJSON(snippet);
-
-      let state = machine.getSnapshot();
-      expect(state.context.animations).toHaveLength(1);
-
-      scheduler.remove('to_remove');
-
-      state = machine.getSnapshot();
-      expect(state.context.animations).toHaveLength(0);
-    });
-  });
-
-  describe('Completion Callbacks', () => {
-    it('should call onSnippetEnd when non-looping snippet completes', () => {
-      const snippet = {
-        name: 'test_complete',
+        name: 'test_seek_clear_ended',
         loop: false,
         curves: {
-          '1': [
-            { time: 0, intensity: 0 },
-            { time: 1, intensity: 1 }
-          ]
+          '1': [{ time: 0, intensity: 0 }, { time: 1, intensity: 1 }]
         }
       };
 
       scheduler.loadFromJSON(snippet);
-      scheduler.play();
+
+      // Seek to beginning should enable the snippet
+      scheduler.seek('test_seek_clear_ended', 0);
 
       const state = machine.getSnapshot();
       const sn = state.context.animations[0];
 
-      // Set to past duration
-      const now = performance.now();
-      sn.startWallTime = now - 2000; // 2 seconds ago, duration is 1 second
-
-      scheduler.step(0.016);
-
-      // Should have called completion callback
-      expect(mockHost.onSnippetEnd).toHaveBeenCalledWith('test_complete');
-    });
-
-    it('should not call onSnippetEnd for looping snippets', () => {
-      const snippet = {
-        name: 'test_loop_no_end',
-        loop: true,
-        curves: {
-          '1': [
-            { time: 0, intensity: 0 },
-            { time: 1, intensity: 1 }
-          ]
-        }
-      };
-
-      scheduler.loadFromJSON(snippet);
-      scheduler.play();
-
-      const state = machine.getSnapshot();
-      const sn = state.context.animations[0];
-
-      // Set to past duration
-      const now = performance.now();
-      sn.startWallTime = now - 2000;
-
-      scheduler.step(0.016);
-
-      // Should NOT call completion callback for looping
-      expect(mockHost.onSnippetEnd).not.toHaveBeenCalled();
+      expect(sn.isPlaying).toBe(true);
     });
   });
 
-  describe('Curve Sampling', () => {
-    it('should interpolate between keyframes', () => {
+  describe('Schedule Snapshot', () => {
+    it('should return schedule snapshot with all snippets', () => {
+      scheduler.loadFromJSON({ name: 'sn1', curves: { '1': [{ time: 0, intensity: 0 }, { time: 2, intensity: 1 }] } });
+      scheduler.loadFromJSON({ name: 'sn2', curves: { '2': [{ time: 0, intensity: 0 }, { time: 3, intensity: 1 }] } });
+
+      const snapshot = scheduler.getScheduleSnapshot();
+
+      expect(snapshot).toHaveLength(2);
+      expect(snapshot[0].name).toBe('sn1');
+      expect(snapshot[0].duration).toBe(2);
+      expect(snapshot[1].name).toBe('sn2');
+      expect(snapshot[1].duration).toBe(3);
+    });
+
+    it('should include playbackRate and intensityScale in snapshot', () => {
+      scheduler.loadFromJSON({
+        name: 'test_snapshot',
+        snippetPlaybackRate: 2.0,
+        snippetIntensityScale: 0.5,
+        curves: { '1': [{ time: 0, intensity: 0 }] }
+      });
+
+      const snapshot = scheduler.getScheduleSnapshot();
+
+      expect(snapshot[0].playbackRate).toBe(2.0);
+      expect(snapshot[0].intensityScale).toBe(0.5);
+    });
+  });
+
+  describe('Seek with Immediate Apply', () => {
+    it('should apply values immediately when seeking (scrubbing)', async () => {
       const snippet = {
-        name: 'test_interpolation',
+        name: 'test_scrub',
         curves: {
           '1': [
             { time: 0, intensity: 0 },
-            { time: 2, intensity: 1 }
+            { time: 1, intensity: 0.8 }
           ]
         }
       };
 
       scheduler.loadFromJSON(snippet);
-      scheduler.play();
-
-      const state = machine.getSnapshot();
-      const sn = state.context.animations[0];
-
-      // Set to middle of animation (1 second into 2 second duration)
-      const now = performance.now();
-      sn.startWallTime = now - 1000;
-
       appliedAUs = [];
-      scheduler.step(0.016);
 
-      // At t=1 in the curve [0,0] -> [2,1], value should be 0.5
-      const au1 = appliedAUs.find(au => au.id === 1);
+      // seek() now internally applies values immediately via applyAU
+      scheduler.seek('test_scrub', 0.5);
+
+      await vi.runAllTimersAsync();
+
+      // Should have called applyAU (immediate, not transitionAU)
+      expect(mockHost.applyAU).toHaveBeenCalled();
+      expect(appliedAUs.length).toBeGreaterThan(0);
+      const au1 = appliedAUs.find(a => a.id === 1);
       expect(au1).toBeDefined();
-      expect(au1!.value).toBeCloseTo(0.5, 1);
+      // At t=0.5, interpolated value should be ~0.4
+      expect(au1!.value).toBeCloseTo(0.4, 1);
     });
 
-    it('should clamp values to [0, 1]', () => {
+    it('should apply values even on paused snippets', async () => {
       const snippet = {
-        name: 'test_clamp',
+        name: 'test_scrub_paused',
         curves: {
-          '1': [
-            { time: 0, intensity: 2.0 } // Over 1.0
-          ]
+          '1': [{ time: 0, intensity: 0 }, { time: 1, intensity: 1 }]
         }
       };
 
       scheduler.loadFromJSON(snippet);
-      scheduler.play();
+
+      // Mark as paused
+      const state = machine.getSnapshot();
+      const sn = state.context.animations[0];
+      sn.isPlaying = false;
+
       appliedAUs = [];
+      scheduler.seek('test_scrub_paused', 0.5);
 
-      scheduler.step(0.016);
+      await vi.runAllTimersAsync();
 
-      // Value should be clamped to 1.0
+      // Should still apply values even when paused (scrubbing works on paused snippets)
+      expect(mockHost.applyAU).toHaveBeenCalled();
+      expect(appliedAUs.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('getCurrentValue()', () => {
+    it('should return 0 for AUs that have never been set', () => {
+      expect(scheduler.getCurrentValue('999')).toBe(0);
+    });
+
+    it('should return tracked value after seek', async () => {
+      const snippet = {
+        name: 'test_current_value',
+        curves: {
+          // Use time > 0 to avoid continuity feature replacing first keyframe
+          '5': [{ time: 0, intensity: 0 }, { time: 0.01, intensity: 0.7 }]
+        }
+      };
+
+      scheduler.loadFromJSON(snippet);
+      // seek() now applies values immediately and tracks currentValues
+      scheduler.seek('test_current_value', 0.01);
+
+      await vi.runAllTimersAsync();
+
+      // Should track the value
+      const value = scheduler.getCurrentValue('5');
+      expect(value).toBeCloseTo(0.7, 2);
+    });
+  });
+
+  describe('Priority Resolution (via seek)', () => {
+    it('should resolve conflicts by priority', async () => {
+      const highPriority = {
+        name: 'high',
+        snippetPriority: 10,
+        curves: {
+          '1': [{ time: 0.01, intensity: 0.3 }]
+        }
+      };
+
+      const lowPriority = {
+        name: 'low',
+        snippetPriority: 1,
+        curves: {
+          '1': [{ time: 0.01, intensity: 0.8 }]
+        }
+      };
+
+      scheduler.loadFromJSON(lowPriority);
+      scheduler.loadFromJSON(highPriority);
+
+      // Seek both to time 0.01 to hit the keyframes
+      // Note: The last seek() call applies all snippets' values immediately
+      appliedAUs = [];
+      scheduler.seek('low', 0.01);
+      scheduler.seek('high', 0.01);
+
+      await vi.runAllTimersAsync();
+
+      // High priority should win even with lower value
       const au1 = appliedAUs.find(au => au.id === 1);
       expect(au1).toBeDefined();
-      expect(au1!.value).toBeLessThanOrEqual(1.0);
+      expect(au1!.value).toBeCloseTo(0.3, 2);
+    });
+
+    it('should use higher value for same priority', async () => {
+      const snippet1 = {
+        name: 's1',
+        snippetPriority: 5,
+        curves: {
+          '1': [{ time: 0.01, intensity: 0.3 }]
+        }
+      };
+
+      const snippet2 = {
+        name: 's2',
+        snippetPriority: 5,
+        curves: {
+          '1': [{ time: 0.01, intensity: 0.8 }]
+        }
+      };
+
+      scheduler.loadFromJSON(snippet1);
+      scheduler.loadFromJSON(snippet2);
+
+      // Seek both - last seek applies all snippets
+      appliedAUs = [];
+      scheduler.seek('s1', 0.01);
+      scheduler.seek('s2', 0.01);
+
+      await vi.runAllTimersAsync();
+
+      // Same priority, higher value wins
+      const au1 = appliedAUs.find(au => au.id === 1);
+      expect(au1).toBeDefined();
+      expect(au1!.value).toBeCloseTo(0.8, 2);
+    });
+  });
+
+  describe('Intensity Scale (via seek)', () => {
+    it('should apply intensity scale to sampled values', async () => {
+      const snippet = {
+        name: 'test_intensity',
+        snippetIntensityScale: 0.5, // 50% intensity -> 0.5^2 = 0.25 multiplier
+        curves: {
+          '1': [{ time: 0.01, intensity: 1.0 }]
+        }
+      };
+
+      scheduler.loadFromJSON(snippet);
+      appliedAUs = [];
+      scheduler.seek('test_intensity', 0.01);
+
+      await vi.runAllTimersAsync();
+
+      // Value should be scaled: 1.0 * 0.25 = 0.25
+      const au1 = appliedAUs.find(au => au.id === 1);
+      expect(au1).toBeDefined();
+      expect(au1!.value).toBeCloseTo(0.25, 2);
     });
   });
 });

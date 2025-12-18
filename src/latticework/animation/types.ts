@@ -182,6 +182,12 @@ export interface SetLoopStateEvent {
   localTime?: number;
 }
 
+export interface SeekSnippetEvent {
+  type: 'SEEK_SNIPPET';
+  name: string;
+  time: number;
+}
+
 export type AnimEvent =
   | LoadAnimationEvent
   | RemoveAnimationEvent
@@ -194,7 +200,8 @@ export type AnimEvent =
   | ManualSetEvent
   | ManualClearEvent
   | SnippetLoopEvent
-  | SetLoopStateEvent;
+  | SetLoopStateEvent
+  | SeekSnippetEvent;
 
 // ---------- Scheduler plumbing ----------
 export type RuntimeSched = { name: string; startsAt: number; offset: number; enabled: boolean };

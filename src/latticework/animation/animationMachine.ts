@@ -89,7 +89,8 @@ export const animationMachine = createMachine({
         REMOVE_ANIMATION: { actions: 'removeSnippet' },
         PLAY_ALL: { target: 'playing', actions: 'markAllPlaying' },
         SNIPPET_LOOPED: { actions: 'updateLoopState' },
-        SET_LOOP_STATE: { actions: 'updateLoopState' }
+        SET_LOOP_STATE: { actions: 'updateLoopState' },
+        SEEK_SNIPPET: { actions: 'seekSnippet' }
       }
     },
     playing: {
@@ -104,7 +105,8 @@ export const animationMachine = createMachine({
         MANUAL_SET: { actions: 'manualSet' },
         MANUAL_CLEAR: { actions: 'manualClear' },
         SNIPPET_LOOPED: { actions: 'updateLoopState' },
-        SET_LOOP_STATE: { actions: 'updateLoopState' }
+        SET_LOOP_STATE: { actions: 'updateLoopState' },
+        SEEK_SNIPPET: { actions: 'seekSnippet' }
       }
     },
     paused: {
@@ -117,7 +119,8 @@ export const animationMachine = createMachine({
         MANUAL_SET: { actions: 'manualSet' },
         MANUAL_CLEAR: { actions: 'manualClear' },
         SNIPPET_LOOPED: { actions: 'updateLoopState' },
-        SET_LOOP_STATE: { actions: 'updateLoopState' }
+        SET_LOOP_STATE: { actions: 'updateLoopState' },
+        SEEK_SNIPPET: { actions: 'seekSnippet' }
       }
     }
   }
@@ -228,6 +231,22 @@ export const animationMachine = createMachine({
         const currentTime = ((now - sn.startWallTime) / 1000) * (sn.snippetPlaybackRate || 1);
         return { ...sn, currentTime };
       });
+      return { animations };
+    }),
+
+    seekSnippet: assign(({ context, event }) => {
+      if (event.type !== 'SEEK_SNIPPET') return {};
+      const { name, time } = event;
+      const idx = context.animations.findIndex((s) => s.name === name);
+      if (idx < 0) return {};
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const sn = context.animations[idx];
+      const rate = sn.snippetPlaybackRate || 1;
+      // Update currentTime and recalculate startWallTime to anchor at the new position
+      const newStartWallTime = now - (time / rate) * 1000;
+      const animations = context.animations.slice();
+      // Seeking enables the snippet for playback (clears ended state)
+      animations[idx] = { ...sn, currentTime: Math.max(0, time), startWallTime: newStartWallTime, isPlaying: true };
       return { animations };
     })
   }

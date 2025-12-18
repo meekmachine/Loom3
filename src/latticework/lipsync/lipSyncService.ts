@@ -37,8 +37,6 @@ const DEFAULT_CONFIG: Required<LipSyncConfig> = {
   jawActivation: 1.0,
   lipsyncIntensity: 1.0,
   speechRate: 1.0,
-  useEmotionalModulation: false,
-  useCoarticulation: true,
   onsetIntensity: 90,
   holdMs: 140,
   engine: 'webSpeech',
@@ -64,8 +62,6 @@ export function createLipSyncService(
         jawActivation: fullConfig.jawActivation,
         lipsyncIntensity: fullConfig.lipsyncIntensity,
         speechRate: fullConfig.speechRate,
-        useEmotionalModulation: fullConfig.useEmotionalModulation,
-        useCoarticulation: fullConfig.useCoarticulation,
       },
     },
   }).start();
@@ -101,8 +97,6 @@ export function createLipSyncService(
       jawActivation: fullConfig.jawActivation,
       lipsyncIntensity: fullConfig.lipsyncIntensity,
       speechRate: fullConfig.speechRate,
-      useEmotionalModulation: fullConfig.useEmotionalModulation,
-      useCoarticulation: fullConfig.useCoarticulation,
     }
   );
 
@@ -168,8 +162,6 @@ export function createLipSyncService(
           jawActivation: fullConfig.jawActivation,
           lipsyncIntensity: fullConfig.lipsyncIntensity,
           speechRate: fullConfig.speechRate,
-          useEmotionalModulation: fullConfig.useEmotionalModulation,
-          useCoarticulation: fullConfig.useCoarticulation,
         } as Partial<import('./lipSyncScheduler').LipSyncSchedulerConfig>,
       });
 
@@ -178,8 +170,6 @@ export function createLipSyncService(
         jawActivation: fullConfig.jawActivation,
         lipsyncIntensity: fullConfig.lipsyncIntensity,
         speechRate: fullConfig.speechRate,
-        useEmotionalModulation: fullConfig.useEmotionalModulation,
-        useCoarticulation: fullConfig.useCoarticulation,
       };
       scheduler.updateConfig(schedulerConfig);
     },

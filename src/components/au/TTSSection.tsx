@@ -15,7 +15,6 @@ import {
 } from '@chakra-ui/react';
 import DockableAccordionItem from './DockableAccordionItem';
 import { EngineThree } from '../../engine/EngineThree';
-import { EngineFour } from '../../engine/EngineFour';
 import { createTTSService } from '../../latticework/tts';
 import { createLipSyncService } from '../../latticework/lipsync';
 import type { TTSService } from '../../latticework/tts/ttsService';
@@ -23,8 +22,9 @@ import type { LipSyncServiceAPI } from '../../latticework/lipsync';
 import { useEngineState } from '../../context/engineContext';
 
 interface TTSSectionProps {
-  engine?: EngineThree | EngineFour | null;
+  engine?: EngineThree | null;
   disabled?: boolean;
+  defaultExpanded?: boolean;
 }
 
 /**
@@ -49,7 +49,7 @@ interface TTSSectionProps {
  * 5. Animation scheduler applies to ARKit morphs at 60fps
  * 6. Smooth return to neutral state after word/speech ends
  */
-export default function TTSSection({ engine, disabled = false }: TTSSectionProps) {
+export default function TTSSection({ engine, disabled = false, defaultExpanded = false }: TTSSectionProps) {
   const { anim } = useEngineState();
   const [text, setText] = useState('The saddest aspect of life right now is that science gathers knowledge faster than society gathers wisdom.');
   const [rate, setRate] = useState(1.0);
@@ -80,8 +80,6 @@ export default function TTSSection({ engine, disabled = false }: TTSSectionProps
         jawActivation,
         lipsyncIntensity,
         speechRate: rate,
-        useEmotionalModulation: false,
-        useCoarticulation: true,
       },
       {
         onSpeechStart: () => {
@@ -329,7 +327,7 @@ export default function TTSSection({ engine, disabled = false }: TTSSectionProps
   };
 
   return (
-    <DockableAccordionItem title="Text-to-Speech">
+    <DockableAccordionItem title="Text-to-Speech" isDefaultExpanded={defaultExpanded}>
       <VStack spacing={4} mt={2} align="stretch">
         {/* Status Badge */}
         <HStack>

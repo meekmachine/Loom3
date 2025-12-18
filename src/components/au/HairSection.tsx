@@ -20,6 +20,7 @@ import DockableAccordionItem from './DockableAccordionItem';
 interface HairSectionProps {
   hairService: HairService | null;
   disabled?: boolean;
+  defaultExpanded?: boolean;
 }
 
 // Physics config interface matching HairService (updated for Ammo.js)
@@ -40,7 +41,7 @@ interface PhysicsConfig {
   windFrequency: number;  // Turbulence speed (0.5-5)
 }
 
-export default function HairSection({ hairService, disabled = false }: HairSectionProps) {
+export default function HairSection({ hairService, disabled = false, defaultExpanded = false }: HairSectionProps) {
   const [state, setState] = useState<HairState | null>(null);
   const [availableMorphs, setAvailableMorphs] = useState<string[]>([]);
   const [physicsConfig, setPhysicsConfig] = useState<PhysicsConfig | null>(null);
@@ -76,7 +77,7 @@ export default function HairSection({ hairService, disabled = false }: HairSecti
 
   if (!hairService || !state) {
     return (
-      <DockableAccordionItem title="Hair & Eyebrows">
+      <DockableAccordionItem title="Hair & Eyebrows" isDefaultExpanded={defaultExpanded}>
         <Box p={2}>
           <Text fontSize="sm" color="gray.400">
             No hair service available
@@ -194,7 +195,7 @@ export default function HairSection({ hairService, disabled = false }: HairSecti
   const colorPresetKeys = Object.keys(HAIR_COLOR_PRESETS);
 
   return (
-    <DockableAccordionItem title="Hair & Eyebrows">
+    <DockableAccordionItem title="Hair & Eyebrows" isDefaultExpanded={defaultExpanded}>
       <VStack spacing={4} align="stretch" p={2}>
         {/* HAIR SECTION */}
         <Box>

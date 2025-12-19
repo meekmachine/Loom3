@@ -90,28 +90,20 @@ export default function PlaybackControls() {
     if (!anim) return;
 
     // Get initial state
-    const updateSnippets = () => {
-      const state = anim.getState?.();
-      if (state?.context?.animations) {
-        setSnippets([...state.context.animations]);
-      }
-    };
+    const state = anim.getState?.();
+    if (state?.context?.animations) {
+      setSnippets([...state.context.animations]);
+    }
 
-    updateSnippets();
-
-    // Subscribe to changes (if available)
+    // Subscribe to changes via onTransition (fires on actual state machine changes)
     const unsub = anim.onTransition?.((st: any) => {
       if (st?.context?.animations) {
         setSnippets([...st.context.animations]);
       }
     });
 
-    // Also poll periodically to catch any missed updates
-    const interval = setInterval(updateSnippets, 100);
-
     return () => {
       unsub?.();
-      clearInterval(interval);
     };
   }, [anim]);
 

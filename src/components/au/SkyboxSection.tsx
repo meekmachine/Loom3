@@ -186,6 +186,7 @@ export default function SkyboxSection({ engine, disabled = false, defaultExpande
                 <SliderThumb boxSize={4} />
               </Slider>
             </Box>
+
           </>
         )}
 

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Drawer,
   DrawerBody,
@@ -78,6 +78,14 @@ function curvePointsToKeyframes(points: CurvePoint[]): Keyframe[] {
   }));
 }
 
+// Section header component - defined outside to prevent recreation on every render
+const SectionHeader = ({ icon: Icon, label }: { icon: React.ElementType; label: string }) => (
+  <HStack spacing={2} mb={2}>
+    <Icon />
+    <Heading size="sm" color="white">{label}</Heading>
+  </HStack>
+);
+
 export default function SliderDrawer({
   isOpen,
   onToggle,
@@ -125,65 +133,66 @@ export default function SliderDrawer({
   const [auSnippetCurves, setAuSnippetCurves] = useState<Record<string, SnippetCurveData[]>>({});
   const [visemeSnippetCurves, setVisemeSnippetCurves] = useState<Record<string, SnippetCurveData[]>>({});
 
+  // Use ref to avoid re-subscribing when showOnlyPlayingSnippets changes
+  const showOnlyPlayingRef = useRef(showOnlyPlayingSnippets);
+  showOnlyPlayingRef.current = showOnlyPlayingSnippets;
+
+  // Stable callback to process animation snapshots - prevents circular re-renders
+  const processAnimationSnapshot = useCallback((snapshot: any) => {
+    const animations = (snapshot?.context?.animations as NormalizedSnippet[]) || [];
+
+    // Rebuild curve data from current animations
+    const newAuCurves: Record<string, SnippetCurveData[]> = {};
+    const newVisemeCurves: Record<string, SnippetCurveData[]> = {};
+
+    animations.forEach(snippet => {
+      if (!snippet.curves) return;
+
+      // Filter by playing state if enabled (use ref to get current value)
+      if (showOnlyPlayingRef.current && !snippet.isPlaying) return;
+
+      const currentTime = snippet.currentTime || 0;
+
+      Object.entries(snippet.curves).forEach(([curveId, points]) => {
+        const keyframes = curvePointsToKeyframes(points);
+        const curveData: SnippetCurveData = {
+          snippetName: snippet.name,
+          keyframes,
+          snippet: { ...snippet, currentTime }
+        };
+
+        // Check snippet category to determine if it's AU or viseme
+        // Visemes use indices 0-14, AUs use indices >= 15
+        const curveIdNum = parseInt(curveId);
+        const isVisemeIndex = !isNaN(curveIdNum) && curveIdNum >= 0 && curveIdNum <= 14;
+
+        if (snippet.snippetCategory === 'visemeSnippet' || isVisemeIndex) {
+          if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
+          newVisemeCurves[curveId].push(curveData);
+        } else if (/^\d+$/.test(curveId)) {
+          // Numeric IDs >= 15 are AUs
+          if (!newAuCurves[curveId]) newAuCurves[curveId] = [];
+          newAuCurves[curveId].push(curveData);
+        } else {
+          // Non-numeric IDs (like viseme names) go to visemes
+          if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
+          newVisemeCurves[curveId].push(curveData);
+        }
+      });
+    });
+
+    setAuSnippetCurves(newAuCurves);
+    setVisemeSnippetCurves(newVisemeCurves);
+  }, []); // No dependencies - uses refs for mutable values
 
   // Subscribe to animation machine state transitions
   // This only fires when animations are added/removed/played/paused - NOT every frame
   useEffect(() => {
     if (!anim?.onTransition) return;
 
-    console.log('[SliderDrawer] Setting up onTransition subscriber');
-
-    const unsubscribe = anim.onTransition((snapshot: any) => {
-      const animations = (snapshot?.context?.animations as NormalizedSnippet[]) || [];
-
-      console.log('[SliderDrawer] Animation state changed, rebuilding curves for', animations.length, 'snippets');
-
-      // Rebuild curve data from current animations
-      const newAuCurves: Record<string, SnippetCurveData[]> = {};
-      const newVisemeCurves: Record<string, SnippetCurveData[]> = {};
-
-      animations.forEach(snippet => {
-        if (!snippet.curves) return;
-
-        // Filter by playing state if enabled
-        if (showOnlyPlayingSnippets && !snippet.isPlaying) return;
-
-        const currentTime = snippet.currentTime || 0;
-
-        Object.entries(snippet.curves).forEach(([curveId, points]) => {
-          const keyframes = curvePointsToKeyframes(points);
-          const curveData: SnippetCurveData = {
-            snippetName: snippet.name,
-            keyframes,
-            snippet: { ...snippet, currentTime }
-          };
-
-          // Check snippet category to determine if it's AU or viseme
-          // Visemes use indices 0-14, AUs use indices >= 15
-          const curveIdNum = parseInt(curveId);
-          const isVisemeIndex = !isNaN(curveIdNum) && curveIdNum >= 0 && curveIdNum <= 14;
-
-          if (snippet.snippetCategory === 'visemeSnippet' || isVisemeIndex) {
-            if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
-            newVisemeCurves[curveId].push(curveData);
-          } else if (/^\d+$/.test(curveId)) {
-            // Numeric IDs >= 15 are AUs
-            if (!newAuCurves[curveId]) newAuCurves[curveId] = [];
-            newAuCurves[curveId].push(curveData);
-          } else {
-            // Non-numeric IDs (like viseme names) go to visemes
-            if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
-            newVisemeCurves[curveId].push(curveData);
-          }
-        });
-      });
-
-      setAuSnippetCurves(newAuCurves);
-      setVisemeSnippetCurves(newVisemeCurves);
-    });
-
+    const unsubscribe = anim.onTransition(processAnimationSnapshot);
     return unsubscribe;
-  }, [anim, showOnlyPlayingSnippets]);
+  }, [anim, processAnimationSnapshot]);
 
   // Convert AU_INFO to array
   const actionUnits = useMemo(() => {
@@ -237,14 +246,6 @@ export default function SliderDrawer({
   const handleVisemeChange = (key: string, value: number) => {
     setVisemeStates(prev => ({ ...prev, [key]: value }));
   };
-
-  // Section header component for consistent styling
-  const SectionHeader = ({ icon: Icon, label }: { icon: React.ElementType; label: string }) => (
-    <HStack spacing={2} mb={2}>
-      <Icon />
-      <Heading size="sm" color="white">{label}</Heading>
-    </HStack>
-  );
 
   return (
     <>

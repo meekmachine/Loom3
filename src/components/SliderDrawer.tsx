@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
 import {
   Drawer,
   DrawerBody,
@@ -13,7 +13,6 @@ import {
   Switch,
   Text,
   Tooltip,
-  Heading
 } from '@chakra-ui/react';
 import { FaBars, FaPlay, FaSmile, FaComment, FaEye, FaCut, FaCubes, FaMicrophone, FaRegEyeSlash, FaGlobe } from 'react-icons/fa';
 import { AU_INFO, AUInfo } from '../engine/arkit/shapeDict';
@@ -27,6 +26,11 @@ import DockableAccordionItem from './au/DockableAccordionItem';
 import PlaybackControls from './PlaybackControls';
 import MeshPanel from './au/MeshPanel';
 import SkyboxSection from './au/SkyboxSection';
+import { useThreeState } from '../context/threeContext';
+import type { NormalizedSnippet, CurvePoint } from '../latticework/animation/types';
+import { HairService } from '../latticework/hair/hairService';
+import { BlinkService } from '../latticework/blink/blinkService';
+import { EngineThree } from '../engine/EngineThree';
 
 // Tab definitions
 type TabId = 'animation' | 'speech' | 'blink' | 'aus' | 'visemes' | 'tracking' | 'hair' | 'meshes' | 'skybox';
@@ -48,10 +52,6 @@ const TABS: TabDef[] = [
   { id: 'meshes', icon: FaCubes, label: 'Meshes' },
   { id: 'skybox', icon: FaGlobe, label: 'Skybox' },
 ];
-import { useThreeState } from '../context/threeContext';
-import type { NormalizedSnippet, CurvePoint } from '../latticework/animation/types';
-import { HairService } from '../latticework/hair/hairService';
-import { BlinkService } from '../latticework/blink/blinkService';
 
 interface SliderDrawerProps {
   isOpen: boolean;
@@ -70,7 +70,6 @@ type SnippetCurveData = {
 };
 
 // Helper to convert CurvePoint[] to Keyframe[]
-// Normalizes intensity from 0-100 to 0-1 range
 function curvePointsToKeyframes(points: CurvePoint[]): Keyframe[] {
   return points.map(p => ({
     time: p.time,
@@ -78,128 +77,225 @@ function curvePointsToKeyframes(points: CurvePoint[]): Keyframe[] {
   }));
 }
 
-// Section header component - defined outside to prevent recreation on every render
-const SectionHeader = ({ icon: Icon, label }: { icon: React.ElementType; label: string }) => (
-  <HStack spacing={2} mb={2}>
-    <Icon />
-    <Heading size="sm" color="white">{label}</Heading>
-  </HStack>
-);
+// Memoized tab button with stable onClick
+const TabButton = memo(({
+  tabId,
+  icon: Icon,
+  label,
+  isActive,
+  onTabClick
+}: {
+  tabId: TabId;
+  icon: React.ElementType;
+  label: string;
+  isActive: boolean;
+  onTabClick: (id: TabId) => void;
+}) => {
+  const handleClick = useCallback(() => {
+    onTabClick(tabId);
+  }, [tabId, onTabClick]);
 
-export default function SliderDrawer({
-  isOpen,
-  onToggle,
-  disabled = false,
-  hairService,
-  blinkService
-}: SliderDrawerProps) {
-  const { engine, anim } = useThreeState();
+  return (
+    <Tooltip label={label} placement="right" hasArrow>
+      <IconButton
+        aria-label={label}
+        icon={<Icon />}
+        onClick={handleClick}
+        variant={isActive ? 'solid' : 'ghost'}
+        colorScheme={isActive ? 'brand' : 'gray'}
+        size="lg"
+        fontSize="xl"
+        color={isActive ? 'white' : 'gray.300'}
+        bg={isActive ? 'brand.500' : 'transparent'}
+        _hover={{
+          bg: isActive ? 'brand.400' : 'gray.700',
+          color: 'white',
+          transform: 'scale(1.1)',
+        }}
+        transition="all 0.2s"
+      />
+    </Tooltip>
+  );
+});
 
-  // Refs for each section to enable scroll-to-section
-  const sectionRefs = useRef<Record<TabId, HTMLDivElement | null>>({
-    animation: null,
-    speech: null,
-    blink: null,
-    aus: null,
-    visemes: null,
-    tracking: null,
-    hair: null,
-    meshes: null,
-    skybox: null,
-  });
+// Memoized tab bar
+const TabBar = memo(({
+  activeTab,
+  onTabClick
+}: {
+  activeTab: TabId;
+  onTabClick: (tab: TabId) => void;
+}) => (
+  <VStack
+    spacing={1}
+    py={4}
+    px={2}
+    bg="gray.900"
+    borderRight="1px solid"
+    borderColor="gray.700"
+    align="center"
+  >
+    {TABS.map((tab) => (
+      <TabButton
+        key={tab.id}
+        tabId={tab.id}
+        icon={tab.icon}
+        label={tab.label}
+        isActive={activeTab === tab.id}
+        onTabClick={onTabClick}
+      />
+    ))}
+  </VStack>
+));
 
-  // Active tab state (for visual indicator)
-  const [activeTab, setActiveTab] = useState<TabId>('animation');
+// ============ Individual Tab Content Components ============
 
-  // Scroll to section when tab is clicked
-  const scrollToSection = (tabId: TabId) => {
-    setActiveTab(tabId);
-    const sectionEl = sectionRefs.current[tabId];
-    if (sectionEl) {
-      sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
+// Animation Tab
+const AnimationTabContent = memo(() => (
+  <DockableAccordionItem title="Playback Controls" isDefaultExpanded>
+    <PlaybackControls />
+  </DockableAccordionItem>
+));
 
-  // Track AU intensities in local state for UI
-  const [auStates, setAuStates] = useState<Record<string, number>>({});
-  const [visemeStates, setVisemeStates] = useState<Record<string, number>>({});
-  const [showUnusedSliders, setShowUnusedSliders] = useState(false);
+// Speech Tab
+const SpeechTabContent = memo(({ engine, disabled }: { engine: EngineThree | null; disabled: boolean }) => (
+  <TTSSection engine={engine} disabled={disabled} defaultExpanded />
+));
+
+// Blink Tab
+const BlinkTabContent = memo(({ blinkService, disabled }: { blinkService: BlinkService | null; disabled: boolean }) => (
+  <BlinkSection blinkService={blinkService} disabled={disabled} defaultExpanded />
+));
+
+// Tracking Tab
+const TrackingTabContent = memo(({ engine, disabled }: { engine: EngineThree | null; disabled: boolean }) => (
+  <EyeHeadTrackingSection engine={engine} disabled={disabled} defaultExpanded />
+));
+
+// Hair Tab
+const HairTabContent = memo(({ hairService, disabled }: { hairService: HairService | null; disabled: boolean }) => (
+  <HairSection hairService={hairService} disabled={disabled} defaultExpanded />
+));
+
+// Meshes Tab
+const MeshesTabContent = memo(({ engine }: { engine: EngineThree | null }) => (
+  <MeshPanel engine={engine} defaultExpanded />
+));
+
+// Skybox Tab
+const SkyboxTabContent = memo(({ engine, disabled }: { engine: EngineThree | null; disabled: boolean }) => (
+  <SkyboxSection engine={engine} disabled={disabled} defaultExpanded />
+));
+
+// AU Controls panel
+const AUControlsPanel = memo(({
+  onResetToNeutral,
+  useCurveEditor,
+  onUseCurveEditorChange,
+  showOnlyPlayingSnippets,
+  onShowOnlyPlayingChange,
+  segmentationMode,
+  onSegmentationModeToggle
+}: {
+  onResetToNeutral: () => void;
+  useCurveEditor: boolean;
+  onUseCurveEditorChange: (v: boolean) => void;
+  showOnlyPlayingSnippets: boolean;
+  onShowOnlyPlayingChange: (v: boolean) => void;
+  segmentationMode: 'facePart' | 'faceArea';
+  onSegmentationModeToggle: () => void;
+}) => (
+  <Box p={3} bg="gray.750" borderRadius="md">
+    <VStack spacing={2} align="stretch">
+      <Button size="sm" onClick={onResetToNeutral} colorScheme="red" fontWeight="semibold">
+        Reset to Neutral
+      </Button>
+      <HStack justify="space-between">
+        <Text fontSize="sm" color="gray.300">Use curve editor</Text>
+        <Switch
+          isChecked={useCurveEditor}
+          onChange={(e) => onUseCurveEditorChange(e.target.checked)}
+          size="sm"
+          colorScheme="brand"
+        />
+      </HStack>
+      {useCurveEditor && (
+        <HStack justify="space-between">
+          <Text fontSize="sm" color="gray.300">Show only playing</Text>
+          <Switch
+            isChecked={showOnlyPlayingSnippets}
+            onChange={(e) => onShowOnlyPlayingChange(e.target.checked)}
+            size="sm"
+            colorScheme="green"
+          />
+        </HStack>
+      )}
+      <HStack justify="space-between">
+        <Text fontSize="sm" color="gray.300">Group by</Text>
+        <Button
+          size="xs"
+          onClick={onSegmentationModeToggle}
+          colorScheme="brand"
+          variant="outline"
+        >
+          {segmentationMode === 'facePart' ? 'Face Part' : 'Face Area'}
+        </Button>
+      </HStack>
+    </VStack>
+  </Box>
+));
+
+// AU Tab - complex, has its own state
+const AUTabContent = memo(({ engine, disabled }: { engine: EngineThree | null; disabled: boolean }) => {
+  const { anim } = useThreeState();
+
   const [segmentationMode, setSegmentationMode] = useState<'facePart' | 'faceArea'>('facePart');
-
-  // Curve editor mode and snippet data
   const [useCurveEditor, setUseCurveEditor] = useState(false);
   const [showOnlyPlayingSnippets, setShowOnlyPlayingSnippets] = useState(false);
-  // Map of AU/Viseme ID -> array of snippet curve data
   const [auSnippetCurves, setAuSnippetCurves] = useState<Record<string, SnippetCurveData[]>>({});
-  const [visemeSnippetCurves, setVisemeSnippetCurves] = useState<Record<string, SnippetCurveData[]>>({});
 
-  // Use ref to avoid re-subscribing when showOnlyPlayingSnippets changes
   const showOnlyPlayingRef = useRef(showOnlyPlayingSnippets);
   showOnlyPlayingRef.current = showOnlyPlayingSnippets;
 
-  // Stable callback to process animation snapshots - prevents circular re-renders
   const processAnimationSnapshot = useCallback((snapshot: any) => {
     const animations = (snapshot?.context?.animations as NormalizedSnippet[]) || [];
-
-    // Rebuild curve data from current animations
     const newAuCurves: Record<string, SnippetCurveData[]> = {};
-    const newVisemeCurves: Record<string, SnippetCurveData[]> = {};
 
     animations.forEach(snippet => {
       if (!snippet.curves) return;
-
-      // Filter by playing state if enabled (use ref to get current value)
       if (showOnlyPlayingRef.current && !snippet.isPlaying) return;
 
       const currentTime = snippet.currentTime || 0;
 
       Object.entries(snippet.curves).forEach(([curveId, points]) => {
-        const keyframes = curvePointsToKeyframes(points);
-        const curveData: SnippetCurveData = {
-          snippetName: snippet.name,
-          keyframes,
-          snippet: { ...snippet, currentTime }
-        };
-
-        // Check snippet category to determine if it's AU or viseme
-        // Visemes use indices 0-14, AUs use indices >= 15
         const curveIdNum = parseInt(curveId);
         const isVisemeIndex = !isNaN(curveIdNum) && curveIdNum >= 0 && curveIdNum <= 14;
 
-        if (snippet.snippetCategory === 'visemeSnippet' || isVisemeIndex) {
-          if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
-          newVisemeCurves[curveId].push(curveData);
-        } else if (/^\d+$/.test(curveId)) {
-          // Numeric IDs >= 15 are AUs
-          if (!newAuCurves[curveId]) newAuCurves[curveId] = [];
-          newAuCurves[curveId].push(curveData);
-        } else {
-          // Non-numeric IDs (like viseme names) go to visemes
-          if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
-          newVisemeCurves[curveId].push(curveData);
-        }
+        // Only process AU curves (not visemes)
+        if (snippet.snippetCategory === 'visemeSnippet' || isVisemeIndex) return;
+        if (!/^\d+$/.test(curveId)) return;
+
+        const keyframes = curvePointsToKeyframes(points);
+        if (!newAuCurves[curveId]) newAuCurves[curveId] = [];
+        newAuCurves[curveId].push({
+          snippetName: snippet.name,
+          keyframes,
+          snippet: { ...snippet, currentTime }
+        });
       });
     });
 
     setAuSnippetCurves(newAuCurves);
-    setVisemeSnippetCurves(newVisemeCurves);
-  }, []); // No dependencies - uses refs for mutable values
+  }, []);
 
-  // Subscribe to animation machine state transitions
-  // This only fires when animations are added/removed/played/paused - NOT every frame
   useEffect(() => {
     if (!anim?.onTransition) return;
-
     const unsubscribe = anim.onTransition(processAnimationSnapshot);
     return unsubscribe;
   }, [anim, processAnimationSnapshot]);
 
-  // Convert AU_INFO to array
-  const actionUnits = useMemo(() => {
-    return Object.values(AU_INFO);
-  }, []);
+  const actionUnits = useMemo(() => Object.values(AU_INFO), []);
 
-  // Group AUs by facePart or faceArea
   const auGroups = useMemo(() => {
     const groups: Record<string, AUInfo[]> = {};
     actionUnits.forEach((au) => {
@@ -212,40 +308,127 @@ export default function SliderDrawer({
     return groups;
   }, [actionUnits, segmentationMode]);
 
-  // Filter sections to hide empty ones when showUnusedSliders is false
   const filteredSections = useMemo(() => {
-    const entries = Object.entries(auGroups);
+    const sectionNames = Object.keys(auGroups).sort();
+    return sectionNames.map(name => ({
+      name,
+      aus: auGroups[name]
+    }));
+  }, [auGroups]);
 
-    // In curve editor mode, always show all sections (user can choose which to view)
-    if (useCurveEditor) {
-      return entries;
-    }
-
-    // In slider mode, respect the showUnusedSliders toggle
-    if (showUnusedSliders) return entries;
-    return entries.filter(([_, aus]) => {
-      // Check if any AU has a value > 0
-      return aus.some(au => (auStates[au.id] ?? 0) > 0);
-    });
-  }, [auGroups, auStates, showUnusedSliders, useCurveEditor]);
-
-  // Reset face to neutral - uses comprehensive engine method that resets both morphs and bones
-  const setFaceToNeutral = () => {
+  const handleResetToNeutral = useCallback(() => {
     engine?.resetToNeutral();
-    // Clear local UI state
-    setAuStates({});
-    setVisemeStates({});
-  };
+  }, [engine]);
 
-  // Handle AU changes
-  const handleAUChange = (id: string, value: number) => {
-    setAuStates(prev => ({ ...prev, [id]: value }));
-  };
+  const handleSegmentationModeToggle = useCallback(() => {
+    setSegmentationMode(prev => prev === 'facePart' ? 'faceArea' : 'facePart');
+  }, []);
 
-  // Handle Viseme changes
-  const handleVisemeChange = (key: string, value: number) => {
-    setVisemeStates(prev => ({ ...prev, [key]: value }));
-  };
+  return (
+    <VStack spacing={4} align="stretch">
+      <AUControlsPanel
+        onResetToNeutral={handleResetToNeutral}
+        useCurveEditor={useCurveEditor}
+        onUseCurveEditorChange={setUseCurveEditor}
+        showOnlyPlayingSnippets={showOnlyPlayingSnippets}
+        onShowOnlyPlayingChange={setShowOnlyPlayingSnippets}
+        segmentationMode={segmentationMode}
+        onSegmentationModeToggle={handleSegmentationModeToggle}
+      />
+      <Accordion allowMultiple>
+        {filteredSections.map((sectionData) => (
+          <AUSection
+            key={sectionData.name}
+            section={sectionData.name}
+            aus={sectionData.aus}
+            engine={engine}
+            disabled={disabled}
+            useCurveEditor={useCurveEditor}
+            auSnippetCurves={auSnippetCurves}
+          />
+        ))}
+      </Accordion>
+    </VStack>
+  );
+});
+
+// Visemes Tab - has its own curve state
+const VisemesTabContent = memo(({ engine, disabled }: { engine: EngineThree | null; disabled: boolean }) => {
+  const { anim } = useThreeState();
+
+  const [useCurveEditor, setUseCurveEditor] = useState(false);
+  const [visemeSnippetCurves, setVisemeSnippetCurves] = useState<Record<string, SnippetCurveData[]>>({});
+
+  const processAnimationSnapshot = useCallback((snapshot: any) => {
+    const animations = (snapshot?.context?.animations as NormalizedSnippet[]) || [];
+    const newVisemeCurves: Record<string, SnippetCurveData[]> = {};
+
+    animations.forEach(snippet => {
+      if (!snippet.curves) return;
+
+      const currentTime = snippet.currentTime || 0;
+
+      Object.entries(snippet.curves).forEach(([curveId, points]) => {
+        const curveIdNum = parseInt(curveId);
+        const isVisemeIndex = !isNaN(curveIdNum) && curveIdNum >= 0 && curveIdNum <= 14;
+
+        // Only process viseme curves
+        if (snippet.snippetCategory !== 'visemeSnippet' && !isVisemeIndex && /^\d+$/.test(curveId)) return;
+
+        const keyframes = curvePointsToKeyframes(points);
+        if (!newVisemeCurves[curveId]) newVisemeCurves[curveId] = [];
+        newVisemeCurves[curveId].push({
+          snippetName: snippet.name,
+          keyframes,
+          snippet: { ...snippet, currentTime }
+        });
+      });
+    });
+
+    setVisemeSnippetCurves(newVisemeCurves);
+  }, []);
+
+  useEffect(() => {
+    if (!anim?.onTransition) return;
+    const unsubscribe = anim.onTransition(processAnimationSnapshot);
+    return unsubscribe;
+  }, [anim, processAnimationSnapshot]);
+
+  return (
+    <VisemeSection
+      engine={engine}
+      disabled={disabled}
+      useCurveEditor={useCurveEditor}
+      visemeSnippetCurves={visemeSnippetCurves}
+      defaultExpanded
+    />
+  );
+});
+
+// ============ Main Drawer Component ============
+
+export default function SliderDrawer({
+  isOpen,
+  onToggle,
+  disabled = false,
+  hairService,
+  blinkService
+}: SliderDrawerProps) {
+  const { engine } = useThreeState();
+
+  const [activeTab, setActiveTab] = useState<TabId>('animation');
+
+  // Lazy rendering - only render content after first open
+  const hasBeenOpenedRef = useRef(false);
+  if (isOpen && !hasBeenOpenedRef.current) {
+    hasBeenOpenedRef.current = true;
+  }
+  const hasBeenOpened = hasBeenOpenedRef.current;
+
+  // Stable tab click handler
+  const handleTabClick = useCallback((tabId: TabId) => {
+    setActiveTab(tabId);
+  }, []);
 
   return (
     <>
@@ -269,195 +452,31 @@ export default function SliderDrawer({
         placement="left"
         onClose={onToggle}
         size="md"
+        motionPreset="none"
       >
-        <DrawerContent
-          zIndex={9999}
-          bg="rgba(255, 255, 255, 0.5)"
-          backdropFilter="blur(10px)"
-          sx={{
-            WebkitBackdropFilter: "blur(10px)",
-          }}
-        >
-          <DrawerCloseButton color="gray.400" _hover={{ color: 'gray.200', bg: 'gray.700' }} />
+        {!isOpen && !hasBeenOpened ? null : (
+          <DrawerContent zIndex={9999} bg="gray.800">
+            <DrawerCloseButton color="gray.400" _hover={{ color: 'gray.200', bg: 'gray.700' }} />
 
-          {/* Main layout: vertical tabs on left, content on right */}
-          <HStack align="stretch" h="100%" spacing={0}>
-            {/* Vertical Tab Bar */}
-            <VStack
-              spacing={1}
-              py={4}
-              px={2}
-              bg="gray.900"
-              borderRight="1px solid"
-              borderColor="gray.700"
-              align="center"
-            >
-              {TABS.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <Tooltip key={tab.id} label={tab.label} placement="right" hasArrow>
-                    <IconButton
-                      aria-label={tab.label}
-                      icon={<Icon />}
-                      onClick={() => scrollToSection(tab.id)}
-                      variant={isActive ? 'solid' : 'ghost'}
-                      colorScheme={isActive ? 'brand' : 'gray'}
-                      size="lg"
-                      fontSize="xl"
-                      color={isActive ? 'white' : 'gray.300'}
-                      bg={isActive ? 'brand.500' : 'transparent'}
-                      _hover={{
-                        bg: isActive ? 'brand.400' : 'gray.700',
-                        color: 'white',
-                        transform: 'scale(1.1)',
-                      }}
-                      transition="all 0.2s"
-                    />
-                  </Tooltip>
-                );
-              })}
-            </VStack>
+            <HStack align="stretch" h="100%" spacing={0}>
+              <TabBar activeTab={activeTab} onTabClick={handleTabClick} />
 
-            {/* Content Area - All sections scrollable */}
-            <Box flex={1} display="flex" flexDirection="column" overflow="hidden">
-              <DrawerBody bg="transparent" flex={1} overflowY="auto" pt={4}>
-                <VStack spacing={6} align="stretch">
-                  {/* Animation Section */}
-                  <Box ref={(el) => { sectionRefs.current.animation = el; }}>
-                    <SectionHeader icon={FaPlay} label="Animation" />
-                    <DockableAccordionItem title="Playback Controls" isDefaultExpanded>
-                      <PlaybackControls />
-                    </DockableAccordionItem>
-                  </Box>
-
-                  {/* Speech Section */}
-                  <Box ref={(el) => { sectionRefs.current.speech = el; }}>
-                    <SectionHeader icon={FaMicrophone} label="Speech" />
-                    <TTSSection engine={engine} disabled={disabled} defaultExpanded />
-                  </Box>
-
-                  {/* Blink Section */}
-                  <Box ref={(el) => { sectionRefs.current.blink = el; }}>
-                    <SectionHeader icon={FaRegEyeSlash} label="Blink" />
-                    <BlinkSection blinkService={blinkService} disabled={disabled} defaultExpanded />
-                  </Box>
-
-                  {/* Action Units Section */}
-                  <Box ref={(el) => { sectionRefs.current.aus = el; }}>
-                    <SectionHeader icon={FaSmile} label="Action Units" />
-                    <VStack spacing={4} align="stretch">
-                      {/* AU Controls */}
-                      <Box p={3} bg="gray.750" borderRadius="md">
-                        <VStack spacing={2} align="stretch">
-                          <Button size="sm" onClick={setFaceToNeutral} colorScheme="red" fontWeight="semibold">
-                            Reset to Neutral
-                          </Button>
-                          <HStack justify="space-between">
-                            <Text fontSize="sm" color="gray.300">Use curve editor</Text>
-                            <Switch
-                              isChecked={useCurveEditor}
-                              onChange={(e) => setUseCurveEditor(e.target.checked)}
-                              size="sm"
-                              colorScheme="brand"
-                            />
-                          </HStack>
-                          {useCurveEditor && (
-                            <HStack justify="space-between">
-                              <Text fontSize="sm" color="gray.300">Show only playing</Text>
-                              <Switch
-                                isChecked={showOnlyPlayingSnippets}
-                                onChange={(e) => setShowOnlyPlayingSnippets(e.target.checked)}
-                                size="sm"
-                                colorScheme="green"
-                              />
-                            </HStack>
-                          )}
-                          <HStack justify="space-between">
-                            <Text fontSize="sm" color="gray.300">Show unused sliders</Text>
-                            <Switch
-                              isChecked={showUnusedSliders}
-                              onChange={(e) => setShowUnusedSliders(e.target.checked)}
-                              size="sm"
-                              colorScheme="brand"
-                            />
-                          </HStack>
-                          <HStack justify="space-between">
-                            <Text fontSize="sm" color="gray.300">Group by</Text>
-                            <Button
-                              size="xs"
-                              onClick={() => setSegmentationMode(prev =>
-                                prev === 'facePart' ? 'faceArea' : 'facePart'
-                              )}
-                              colorScheme="brand"
-                              variant="outline"
-                            >
-                              {segmentationMode === 'facePart' ? 'Face Part' : 'Face Area'}
-                            </Button>
-                          </HStack>
-                        </VStack>
-                      </Box>
-                      <Accordion allowMultiple>
-                        {filteredSections.map(([section, aus]) => (
-                          <AUSection
-                            key={section}
-                            section={section}
-                            aus={aus}
-                            auStates={auStates}
-                            engine={engine}
-                            showUnusedSliders={showUnusedSliders}
-                            onAUChange={handleAUChange}
-                            disabled={disabled}
-                            useCurveEditor={useCurveEditor}
-                            auSnippetCurves={auSnippetCurves}
-                          />
-                        ))}
-                      </Accordion>
-                    </VStack>
-                  </Box>
-
-                  {/* Visemes Section */}
-                  <Box ref={(el) => { sectionRefs.current.visemes = el; }}>
-                    <SectionHeader icon={FaComment} label="Visemes" />
-                    <VisemeSection
-                      engine={engine}
-                      visemeStates={visemeStates}
-                      onVisemeChange={handleVisemeChange}
-                      disabled={disabled}
-                      useCurveEditor={useCurveEditor}
-                      visemeSnippetCurves={visemeSnippetCurves}
-                      defaultExpanded
-                    />
-                  </Box>
-
-                  {/* Eye & Head Tracking Section */}
-                  <Box ref={(el) => { sectionRefs.current.tracking = el; }}>
-                    <SectionHeader icon={FaEye} label="Eye & Head Tracking" />
-                    <EyeHeadTrackingSection engine={engine} disabled={disabled} defaultExpanded />
-                  </Box>
-
-                  {/* Hair Section */}
-                  <Box ref={(el) => { sectionRefs.current.hair = el; }}>
-                    <SectionHeader icon={FaCut} label="Hair" />
-                    <HairSection hairService={hairService} disabled={disabled} defaultExpanded />
-                  </Box>
-
-                  {/* Meshes Section */}
-                  <Box ref={(el) => { sectionRefs.current.meshes = el; }}>
-                    <SectionHeader icon={FaCubes} label="Meshes" />
-                    <MeshPanel engine={engine} defaultExpanded />
-                  </Box>
-
-                  {/* Skybox Section */}
-                  <Box ref={(el) => { sectionRefs.current.skybox = el; }}>
-                    <SectionHeader icon={FaGlobe} label="Skybox" />
-                    <SkyboxSection engine={engine} disabled={disabled} defaultExpanded />
-                  </Box>
-                </VStack>
-              </DrawerBody>
-            </Box>
-          </HStack>
-        </DrawerContent>
+              <Box flex={1} display="flex" flexDirection="column" overflow="hidden">
+                <DrawerBody bg="transparent" flex={1} overflowY="auto" pt={4}>
+                  {activeTab === 'animation' && <AnimationTabContent />}
+                  {activeTab === 'speech' && <SpeechTabContent engine={engine} disabled={disabled} />}
+                  {activeTab === 'blink' && <BlinkTabContent blinkService={blinkService ?? null} disabled={disabled} />}
+                  {activeTab === 'aus' && <AUTabContent engine={engine} disabled={disabled} />}
+                  {activeTab === 'visemes' && <VisemesTabContent engine={engine} disabled={disabled} />}
+                  {activeTab === 'tracking' && <TrackingTabContent engine={engine} disabled={disabled} />}
+                  {activeTab === 'hair' && <HairTabContent hairService={hairService ?? null} disabled={disabled} />}
+                  {activeTab === 'meshes' && <MeshesTabContent engine={engine} />}
+                  {activeTab === 'skybox' && <SkyboxTabContent engine={engine} disabled={disabled} />}
+                </DrawerBody>
+              </Box>
+            </HStack>
+          </DrawerContent>
+        )}
       </Drawer>
     </>
   );

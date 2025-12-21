@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { VStack, Box, Text, Button, HStack, useToast } from '@chakra-ui/react';
 import { AddIcon } from '@chakra-ui/icons';
 import DockableAccordionItem from './DockableAccordionItem';
@@ -111,10 +111,7 @@ const buildContinuumCurveData = (
 interface AUSectionProps {
   section: string;
   aus: AUInfo[];
-  auStates: Record<string, number>;
   engine?: EngineThree | null;
-  showUnusedSliders?: boolean;
-  onAUChange?: (id: string, value: number) => void;
   disabled?: boolean;
   useCurveEditor?: boolean;
   auSnippetCurves?: Record<string, SnippetCurveData[]>;
@@ -123,14 +120,12 @@ interface AUSectionProps {
 /**
  * AUSection - Renders AU sliders for a section
  * Shows continuum sliders for paired AUs, individual sliders for others
+ * UNCONTROLLED - each slider manages its own state
  */
-export default function AUSection({
+function AUSection({
   section,
   aus,
-  auStates,
   engine,
-  showUnusedSliders = false,
-  onAUChange,
   disabled = false,
   useCurveEditor = false,
   auSnippetCurves = {}
@@ -162,11 +157,7 @@ export default function AUSection({
     const name = prompt(`Enter name for ${auName} (AU ${auId}) animation:`, `${auName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`);
     if (!name) return;
 
-    // Get current AU intensity from state (0-1 range), convert to 0-100 for animation curves
-    const currentIntensity = (auStates[auId] ?? 0) * 100;
-
     // Create a default animation with a simple rise-and-fall curve
-    // Start from current slider position
     const snippet = {
       name,
       snippetCategory: 'auSnippet',
@@ -176,10 +167,10 @@ export default function AUSection({
       loop: false,
       curves: {
         [auId]: [
-          { time: 0.0, intensity: currentIntensity },
+          { time: 0.0, intensity: 0 },
           { time: 0.5, intensity: 70 },
           { time: 1.5, intensity: 70 },
-          { time: 2.0, intensity: currentIntensity }
+          { time: 2.0, intensity: 0 }
         ]
       }
     };
@@ -350,14 +341,8 @@ export default function AUSection({
 
             if (!pairedAU) {
               // Pair not in this section, render as individual
-              const intensity = auStates[au.id] ?? 0;
-              const intensityL = auStates[`${au.id}L`] ?? 0;
-              const intensityR = auStates[`${au.id}R`] ?? 0;
-
               // Check if this AU has left/right morphs
               const hasLR = hasLeftRightMorphs(auNum);
-
-              if (!showUnusedSliders && intensity <= 0 && intensityL <= 0 && intensityR <= 0) return null;
 
               // If AU has left/right variants, render 3 sliders
               if (hasLR) {
@@ -367,43 +352,31 @@ export default function AUSection({
                       <AUSlider
                         au={au.id}
                         name={au.name}
-                        intensity={intensity}
                         muscularBasis={au.muscularBasis}
                         links={au.links}
                         engine={engine}
                         disabled={disabled}
                         side="both"
-                        onChange={(val) => {
-                          onAUChange?.(au.id, val);
-                        }}
-                      />
+                                              />
                     </Box>
                     <HStack w="100%" spacing={2}>
                       <Box flex={1} bg="gray.750" p={2} borderRadius="md">
                         <AUSlider
                           au={au.id}
                           name={au.name}
-                          intensity={intensityL}
                           engine={engine}
                           disabled={disabled}
                           side="L"
-                          onChange={(val) => {
-                            onAUChange?.(`${au.id}L`, val);
-                          }}
-                        />
+                                                  />
                       </Box>
                       <Box flex={1} bg="gray.750" p={2} borderRadius="md">
                         <AUSlider
                           au={au.id}
                           name={au.name}
-                          intensity={intensityR}
                           engine={engine}
                           disabled={disabled}
                           side="R"
-                          onChange={(val) => {
-                            onAUChange?.(`${au.id}R`, val);
-                          }}
-                        />
+                                                  />
                       </Box>
                     </HStack>
                   </VStack>
@@ -416,17 +389,12 @@ export default function AUSection({
                   <AUSlider
                     au={au.id}
                     name={au.name}
-                    intensity={intensity}
                     muscularBasis={au.muscularBasis}
                     links={au.links}
                     engine={engine}
                     disabled={disabled}
                     side="both"
-                    onChange={(val) => {
-                      onAUChange?.(au.id, val);
-                      engine?.setAU(au.id as any, val);
-                    }}
-                  />
+                                      />
                 </Box>
               );
             }
@@ -438,44 +406,23 @@ export default function AUSection({
             // Render continuum slider
             const negativeAU = isNegative ? au : pairedAU;
             const positiveAU = isNegative ? pairedAU : au;
-            const negValue = auStates[negativeAU.id] ?? 0;
-            const posValue = auStates[positiveAU.id] ?? 0;
-            const continuumValue = posValue - negValue;
 
             return (
               <Box key={`${pair.negative}-${pair.positive}`} w="100%">
                 <ContinuumSlider
                   negativeAU={negativeAU}
                   positiveAU={positiveAU}
-                  value={continuumValue}
                   engine={engine}
                   showBlendSlider={pair.showBlend}
                   disabled={disabled}
-                  onChange={(val) => {
-                    // Update local state for UI tracking
-                    // ContinuumSlider calls engine.setContinuum() directly
-                    if (val >= 0) {
-                      onAUChange?.(positiveAU.id, val);
-                      onAUChange?.(negativeAU.id, 0);
-                    } else {
-                      onAUChange?.(negativeAU.id, Math.abs(val));
-                      onAUChange?.(positiveAU.id, 0);
-                    }
-                  }}
                 />
               </Box>
             );
           }
 
           // Regular individual AU slider
-          const intensity = auStates[au.id] ?? 0;
-          const intensityL = auStates[`${au.id}L`] ?? 0;
-          const intensityR = auStates[`${au.id}R`] ?? 0;
-
           // Check if this AU has left/right morphs
           const hasLR = hasLeftRightMorphs(auNum);
-
-          if (!showUnusedSliders && intensity <= 0 && intensityL <= 0 && intensityR <= 0) return null;
 
           // If AU has left/right variants, render 3 sliders in a compact layout
           if (hasLR) {
@@ -486,16 +433,12 @@ export default function AUSection({
                   <AUSlider
                     au={au.id}
                     name={au.name}
-                    intensity={intensity}
                     muscularBasis={au.muscularBasis}
                     links={au.links}
                     engine={engine}
                     disabled={disabled}
                     side="both"
-                    onChange={(val) => {
-                      onAUChange?.(au.id, val);
-                    }}
-                  />
+                                      />
                 </Box>
 
                 {/* Left and Right sliders in a compact row */}
@@ -504,27 +447,19 @@ export default function AUSection({
                     <AUSlider
                       au={au.id}
                       name={au.name}
-                      intensity={intensityL}
                       engine={engine}
                       disabled={disabled}
                       side="L"
-                      onChange={(val) => {
-                        onAUChange?.(`${au.id}L`, val);
-                      }}
-                    />
+                                          />
                   </Box>
                   <Box flex={1} bg="gray.750" p={2} borderRadius="md">
                     <AUSlider
                       au={au.id}
                       name={au.name}
-                      intensity={intensityR}
                       engine={engine}
                       disabled={disabled}
                       side="R"
-                      onChange={(val) => {
-                        onAUChange?.(`${au.id}R`, val);
-                      }}
-                    />
+                                          />
                   </Box>
                 </HStack>
               </VStack>
@@ -537,29 +472,12 @@ export default function AUSection({
               <AUSlider
                 au={au.id}
                 name={au.name}
-                intensity={intensity}
                 muscularBasis={au.muscularBasis}
                 links={au.links}
                 engine={engine}
                 disabled={disabled}
                 side="both"
-                onChange={(val) => {
-                  onAUChange?.(au.id, val);
-
-                  // Handle jaw AUs (25, 26, 27) like visemes
-                  const auNum = parseInt(au.id);
-                  if (auNum === 25 || auNum === 26 || auNum === 27) {
-                    engine?.setMorph('Jaw_Open', val);
-                    if (auNum === 27) {
-                      engine?.setMorph('Mouth_Stretch_L', val);
-                      engine?.setMorph('Mouth_Stretch_R', val);
-                    }
-                    engine?.setAU(auNum, val);
-                  } else {
-                    engine?.setAU(au.id as any, val);
-                  }
-                }}
-              />
+                              />
             </Box>
           );
         })}
@@ -567,3 +485,43 @@ export default function AUSection({
     </DockableAccordionItem>
   );
 }
+
+// Custom comparison - only rerender if meaningful props change
+// auSnippetCurves changes frequently during animation playback, but we only need
+// to rerender if the curves for THIS section's AUs actually changed
+function arePropsEqual(
+  prev: AUSectionProps,
+  next: AUSectionProps
+): boolean {
+  // Quick checks for primitive/reference equality
+  if (prev.section !== next.section) return false;
+  if (prev.disabled !== next.disabled) return false;
+  if (prev.useCurveEditor !== next.useCurveEditor) return false;
+  if (prev.engine !== next.engine) return false;
+
+  // Check if aus array contents changed (by reference since they come from auGroups)
+  if (prev.aus !== next.aus) {
+    // If lengths differ, definitely changed
+    if (prev.aus.length !== next.aus.length) return false;
+    // Check if any AU id changed
+    for (let i = 0; i < prev.aus.length; i++) {
+      if (prev.aus[i].id !== next.aus[i].id) return false;
+    }
+  }
+
+  // For auSnippetCurves, only check if curves for our AUs changed
+  // This prevents rerenders when other sections' curves update
+  if (prev.useCurveEditor && next.useCurveEditor) {
+    const prevCurves = prev.auSnippetCurves || {};
+    const nextCurves = next.auSnippetCurves || {};
+
+    for (const au of next.aus) {
+      if (prevCurves[au.id] !== nextCurves[au.id]) return false;
+    }
+  }
+
+  return true;
+}
+
+// Memoize to prevent rerenders when parent state changes
+export default memo(AUSection, arePropsEqual);

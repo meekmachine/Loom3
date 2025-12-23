@@ -323,28 +323,7 @@ export class AnimationScheduler {
             continue;
           }
 
-          // Determine if this is a continuum pair
-          const continuumInfo = this.getContinuumInfo(curveId);
-
-          if (continuumInfo && this.host.transitionContinuum) {
-            // Skip - will be handled by the other AU in the pair
-            if (curveId === String(continuumInfo.posAU)) continue;
-
-            // Get the other AU's value
-            const otherCurve = curves[String(continuumInfo.posAU)];
-            const otherValue = otherCurve
-              ? clamp01(applyIntensityScale(sampleAt(otherCurve, nextTime), scale))
-              : 0;
-
-            const continuumValue = otherValue - targetValue;
-            const handle = this.host.transitionContinuum(
-              continuumInfo.negAU,
-              continuumInfo.posAU,
-              continuumValue,
-              durationMs
-            );
-            handles.push(handle);
-          } else if (isNum(curveId)) {
+          if (isNum(curveId)) {
             // Regular AU transition
             // Get balance from snippet: per-AU override takes precedence over global balance
             const snippetBalanceMap = (sn as any).snippetBalanceMap ?? {};
@@ -426,30 +405,6 @@ export class AnimationScheduler {
 
     // Cleanup
     this.playbackRunners.delete(snippetName);
-  }
-
-  /**
-   * Check if a curve ID is part of a continuum pair.
-   * Returns the pair info if found, null otherwise.
-   */
-  private getContinuumInfo(curveId: string): { negAU: number; posAU: number } | null {
-    if (!isNum(curveId)) return null;
-    const auId = parseInt(curveId, 10);
-
-    for (const composite of COMPOSITE_ROTATIONS) {
-      for (const axisName of ['pitch', 'yaw', 'roll'] as const) {
-        const axis = composite[axisName];
-        if (!axis || axis.negative === undefined || axis.positive === undefined) continue;
-        if (auId === axis.negative || auId === axis.positive) {
-          return { negAU: axis.negative, posAU: axis.positive };
-        }
-      }
-    }
-    return null;
-  }
-
-  private now() {
-    return typeof performance !== 'undefined' ? performance.now() : Date.now();
   }
 
   private currentSnippets() {
@@ -658,11 +613,8 @@ export class AnimationScheduler {
             } else {
               this.host.applyAU(posAU, continuumValue);
             }
-          } else if (this.host.transitionContinuum) {
-            // Use transitionContinuum if available
-            this.host.transitionContinuum(negAU, posAU, continuumValue, durationMs);
           } else if (this.host.transitionAU) {
-            // Fallback: transition ONE AU based on sign
+            // Transition ONE AU based on sign
             if (continuumValue < 0) {
               this.host.transitionAU(negAU, Math.abs(continuumValue), durationMs);
             } else {

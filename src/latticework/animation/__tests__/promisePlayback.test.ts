@@ -99,34 +99,6 @@ describe('Promise-Based Playback', () => {
           cancel: vi.fn(() => resolvePromise()),
         };
       }),
-      transitionContinuum: vi.fn((negAU, posAU, v, dur): TransitionHandle => {
-        let resolvePromise: () => void = () => {};
-        const promise = new Promise<void>((resolve) => {
-          resolvePromise = () => {
-            // Update both AUs based on continuum value
-            const negVal = v < 0 ? Math.abs(v) : 0;
-            const posVal = v > 0 ? v : 0;
-            meshState[String(negAU)] = negVal;
-            meshState[String(posAU)] = posVal;
-            resolve();
-          };
-        });
-
-        firedTransitions.push({
-          type: 'continuum',
-          id: `${negAU}_${posAU}`,
-          value: v,
-          durationMs: dur ?? 200,
-          resolvePromise,
-        });
-
-        return {
-          promise,
-          pause: vi.fn(),
-          resume: vi.fn(),
-          cancel: vi.fn(() => resolvePromise()),
-        };
-      }),
       onSnippetEnd: vi.fn()
     };
 

@@ -639,7 +639,8 @@ export const CC4_MORPHS = {
 
 /** Which mesh each morph category applies to */
 export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {
-  face: ['CC_Base_Body_1'],  // Face morphs only need the face mesh
+  // Face/AU morphs affect the main face mesh and both eyebrow meshes.
+  face: ['CC_Base_Body_1', 'Male_Bushy_1', 'Male_Bushy_2'],
   viseme: ['CC_Base_Body_1'],
   eyeOcclusion: ['CC_Base_EyeOcclusion_1', 'CC_Base_EyeOcclusion_2'],
   tearLine: ['CC_Base_TearLine_1', 'CC_Base_TearLine_2'],

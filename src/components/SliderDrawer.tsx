@@ -530,9 +530,6 @@ const MemoizedVisemesContent = memo(({ engine, disabled }: { engine: EngineThree
 const MemoizedTrackingContent = memo(({ engine, disabled }: { engine: EngineThree | null; disabled: boolean }) =>
   <TrackingTabContent engine={engine} disabled={disabled} />
 );
-const MemoizedHairContent = memo(({ disabled }: { disabled: boolean }) =>
-  <HairTabContent disabled={disabled} />
-);
 const MemoizedMeshesContent = memo(({ engine }: { engine: EngineThree | null }) =>
   <MeshesTabContent engine={engine} />
 );
@@ -571,11 +568,6 @@ const TabContentContainer = memo(({ activeTab, mountedTabs, engine, disabled }: 
       {mountedTabs.has('tracking') && (
         <TabPanel tabId="tracking" isActive={activeTab === 'tracking'}>
           <MemoizedTrackingContent engine={engine} disabled={disabled} />
-        </TabPanel>
-      )}
-      {mountedTabs.has('hair') && (
-        <TabPanel tabId="hair" isActive={activeTab === 'hair'}>
-          <MemoizedHairContent disabled={disabled} />
         </TabPanel>
       )}
       {mountedTabs.has('meshes') && (

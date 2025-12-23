@@ -113,18 +113,18 @@ const AUSlider: React.FC<AUSliderProps> = ({
     // Notify parent if callback provided (for tracking visible sliders)
     onValueChangeRef.current?.(auIdStr, value);
 
-    // Apply to engine (balance is applied via stored auBalances)
+    // Apply to engine with current balance
     if (engine) {
-      engine.setAU(auId, value);
+      engine.setAU(auId, value, balance);
     }
   };
 
   const handleBalanceChange = (value: number) => {
     setBalance(value);
 
-    // Apply balance to engine
+    // Re-apply AU with same intensity but new balance
     if (engine) {
-      engine.setAUBalance(auId, value);
+      engine.setAU(auId, intensity, value);
     }
   };
 
@@ -144,13 +144,8 @@ const AUSlider: React.FC<AUSliderProps> = ({
     }
   };
 
-  // Get current balance from engine
-  const getBalance = () => {
-    if (engine && isBilateralAU) {
-      return engine.getAUBalance(auId) ?? balance;
-    }
-    return balance;
-  };
+  // Get current balance (local state only)
+  const getBalance = () => balance;
 
   const displayLabel = `${au} - ${name}`;
 

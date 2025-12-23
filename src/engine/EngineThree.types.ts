@@ -9,7 +9,7 @@
  */
 
 /**
- * TransitionHandle - returned from transitionAU/transitionMorph/transitionContinuum
+ * TransitionHandle - returned from transitionAU/transitionMorph/transitionViseme
  * Provides promise-based completion notification plus fine-grained control.
  *
  * The animation agency uses these handles to await keyframe transitions,
@@ -38,6 +38,23 @@ export type NodeBase = {
 };
 
 export type ResolvedBones = Partial<Record<BoneKey, NodeBase>>;
+
+// Composite bone rotation state (per-axis)
+export type RotationAxisState = {
+  /** Normalized value in [-1, 1] for this axis */
+  value: number;
+  /** Maximum rotation for this axis in radians (cached once) */
+  maxRadians: number;
+};
+
+export type CompositeRotationState = {
+  pitch: RotationAxisState;
+  yaw: RotationAxisState;
+  roll: RotationAxisState;
+};
+
+/** Runtime rotation state map: node key → composite pitch/yaw/roll state */
+export type RotationsState = Record<string, CompositeRotationState>;
 
 /**
  * Engine - The 3D rendering engine interface (EngineThree)
@@ -127,19 +144,6 @@ export interface Engine {
   transitionViseme?: (visemeIndex: number, value: number, durationMs?: number, jawScale?: number) => TransitionHandle;
 
   /**
-   * Transition a continuum AU pair (e.g., eyes left/right, head up/down).
-   * Takes a single value from -1 to +1 and internally manages both AU values.
-   * This ensures smooth interpolation through the full range without separate transitions.
-   *
-   * @param negAU - AU ID for negative direction (e.g., 61 for eyes left, 31 for head left)
-   * @param posAU - AU ID for positive direction (e.g., 62 for eyes right, 32 for head right)
-   * @param value - Target value from -1 (full negative) to +1 (full positive)
-   * @param durationMs - Transition duration in milliseconds (default: 200ms)
-   * @returns TransitionHandle with { promise, pause, resume, cancel }
-   */
-  transitionContinuum?: (negAU: number, posAU: number, value: number, durationMs?: number) => TransitionHandle;
-
-  /**
    * Callback invoked when a non-looping snippet naturally completes
    * NOT called when user manually stops a snippet
    *
@@ -166,27 +170,6 @@ export interface Engine {
    * Get count of active transitions (for debugging)
    */
   getActiveTransitionCount?: () => number;
-
-  // Composite helper methods for continuum pairs (instant)
-  setEyesHorizontal?: (value: number) => void;
-  setEyesVertical?: (value: number) => void;
-  setHeadHorizontal?: (value: number) => void;
-  setHeadVertical?: (value: number) => void;
-  setHeadTilt?: (value: number) => void;
-  setHeadRoll?: (value: number) => void;
-  setJawHorizontal?: (value: number) => void;
-  setTongueHorizontal?: (value: number) => void;
-  setTongueVertical?: (value: number) => void;
-
-  // Composite transition methods for continuum pairs (animated)
-  transitionEyesHorizontal?: (value: number, durationMs?: number) => void;
-  transitionEyesVertical?: (value: number, durationMs?: number) => void;
-  transitionHeadHorizontal?: (value: number, durationMs?: number) => void;
-  transitionHeadVertical?: (value: number, durationMs?: number) => void;
-  transitionHeadRoll?: (value: number, durationMs?: number) => void;
-  transitionJawHorizontal?: (value: number, durationMs?: number) => void;
-  transitionTongueHorizontal?: (value: number, durationMs?: number) => void;
-  transitionTongueVertical?: (value: number, durationMs?: number) => void;
 }
 
 /**

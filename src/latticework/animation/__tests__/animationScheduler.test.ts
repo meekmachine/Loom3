@@ -59,7 +59,6 @@ describe('AnimationScheduler', () => {
         return createHandle();
       }),
       transitionMorph: vi.fn(() => createHandle()),
-      transitionContinuum: vi.fn(() => createHandle()),
       onSnippetEnd: vi.fn()
     };
 

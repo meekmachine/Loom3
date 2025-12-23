@@ -60,7 +60,6 @@ describe('AnimationService', () => {
         return mockTransitionHandle();
       }),
       transitionMorph: vi.fn(() => mockTransitionHandle()),
-      transitionContinuum: vi.fn(() => mockTransitionHandle()),
       onSnippetEnd: vi.fn()
     };
 

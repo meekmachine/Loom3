@@ -726,23 +726,40 @@ export class EyeHeadTrackingService {
       );
     } else if (this.config.engine) {
       // Direct engine path - simpler, bypasses animation scheduler
-      // Use transitionContinuum for each axis (yaw/pitch)
+      // Use transitionAU for each axis (yaw/pitch)
+      // Only call ONE AU based on continuum sign (calling both would overwrite the bone)
       if (applyEyes && this.config.eyeTrackingEnabled) {
         const eyeYaw = smoothedTarget.x * eyeIntensity;
         const eyePitch = smoothedTarget.y * eyeIntensity;
         // Eyes horizontal: AU61 (left) / AU62 (right)
-        this.config.engine.transitionContinuum(61, 62, eyeYaw, eyeDuration);
-        // Eyes vertical: AU63 (up) / AU64 (down)
-        this.config.engine.transitionContinuum(64, 63, eyePitch, eyeDuration);
+        if (eyeYaw < 0) {
+          this.config.engine.transitionAU?.(61, Math.abs(eyeYaw), eyeDuration);
+        } else {
+          this.config.engine.transitionAU?.(62, eyeYaw, eyeDuration);
+        }
+        // Eyes vertical: AU64 (down) / AU63 (up)
+        if (eyePitch < 0) {
+          this.config.engine.transitionAU?.(64, Math.abs(eyePitch), eyeDuration);
+        } else {
+          this.config.engine.transitionAU?.(63, eyePitch, eyeDuration);
+        }
       }
 
       if (applyHead && this.config.headTrackingEnabled && this.config.headFollowEyes) {
         const headYaw = smoothedTarget.x * headIntensity;
         const headPitch = smoothedTarget.y * headIntensity;
         // Head horizontal: AU31 (left) / AU32 (right)
-        this.config.engine.transitionContinuum(31, 32, headYaw, headDuration);
+        if (headYaw < 0) {
+          this.config.engine.transitionAU?.(31, Math.abs(headYaw), headDuration);
+        } else {
+          this.config.engine.transitionAU?.(32, headYaw, headDuration);
+        }
         // Head vertical: AU54 (down) / AU33 (up)
-        this.config.engine.transitionContinuum(54, 33, headPitch, headDuration);
+        if (headPitch < 0) {
+          this.config.engine.transitionAU?.(54, Math.abs(headPitch), headDuration);
+        } else {
+          this.config.engine.transitionAU?.(33, headPitch, headDuration);
+        }
       }
     } else {
       console.warn('[EyeHeadTracking] No animation agency or engine available - cannot apply gaze');
@@ -819,14 +836,19 @@ export class EyeHeadTrackingService {
         if (useAgency && this.scheduler && this.config.animationAgency) {
           this.scheduler.resetToNeutral(duration);
         } else if (this.config.engine) {
-          // Use transitionContinuum to return all axes to neutral (0)
+          // Use transitionAU to return all axes to neutral (0)
+          // Reset both AUs in each pair to 0
           if (this.config.eyeTrackingEnabled) {
-            this.config.engine.transitionContinuum(61, 62, 0, duration); // Eyes yaw
-            this.config.engine.transitionContinuum(64, 63, 0, duration); // Eyes pitch
+            this.config.engine.transitionAU?.(61, 0, duration); // Eyes left
+            this.config.engine.transitionAU?.(62, 0, duration); // Eyes right
+            this.config.engine.transitionAU?.(63, 0, duration); // Eyes up
+            this.config.engine.transitionAU?.(64, 0, duration); // Eyes down
           }
           if (this.config.headTrackingEnabled && this.config.headFollowEyes) {
-            this.config.engine.transitionContinuum(31, 32, 0, duration); // Head yaw
-            this.config.engine.transitionContinuum(54, 33, 0, duration); // Head pitch
+            this.config.engine.transitionAU?.(31, 0, duration); // Head left
+            this.config.engine.transitionAU?.(32, 0, duration); // Head right
+            this.config.engine.transitionAU?.(33, 0, duration); // Head up
+            this.config.engine.transitionAU?.(54, 0, duration); // Head down
           }
         }
 

@@ -96,14 +96,6 @@ describe('Scrubber and Replay', () => {
           meshState[key] = v;
         });
       }),
-      transitionContinuum: vi.fn((negAU, posAU, v, dur): TransitionHandle => {
-        return createAutoResolvingHandle('continuum', `${negAU}_${posAU}`, v, dur ?? 200, () => {
-          const negVal = v < 0 ? Math.abs(v) : 0;
-          const posVal = v > 0 ? v : 0;
-          meshState[String(negAU)] = negVal;
-          meshState[String(posAU)] = posVal;
-        });
-      }),
       onSnippetEnd: vi.fn()
     };
 

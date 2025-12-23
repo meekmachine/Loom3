@@ -1,6 +1,7 @@
 import type { Snippet, HostCaps, ScheduleOpts } from './types';
 import type { TransitionHandle } from '../../engine/EngineThree.types';
 import { VISEME_KEYS, COMPOSITE_ROTATIONS } from '../../engine/arkit/shapeDict';
+import { animationEventEmitter } from './animationService';
 
 type RuntimeSched = { name: string; startsAt: number; offset: number; enabled: boolean };
 
@@ -70,6 +71,8 @@ export function normalize(sn: any): Snippet & { curves: Record<string, Scheduler
       snippetIntensityScale: sn.snippetIntensityScale ?? 1,
       snippetBlendMode: sn.snippetBlendMode ?? 'replace',  // Default to 'replace' for backward compatibility
       snippetJawScale: sn.snippetJawScale ?? 1.0,  // Jaw bone activation for viseme snippets
+      snippetBalance: sn.snippetBalance ?? 0,  // Global L/R balance for bilateral AUs
+      snippetBalanceMap: sn.snippetBalanceMap ?? {},  // Per-AU balance overrides
       curves
     } as any;
   }
@@ -102,6 +105,8 @@ export function normalize(sn: any): Snippet & { curves: Record<string, Scheduler
     snippetIntensityScale: sn.snippetIntensityScale ?? 1,
     snippetBlendMode: sn.snippetBlendMode ?? 'replace',
     snippetJawScale: sn.snippetJawScale ?? 1.0,
+    snippetBalance: sn.snippetBalance ?? 0,
+    snippetBalanceMap: sn.snippetBalanceMap ?? {},
     curves
   } as any;
 }
@@ -190,8 +195,6 @@ export class AnimationScheduler {
 
     // NOW start the async loop (runner is already in map)
     runner.promise = this.runPlaybackLoop(snippetName);
-
-    console.log(`[Scheduler] Started playback runner for: ${snippetName}`);
   }
 
   /**
@@ -209,7 +212,6 @@ export class AnimationScheduler {
     }
     runner.handles = [];
     this.playbackRunners.delete(snippetName);
-    console.log(`[Scheduler] Stopped playback runner for: ${snippetName}`);
   }
 
   /**
@@ -223,7 +225,6 @@ export class AnimationScheduler {
     for (const handle of runner.handles) {
       try { handle.pause(); } catch {}
     }
-    console.log(`[Scheduler] Paused playback runner for: ${snippetName}`);
   }
 
   /**
@@ -237,7 +238,6 @@ export class AnimationScheduler {
     for (const handle of runner.handles) {
       try { handle.resume(); } catch {}
     }
-    console.log(`[Scheduler] Resumed playback runner for: ${snippetName}`);
   }
 
   /**
@@ -262,10 +262,7 @@ export class AnimationScheduler {
     // Main playback loop (handles looping)
     while (runner.active) {
       const sn = getSnippet();
-      if (!sn || !sn.curves) {
-        console.log(`[Scheduler] Runner ${snippetName}: snippet not found, stopping`);
-        break;
-      }
+      if (!sn || !sn.curves) break;
 
       const curves = sn.curves as Record<string, SchedulerCurvePoint[]>;
       const rate = sn.snippetPlaybackRate ?? 1;
@@ -280,12 +277,7 @@ export class AnimationScheduler {
       }
       const keyframeTimes = Array.from(allTimes).sort((a, b) => a - b);
 
-      if (keyframeTimes.length === 0) {
-        console.log(`[Scheduler] Runner ${snippetName}: no keyframes, stopping`);
-        break;
-      }
-
-      console.log(`[Scheduler] Runner ${snippetName}: starting loop ${loopIteration}, ${keyframeTimes.length} keyframe times`);
+      if (keyframeTimes.length === 0) break;
 
       // Iterate through keyframe boundaries
       for (let i = 0; i < keyframeTimes.length; i++) {
@@ -354,11 +346,16 @@ export class AnimationScheduler {
             handles.push(handle);
           } else if (isNum(curveId)) {
             // Regular AU transition
+            // Get balance from snippet: per-AU override takes precedence over global balance
+            const snippetBalanceMap = (sn as any).snippetBalanceMap ?? {};
+            const snippetBalance = (sn as any).snippetBalance ?? 0;
+            const balance = snippetBalanceMap[curveId] !== undefined ? snippetBalanceMap[curveId] : snippetBalance;
+
             if (this.host.transitionAU) {
-              const handle = this.host.transitionAU(parseInt(curveId, 10), targetValue, durationMs);
+              const handle = this.host.transitionAU(parseInt(curveId, 10), targetValue, durationMs, balance);
               handles.push(handle);
             } else {
-              this.host.applyAU(parseInt(curveId, 10), targetValue);
+              this.host.applyAU(parseInt(curveId, 10), targetValue, balance);
             }
           } else {
             // Morph/viseme transition (by name)
@@ -381,6 +378,17 @@ export class AnimationScheduler {
 
         runner.handles = [];
 
+        // Emit keyframe completed event for UI updates
+        const snForDuration = getSnippet();
+        const snippetDuration = snForDuration ? this.totalDuration(snForDuration) : 0;
+        animationEventEmitter.emitKeyframeCompleted({
+          snippetName,
+          keyframeIndex: i,
+          totalKeyframes: keyframeTimes.length,
+          currentTime: keyframeTimes[i],
+          duration: snippetDuration,
+        });
+
         // Check if still active after awaiting
         if (!runner.active) break;
       }
@@ -391,16 +399,23 @@ export class AnimationScheduler {
       const snCheck = getSnippet();
       if (!snCheck?.loop) {
         // Non-looping snippet completed
-        console.log(`[Scheduler] Runner ${snippetName}: completed (non-looping)`);
         this.ended.add(snippetName);
         // Mark snippet as not playing so UI can show play button for replay
         if (snCheck) snCheck.isPlaying = false;
+        // Emit snippet completed event for UI
+        animationEventEmitter.emitSnippetCompleted(snippetName);
         try { this.host.onSnippetEnd?.(snippetName); } catch {}
         break;
       }
 
       // Looping - increment and continue
       loopIteration++;
+      // Emit loop event for UI
+      animationEventEmitter.emitSnippetLooped({
+        snippetName,
+        iteration: loopIteration,
+        localTime: 0,
+      });
       this.safeSend({
         type: 'SNIPPET_LOOPED',
         name: snippetName,
@@ -411,7 +426,6 @@ export class AnimationScheduler {
 
     // Cleanup
     this.playbackRunners.delete(snippetName);
-    console.log(`[Scheduler] Runner ${snippetName}: exited`);
   }
 
   /**
@@ -570,12 +584,10 @@ export class AnimationScheduler {
         // Combine replace-mode winner with additive sum
         const combined = clamp01(replaceTarget.v + additiveSum);
         targets.set(curveId, { ...replaceTarget, v: combined });
-        console.log(`[AnimationScheduler][Additive] AU ${curveId}: replace=${replaceTarget.v.toFixed(3)} additive=${additiveSum.toFixed(3)} → ${combined.toFixed(3)}`);
       } else {
         // No replace-mode snippet, just use additive sum
         const combined = clamp01(additiveSum);
         targets.set(curveId, { v: combined, pri: maxAdditivePri, durMs: 120, category: 'default' });
-        console.log(`[AnimationScheduler][Additive] AU ${curveId}: additive only=${additiveSum.toFixed(3)} → ${combined.toFixed(3)}`);
       }
     }
 
@@ -597,16 +609,16 @@ export class AnimationScheduler {
 
     // Process each composite rotation definition from shapeDict
     for (const composite of COMPOSITE_ROTATIONS) {
-      const { node, pitch, yaw, roll } = composite;
+      const { pitch, yaw, roll } = composite;
 
       // Process each axis (pitch, yaw, roll) for this node
-      const axes: Array<{ name: 'pitch' | 'yaw' | 'roll'; config: typeof pitch }> = [
-        { name: 'pitch', config: pitch },
-        { name: 'yaw', config: yaw },
-        { name: 'roll', config: roll },
+      const axes: Array<{ config: typeof pitch }> = [
+        { config: pitch },
+        { config: yaw },
+        { config: roll },
       ];
 
-      for (const { name: axisName, config } of axes) {
+      for (const { config } of axes) {
         if (!config || !config.negative || !config.positive) continue;
 
         const negAU = config.negative;
@@ -653,10 +665,6 @@ export class AnimationScheduler {
             this.host.applyAU(negAU, negValue);
             this.host.applyAU(posAU, posValue);
           }
-
-          console.log(
-            `[AnimationScheduler][Continuum] ${node}.${axisName}: continuum=${continuumValue.toFixed(3)} (AU${negAU}=${negValue.toFixed(3)}, AU${posAU}=${posValue.toFixed(3)}) dur=${durationMs}ms`
-          );
 
           processedContinuums.add(continuumKey);
 
@@ -776,9 +784,6 @@ export class AnimationScheduler {
       const first = arr?.[0];
       if (!first || !first.inherit) return;
       const current = this.currentValues.get(curveId) ?? first.intensity ?? 0;
-      if (Math.abs((first.intensity ?? 0) - current) > 0.001) {
-        console.log(`[Scheduler] Loop continuity: ${sn.name} AU ${curveId} resumes from ${current.toFixed(3)}`);
-      }
       first.intensity = current;
     });
   }
@@ -816,12 +821,6 @@ export class AnimationScheduler {
       // If first keyframe is marked for inherit (or sits at time 0), replace its intensity with current value
       if (newKeyframes[0].inherit || newKeyframes[0].time === 0) {
         const currentValue = this.currentValues.get(auId) ?? 0;
-        const prevValue = newKeyframes[0].intensity ?? 0;
-
-        if (Math.abs(currentValue - prevValue) > 0.001) {
-          console.log(`[Scheduler] Continuity: ${snippet.name} AU ${auId} starts from ${currentValue.toFixed(3)} (was ${prevValue.toFixed(3)})`);
-        }
-
         newKeyframes[0] = {
           ...newKeyframes[0],
           time: newKeyframes[0].time,
@@ -901,8 +900,6 @@ export class AnimationScheduler {
     rt.offset = seekTime;
     rt.enabled = true;
     this.ended.delete(name);
-
-    console.log('[Scheduler] seek()', name, 'to', seekTime.toFixed(3));
 
     // Send SEEK_SNIPPET event to machine - this creates new state and triggers UI updates
     this.safeSend({ type: 'SEEK_SNIPPET', name, time: seekTime });

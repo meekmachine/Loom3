@@ -50,15 +50,20 @@ jobs:
           npm version ${{ github.event.inputs.version }} -m "Bump version to %s"
           git push --follow-tags
 
-      - name: Debug - Check secret exists
+      - name: Debug - Check auth setup
         run: |
-          if [ -z "${{ secrets.LOOMLARGE }}" ]; then
-            echo "SECRET IS EMPTY"
-          else
-            echo "Secret exists, length: ${#TOKEN}"
-          fi
+          echo "=== TOKEN LENGTH ==="
+          echo "Length: ${#TOKEN}"
+          echo "=== NPM CONFIG ==="
+          npm config list
+          echo "=== NPMRC FILES ==="
+          cat ~/.npmrc 2>/dev/null || echo "No ~/.npmrc"
+          cat .npmrc 2>/dev/null || echo "No ./.npmrc"
+          echo "=== NPM WHOAMI ==="
+          npm whoami 2>&1 || echo "whoami failed"
         env:
           TOKEN: ${{ secrets.LOOMLARGE }}
+          NODE_AUTH_TOKEN: ${{ secrets.LOOMLARGE }}
 
       - name: Publish to NPM
         run: npm publish --access public

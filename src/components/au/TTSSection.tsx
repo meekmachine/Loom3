@@ -487,7 +487,7 @@ function TTSSection({ engine, disabled = false, defaultExpanded = false }: TTSSe
         </HStack>
 
         {/* Info */}
-        <Text fontSize="2xs" color="gray.500">
+        <Text fontSize="2xs" color="white">
           Integrated: TTS + LipSync + Prosodic Gestures
         </Text>
       </VStack>

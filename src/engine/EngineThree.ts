@@ -123,8 +123,8 @@ export class EngineThree {
     switch (info.facePart) {
       case 'Tongue':
         return MORPH_TO_MESH.tongue;
-      case 'EyeOcclusion':
-        return MORPH_TO_MESH.eyeOcclusion;
+      case 'Eye':
+        return MORPH_TO_MESH.eye;
       default:
         return MORPH_TO_MESH.face;
     }
@@ -564,6 +564,112 @@ export class EngineThree {
       }
     });
   };
+
+  // ============================================================================
+  // MESH MATERIAL CONFIGURATION
+  // Runtime-configurable material properties for debugging render order/blending
+  // ============================================================================
+
+  /** Blending mode options for Three.js materials */
+  static readonly BLENDING_MODES = {
+    'Normal': THREE.NormalBlending,
+    'Additive': THREE.AdditiveBlending,
+    'Subtractive': THREE.SubtractiveBlending,
+    'Multiply': THREE.MultiplyBlending,
+    'None': THREE.NoBlending,
+  } as const;
+
+  /** Get material config for a mesh */
+  getMeshMaterialConfig = (meshName: string): {
+    renderOrder: number;
+    transparent: boolean;
+    opacity: number;
+    depthWrite: boolean;
+    depthTest: boolean;
+    blending: string;
+  } | null => {
+    if (!this.model) return null;
+    let result: ReturnType<typeof this.getMeshMaterialConfig> = null;
+
+    this.model.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh && obj.name === meshName) {
+        const mesh = obj as THREE.Mesh;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat) {
+          // Reverse lookup blending mode name
+          let blendingName = 'Normal';
+          for (const [name, value] of Object.entries(EngineThree.BLENDING_MODES)) {
+            if (mat.blending === value) {
+              blendingName = name;
+              break;
+            }
+          }
+          result = {
+            renderOrder: mesh.renderOrder,
+            transparent: mat.transparent,
+            opacity: mat.opacity,
+            depthWrite: mat.depthWrite,
+            depthTest: mat.depthTest,
+            blending: blendingName,
+          };
+        }
+      }
+    });
+
+    return result;
+  };
+
+  /** Set material config for a mesh */
+  setMeshMaterialConfig = (meshName: string, config: {
+    renderOrder?: number;
+    transparent?: boolean;
+    opacity?: number;
+    depthWrite?: boolean;
+    depthTest?: boolean;
+    blending?: string;
+  }) => {
+    if (!this.model) return;
+
+    this.model.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh && obj.name === meshName) {
+        const mesh = obj as THREE.Mesh;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+
+        if (config.renderOrder !== undefined) {
+          mesh.renderOrder = config.renderOrder;
+        }
+
+        if (mat) {
+          // Handle transparency - auto-enable when opacity < 1
+          if (config.opacity !== undefined) {
+            mat.opacity = config.opacity;
+            // Auto-enable transparency when opacity is reduced
+            if (config.opacity < 1 && config.transparent === undefined) {
+              mat.transparent = true;
+            }
+          }
+          if (config.transparent !== undefined) {
+            mat.transparent = config.transparent;
+          }
+          if (config.depthWrite !== undefined) {
+            mat.depthWrite = config.depthWrite;
+          }
+          if (config.depthTest !== undefined) {
+            mat.depthTest = config.depthTest;
+          }
+          if (config.blending !== undefined) {
+            const blendValue = EngineThree.BLENDING_MODES[config.blending as keyof typeof EngineThree.BLENDING_MODES];
+            if (blendValue !== undefined) {
+              mat.blending = blendValue;
+            }
+          }
+          // Always mark material as needing update after any change
+          mat.needsUpdate = true;
+        }
+      }
+    });
+  };
+
   private bones: ResolvedBones = {};
 
   // --- Mix weight system ---
@@ -659,9 +765,26 @@ export class EngineThree {
     this.meshes = meshes;
     this.meshByName.clear();
     this.morphCache.clear(); // Invalidate morph index cache when model changes
-    for (const m of meshes) {
-      if (m && m.name) {
-        this.meshByName.set(m.name, m);
+
+    // Populate meshByName from the full model traversal (not just this.meshes)
+    // This ensures we find all morph meshes including eye occlusion, tear lines, etc.
+    if (model) {
+      model.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.isMesh && mesh.name) {
+          const infl = (mesh as any).morphTargetInfluences;
+          // Only add meshes that have morph targets
+          if (Array.isArray(infl) && infl.length > 0) {
+            this.meshByName.set(mesh.name, mesh);
+          }
+        }
+      });
+    } else {
+      // Fallback: use the meshes array if model not provided
+      for (const m of meshes) {
+        if (m && m.name) {
+          this.meshByName.set(m.name, m);
+        }
       }
     }
 
@@ -703,7 +826,6 @@ export class EngineThree {
     // Fast path: check cache first (may have multiple entries for same morph key)
     const cached = this.morphCache.get(key);
     if (cached) {
-      // Apply to all cached targets
       for (const target of cached) {
         target.infl[target.idx] = val;
       }
@@ -711,7 +833,6 @@ export class EngineThree {
     }
 
     // Cache miss: look up in all specified meshes and cache for next time
-    // A morph like browInnerUp exists in both face mesh AND eyebrow meshes
     const targets: { infl: number[], idx: number }[] = [];
 
     if (meshNames && meshNames.length) {
@@ -786,9 +907,10 @@ export class EngineThree {
       const meshNames = this.getMeshNamesForAU(id);
 
       // Partition into left/right/center based on naming
-      const leftKeys = keys.filter(k => /(_L$|Left$)/.test(k));
-      const rightKeys = keys.filter(k => /(_R$|Right$)/.test(k));
-      const centerKeys = keys.filter(k => !/(_L$|Left$|_R$|Right$)/.test(k));
+      // Matches: _L, Left, or " L" (space+L) at end of string
+      const leftKeys = keys.filter(k => /(_L$| L$|Left$)/i.test(k));
+      const rightKeys = keys.filter(k => /(_R$| R$|Right$)/i.test(k));
+      const centerKeys = keys.filter(k => !/(_L$| L$|Left$|_R$| R$|Right$)/i.test(k));
 
       const { left: leftVal, right: rightVal } = this.computeSideValues(base, balance);
 
@@ -949,43 +1071,50 @@ export class EngineThree {
   };
 
   // ========================================
-  // Mesh Render Order (eyes/body/hair layering)
+  // Mesh Render Order & Material Settings
+  // Configured via CC4_MESHES in shapeDict.ts
   // ========================================
 
   /**
-   * Set up render order for all meshes to ensure proper layering.
-   * Eyes render first (behind), then face/body, then hair (on top).
-   * This prevents eyes from showing through transparent hair.
+   * Set up render order and material settings for all meshes.
+   * Settings are defined in CC4_MESHES (shapeDict.ts) per-mesh.
    */
   private setupMeshRenderOrder(model: THREE.Object3D) {
     model.traverse((obj) => {
       if (!(obj as THREE.Mesh).isMesh) return;
       const mesh = obj as THREE.Mesh;
       const info = CC4_MESHES[mesh.name];
-      const category = info?.category;
+      if (!info?.material) return;
 
-      // Render order hierarchy:
-      // -10: Eyes (render first, behind everything)
-      //  -5: Eye occlusion, tear lines
-      //   0: Body, teeth, tongue (default)
-      //   5: Eyebrows (above face)
-      //  10: Hair (render last, on top of everything)
-      switch (category) {
-        case 'eye':
-        case 'cornea':
-          mesh.renderOrder = -10;
-          break;
-        case 'eyeOcclusion':
-        case 'tearLine':
-          mesh.renderOrder = -5;
-          break;
-        case 'eyebrow':
-          mesh.renderOrder = 5;
-          break;
-        case 'hair':
-          mesh.renderOrder = 10;
-          break;
-        // body, teeth, tongue, etc. stay at default 0
+      const settings = info.material;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+
+      // Apply render order
+      if (settings.renderOrder !== undefined) {
+        mesh.renderOrder = settings.renderOrder;
+      }
+
+      // Apply material settings
+      if (mat) {
+        if (settings.transparent !== undefined) {
+          mat.transparent = settings.transparent;
+        }
+        if (settings.opacity !== undefined) {
+          mat.opacity = settings.opacity;
+        }
+        if (settings.depthWrite !== undefined) {
+          mat.depthWrite = settings.depthWrite;
+        }
+        if (settings.depthTest !== undefined) {
+          mat.depthTest = settings.depthTest;
+        }
+        if (settings.blending !== undefined) {
+          const blendValue = EngineThree.BLENDING_MODES[settings.blending];
+          if (blendValue !== undefined) {
+            mat.blending = blendValue;
+          }
+        }
+        mat.needsUpdate = true;
       }
     });
   }

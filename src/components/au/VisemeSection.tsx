@@ -219,7 +219,7 @@ function VisemeSection({
               return (
                 <Box key={key} w="100%" p={3} bg="gray.700" borderRadius="md" border="1px dashed" borderColor="gray.600">
                   <HStack justify="space-between">
-                    <Text fontSize="sm" color="gray.300">
+                    <Text fontSize="sm" color="white">
                       {key} (index {index})
                     </Text>
                     <Button

@@ -38,7 +38,7 @@ export default function EngineSceneSwitcher({
         {/* Engine Selector */}
         <Box>
           <HStack justify="space-between" mb={2}>
-            <Text fontSize="sm" color="gray.300" fontWeight="medium">
+            <Text fontSize="sm" color="white" fontWeight="medium">
               Rendering Engine
             </Text>
             <Badge
@@ -66,7 +66,7 @@ export default function EngineSceneSwitcher({
               </option>
             </NativeSelect.Field>
           </NativeSelect.Root>
-          <Text fontSize="xs" color="gray.500" mt={1}>
+          <Text fontSize="xs" color="white" mt={1}>
             {currentEngine === 'three'
               ? 'Classic imperative Three.js engine with manual RAF loop'
               : 'Declarative React Three Fiber engine with useFrame hooks'}
@@ -78,7 +78,7 @@ export default function EngineSceneSwitcher({
         {/* Scene Selector */}
         <Box>
           <HStack justify="space-between" mb={2}>
-            <Text fontSize="sm" color="gray.300" fontWeight="medium">
+            <Text fontSize="sm" color="white" fontWeight="medium">
               Scene Renderer
             </Text>
             <Badge
@@ -106,7 +106,7 @@ export default function EngineSceneSwitcher({
               </option>
             </NativeSelect.Field>
           </NativeSelect.Root>
-          <Text fontSize="xs" color="gray.500" mt={1}>
+          <Text fontSize="xs" color="white" mt={1}>
             {currentScene === 'glb'
               ? 'Manual WebGL renderer with custom loading animation'
               : 'Declarative R3F canvas with Suspense and Environment'}

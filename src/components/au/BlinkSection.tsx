@@ -59,7 +59,7 @@ function BlinkSection({ disabled = false, defaultExpanded = false }: BlinkSectio
     return (
       <DockableAccordionItem title="Blinking" isDefaultExpanded={defaultExpanded}>
         <Box p={2}>
-          <Text fontSize="sm" color="gray.400">
+          <Text fontSize="sm" color="white">
             Waiting for animation service...
           </Text>
         </Box>
@@ -136,7 +136,7 @@ function BlinkSection({ disabled = false, defaultExpanded = false }: BlinkSectio
         <VStack align="stretch" gap={1}>
           <HStack justify="space-between">
             <Text fontSize="xs" color="gray.50">Frequency (blinks/min)</Text>
-            <Text fontSize="xs" color="gray.300">
+            <Text fontSize="xs" color="white">
               {state.frequency.toFixed(0)}
             </Text>
           </HStack>
@@ -155,7 +155,7 @@ function BlinkSection({ disabled = false, defaultExpanded = false }: BlinkSectio
               <Slider.Thumb index={0} />
             </Slider.Control>
           </Slider.Root>
-          <Text fontSize="xs" color="gray.500" fontStyle="italic">
+          <Text fontSize="xs" color="white" fontStyle="italic">
             Typical: 15-20 blinks/min
           </Text>
         </VStack>
@@ -164,7 +164,7 @@ function BlinkSection({ disabled = false, defaultExpanded = false }: BlinkSectio
         <VStack align="stretch" gap={1}>
           <HStack justify="space-between">
             <Text fontSize="xs" color="gray.50">Duration (seconds)</Text>
-            <Text fontSize="xs" color="gray.300">
+            <Text fontSize="xs" color="white">
               {state.duration.toFixed(2)}s
             </Text>
           </HStack>
@@ -183,7 +183,7 @@ function BlinkSection({ disabled = false, defaultExpanded = false }: BlinkSectio
               <Slider.Thumb index={0} />
             </Slider.Control>
           </Slider.Root>
-          <Text fontSize="xs" color="gray.500" fontStyle="italic">
+          <Text fontSize="xs" color="white" fontStyle="italic">
             Typical: 0.1-0.3 seconds
           </Text>
         </VStack>
@@ -192,7 +192,7 @@ function BlinkSection({ disabled = false, defaultExpanded = false }: BlinkSectio
         <VStack align="stretch" gap={1}>
           <HStack justify="space-between">
             <Text fontSize="xs" color="gray.50">Intensity</Text>
-            <Text fontSize="xs" color="gray.300">
+            <Text fontSize="xs" color="white">
               {(state.intensity * 100).toFixed(0)}%
             </Text>
           </HStack>
@@ -217,7 +217,7 @@ function BlinkSection({ disabled = false, defaultExpanded = false }: BlinkSectio
         <VStack align="stretch" gap={1}>
           <HStack justify="space-between">
             <Text fontSize="xs" color="gray.50">Randomness</Text>
-            <Text fontSize="xs" color="gray.300">
+            <Text fontSize="xs" color="white">
               {(state.randomness * 100).toFixed(0)}%
             </Text>
           </HStack>
@@ -236,7 +236,7 @@ function BlinkSection({ disabled = false, defaultExpanded = false }: BlinkSectio
               <Slider.Thumb index={0} />
             </Slider.Control>
           </Slider.Root>
-          <Text fontSize="xs" color="gray.500" fontStyle="italic">
+          <Text fontSize="xs" color="white" fontStyle="italic">
             Adds natural variation to timing and intensity
           </Text>
         </VStack>

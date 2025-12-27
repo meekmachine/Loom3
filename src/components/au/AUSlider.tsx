@@ -217,7 +217,7 @@ const AUSlider: React.FC<AUSliderProps> = ({
         <Box pt={2} borderTop="1px solid" borderColor="gray.600">
           <HStack mb={1} justify="space-between">
             <Text fontSize="xs" color="blue.300">L</Text>
-            <Text fontSize="xs" color="gray.300">
+            <Text fontSize="xs" color="white">
               Balance {getBalance().toFixed(2)}
             </Text>
             <Text fontSize="xs" color="orange.300">R</Text>
@@ -244,8 +244,8 @@ const AUSlider: React.FC<AUSliderProps> = ({
       {hasMixedAU && engine && (
         <Box pt={2} borderTop="1px solid" borderColor="gray.600">
           <HStack mb={1} justify="space-between">
-            <Text fontSize="xs" color="gray.300">Blend (Morph ↔ Bone)</Text>
-            <Text fontSize="xs" color="gray.400">
+            <Text fontSize="xs" color="white">Blend (Morph ↔ Bone)</Text>
+            <Text fontSize="xs" color="white">
               {getMix().toFixed(2)}
             </Text>
           </HStack>

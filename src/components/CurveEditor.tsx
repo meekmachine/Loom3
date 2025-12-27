@@ -221,7 +221,7 @@ export const CurveEditor: React.FC<CurveEditorProps> = ({
         <HStack mb={1} gap={2} justify="space-between" w="100%">
           <HStack gap={2}>
             <Text fontWeight="bold" fontSize="md" color="gray.50">{label}</Text>
-            <Text fontSize="xs" color="gray.400">AU {auId}</Text>
+            <Text fontSize="xs" color="white">AU {auId}</Text>
           </HStack>
           {isPlaying && (
             <HStack gap={1}>
@@ -393,7 +393,7 @@ export const CurveEditor: React.FC<CurveEditorProps> = ({
           )}
         </svg>
       </Box>
-      <Text fontSize="xs" color="gray.400" mt={1} opacity={0.8}>
+      <Text fontSize="xs" color="white" mt={1} opacity={0.8}>
         Click to add keyframe. Drag to move. Right-click to delete.
       </Text>
     </VStack>

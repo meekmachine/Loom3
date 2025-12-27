@@ -89,8 +89,8 @@ export const AU_TO_MORPHS: Record<number, string[]> = {
   71: ['Eye_R_Look_Up'],
   72: ['Eye_R_Look_Down'],
 
-  // Eye Occlusion morphs (CC_Base_EyeOcclusion meshes)
-  // These control the shadow/depth around the eyes
+  // Eye morphs (CC_Base_Eye meshes)
+  // EO morphs control the shadow/depth around the eyes
   80: ['EO Bulge L', 'EO Bulge R'],
   81: ['EO Depth L', 'EO Depth R'],
   82: ['EO Inner Depth L', 'EO Inner Depth R'],
@@ -223,7 +223,8 @@ export const isMixedAU = (id: number): boolean =>
 /** Check if an AU has separate left/right morphs */
 export const hasLeftRightMorphs = (auId: number): boolean => {
   const keys = AU_TO_MORPHS[auId] || [];
-  return keys.some(k => /_L$|_R$|Left$|Right$/.test(k));
+  // Match: _L, _R, Left, Right, or " L"/" R" (space+letter) at end of string
+  return keys.some(k => /_L$|_R$| L$| R$|Left$|Right$/i.test(k));
 };
 
 export const COMPOSITE_ROTATIONS: CompositeRotation[] = [
@@ -411,30 +412,30 @@ export const AU_INFO: Record<string, AUInfo> = {
   '55': { id:'55', name:'Head Tilt Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head' },
   '56': { id:'56', name:'Head Tilt Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head' },
 
-  // Eye Occlusion (Upper) - controls shadow/depth around the eyes
-  '80': { id:'80', name:'Eye Bulge',              faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '81': { id:'81', name:'Eye Depth',              faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '82': { id:'82', name:'Eye Inner Depth',        faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '83': { id:'83', name:'Eye Inner Height',       faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '84': { id:'84', name:'Eye Inner Width',        faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '85': { id:'85', name:'Eye Outer Depth',        faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '86': { id:'86', name:'Eye Outer Height',       faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '87': { id:'87', name:'Eye Outer Width',        faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '88': { id:'88', name:'Eye Upper Depth',        faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '89': { id:'89', name:'Eye Lower Depth',        faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '90': { id:'90', name:'Eye Center Upper Depth', faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '91': { id:'91', name:'Eye Center Upper Height',faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '92': { id:'92', name:'Eye Center Lower Depth', faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '93': { id:'93', name:'Eye Center Lower Height',faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '94': { id:'94', name:'Eye Inner Upper Depth',  faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '95': { id:'95', name:'Eye Inner Upper Height', faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '96': { id:'96', name:'Eye Inner Lower Depth',  faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '97': { id:'97', name:'Eye Inner Lower Height', faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '98': { id:'98', name:'Eye Outer Upper Depth',  faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '99': { id:'99', name:'Eye Outer Upper Height', faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '100': { id:'100', name:'Eye Outer Lower Depth', faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '101': { id:'101', name:'Eye Outer Lower Height',faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
-  '102': { id:'102', name:'Eye Duct Depth',        faceArea:'Upper', facePart:'EyeOcclusion', faceSection:'EyeOcclusion' },
+  // Eye (Upper) - EO morphs applied to CC_Base_Eye meshes
+  '80': { id:'80', name:'Eye Bulge',              faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '81': { id:'81', name:'Eye Depth',              faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '82': { id:'82', name:'Eye Inner Depth',        faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '83': { id:'83', name:'Eye Inner Height',       faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '84': { id:'84', name:'Eye Inner Width',        faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '85': { id:'85', name:'Eye Outer Depth',        faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '86': { id:'86', name:'Eye Outer Height',       faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '87': { id:'87', name:'Eye Outer Width',        faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '88': { id:'88', name:'Eye Upper Depth',        faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '89': { id:'89', name:'Eye Lower Depth',        faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '90': { id:'90', name:'Eye Center Upper Depth', faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '91': { id:'91', name:'Eye Center Upper Height',faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '92': { id:'92', name:'Eye Center Lower Depth', faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '93': { id:'93', name:'Eye Center Lower Height',faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '94': { id:'94', name:'Eye Inner Upper Depth',  faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '95': { id:'95', name:'Eye Inner Upper Height', faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '96': { id:'96', name:'Eye Inner Lower Depth',  faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '97': { id:'97', name:'Eye Inner Lower Height', faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '98': { id:'98', name:'Eye Outer Upper Depth',  faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '99': { id:'99', name:'Eye Outer Upper Height', faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '100': { id:'100', name:'Eye Outer Lower Depth', faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '101': { id:'101', name:'Eye Outer Lower Height',faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
+  '102': { id:'102', name:'Eye Duct Depth',        faceArea:'Upper', facePart:'Eye', faceSection:'Eye' },
 };
 
 /** Default mix weights (0 = morph only, 1 = bone only) */
@@ -452,48 +453,71 @@ export const AU_MIX_DEFAULTS: Record<number, number> = {
 
 export type MeshCategory = 'body' | 'eye' | 'eyeOcclusion' | 'tearLine' | 'teeth' | 'tongue' | 'hair' | 'eyebrow' | 'cornea' | 'eyelash';
 
+/** Blending mode names (matches Three.js constants) */
+export type BlendingMode = 'Normal' | 'Additive' | 'Subtractive' | 'Multiply' | 'None';
+
+/** Material settings for mesh rendering */
+export interface MeshMaterialSettings {
+  renderOrder?: number;
+  transparent?: boolean;
+  opacity?: number;
+  depthWrite?: boolean;
+  depthTest?: boolean;
+  blending?: BlendingMode;
+}
+
+/** Mesh info including category, morph count, and optional material settings */
+export interface MeshInfo {
+  category: MeshCategory;
+  morphCount: number;
+  material?: MeshMaterialSettings;
+}
+
 /** Exact mesh name -> category mapping from the character GLB */
-export const CC4_MESHES: Record<string, { category: MeshCategory; morphCount: number }> = {
-  // Body (6 meshes, 80 morphs each)
+export const CC4_MESHES: Record<string, MeshInfo> = {
+  // Body (6 meshes, 80 morphs each) - default render order 0
   'CC_Base_Body_1': { category: 'body', morphCount: 80 },
   'CC_Base_Body_2': { category: 'body', morphCount: 80 },
   'CC_Base_Body_3': { category: 'body', morphCount: 80 },
   'CC_Base_Body_4': { category: 'body', morphCount: 80 },
   'CC_Base_Body_5': { category: 'body', morphCount: 80 },
   'CC_Base_Body_6': { category: 'body', morphCount: 80 },
-  // Eyes (bone-driven, no morphs)
-  'CC_Base_Eye': { category: 'eye', morphCount: 0 },
-  'CC_Base_Eye_1': { category: 'eye', morphCount: 0 },
-  // Eye occlusion (94 morphs each)
-  'CC_Base_EyeOcclusion_1': { category: 'eyeOcclusion', morphCount: 94 },
-  'CC_Base_EyeOcclusion_2': { category: 'eyeOcclusion', morphCount: 94 },
-  // Tear lines (90 morphs each)
-  'CC_Base_TearLine_1': { category: 'tearLine', morphCount: 90 },
-  'CC_Base_TearLine_2': { category: 'tearLine', morphCount: 90 },
-  // Cornea (no morphs)
-  'CC_Base_Cornea': { category: 'cornea', morphCount: 0 },
-  'CC_Base_Cornea_1': { category: 'cornea', morphCount: 0 },
-  // Teeth (no morphs, follow jaw bone)
+  // Eyes (bone-driven, no morphs) - render first (behind everything)
+  'CC_Base_Eye': { category: 'eye', morphCount: 0, material: { renderOrder: -10 } },
+  'CC_Base_Eye_1': { category: 'eye', morphCount: 0, material: { renderOrder: -10 } },
+  'CC_Base_Eye_2': { category: 'eye', morphCount: 0, material: { renderOrder: -10 } },
+  'CC_Base_Eye_3': { category: 'eye', morphCount: 0, material: { renderOrder: -10 } },
+  'CC_Base_Eye_4': { category: 'eye', morphCount: 0, material: { renderOrder: -10 } },
+  // Eye occlusion (94 morphs each) - render on top of eyes with transparency support
+  'CC_Base_EyeOcclusion_1': { category: 'eyeOcclusion', morphCount: 94, material: { renderOrder: 2, transparent: true, opacity: 1, depthWrite: true, depthTest: true, blending: 'Normal' } },
+  'CC_Base_EyeOcclusion_2': { category: 'eyeOcclusion', morphCount: 94, material: { renderOrder: 2, transparent: true, opacity: 1, depthWrite: true, depthTest: true, blending: 'Normal' } },
+  // Tear lines (90 morphs each) - on top of eyes/face
+  'CC_Base_TearLine_1': { category: 'tearLine', morphCount: 90, material: { renderOrder: 2 } },
+  'CC_Base_TearLine_2': { category: 'tearLine', morphCount: 90, material: { renderOrder: 2 } },
+  // Cornea (no morphs) - render first with eyes
+  'CC_Base_Cornea': { category: 'cornea', morphCount: 0, material: { renderOrder: -10 } },
+  'CC_Base_Cornea_1': { category: 'cornea', morphCount: 0, material: { renderOrder: -10 } },
+  // Teeth (no morphs, follow jaw bone) - default render order
   'CC_Base_Teeth_1': { category: 'teeth', morphCount: 0 },
   'CC_Base_Teeth_2': { category: 'teeth', morphCount: 0 },
-  // Tongue (23 morphs)
+  // Tongue (23 morphs) - default render order
   'CC_Base_Tongue': { category: 'tongue', morphCount: 23 },
-  // Eyebrows (91 morphs each)
-  'Male_Bushy_1': { category: 'eyebrow', morphCount: 91 },
-  'Male_Bushy_2': { category: 'eyebrow', morphCount: 91 },
-  // Hair (14 styling morphs each)
-  'Side_part_wavy_1': { category: 'hair', morphCount: 14 },
-  'Side_part_wavy_2': { category: 'hair', morphCount: 14 },
+  // Eyebrows (91 morphs each) - above face
+  'Male_Bushy_1': { category: 'eyebrow', morphCount: 91, material: { renderOrder: 5 } },
+  'Male_Bushy_2': { category: 'eyebrow', morphCount: 91, material: { renderOrder: 5 } },
+  // Hair (14 styling morphs each) - render last (on top of everything)
+  'Side_part_wavy_1': { category: 'hair', morphCount: 14, material: { renderOrder: 10 } },
+  'Side_part_wavy_2': { category: 'hair', morphCount: 14, material: { renderOrder: 10 } },
 };
 
-export type MorphCategory = 'face' | 'viseme' | 'eyeOcclusion' | 'tearLine' | 'tongue' | 'hair';
+export type MorphCategory = 'face' | 'viseme' | 'eye' | 'tearLine' | 'tongue' | 'hair';
 
 /** Which mesh each morph category applies to */
 export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {
   // Face/AU morphs affect the main face mesh and both eyebrow meshes.
   face: ['CC_Base_Body_1', 'Male_Bushy_1', 'Male_Bushy_2'],
   viseme: ['CC_Base_Body_1'],
-  eyeOcclusion: ['CC_Base_EyeOcclusion_1', 'CC_Base_EyeOcclusion_2'],
+  eye: ['CC_Base_EyeOcclusion_1', 'CC_Base_EyeOcclusion_2'],
   tearLine: ['CC_Base_TearLine_1', 'CC_Base_TearLine_2'],
   tongue: ['CC_Base_Tongue'],
   hair: ['Side_part_wavy_1', 'Side_part_wavy_2'],

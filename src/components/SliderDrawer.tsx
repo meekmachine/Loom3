@@ -281,7 +281,7 @@ const AUControlsPanel = memo(({
         Reset to Neutral
       </Button>
       <HStack justify="space-between">
-        <Text fontSize="sm" color="gray.300">Use curve editor</Text>
+        <Text fontSize="sm" color="white">Use curve editor</Text>
         <Switch.Root
           checked={useCurveEditor}
           onCheckedChange={(details) => onUseCurveEditorChange(details.checked)}
@@ -296,7 +296,7 @@ const AUControlsPanel = memo(({
       </HStack>
       {useCurveEditor && (
         <HStack justify="space-between">
-          <Text fontSize="sm" color="gray.300">Show only playing</Text>
+          <Text fontSize="sm" color="white">Show only playing</Text>
           <Switch.Root
             checked={showOnlyPlayingSnippets}
             onCheckedChange={(details) => onShowOnlyPlayingChange(details.checked)}
@@ -311,7 +311,7 @@ const AUControlsPanel = memo(({
         </HStack>
       )}
       <HStack justify="space-between">
-        <Text fontSize="sm" color="gray.300">Group by</Text>
+        <Text fontSize="sm" color="white">Group by</Text>
         <Button
           size="xs"
           onClick={onSegmentationModeToggle}
@@ -645,7 +645,7 @@ export default function SliderDrawer({
                   position="absolute"
                   top={2}
                   right={2}
-                  color="gray.400"
+                  color="white"
                   _hover={{ color: 'gray.200', bg: 'gray.700' }}
                 />
               </Drawer.CloseTrigger>

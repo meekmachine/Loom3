@@ -111,7 +111,7 @@ function ModulesMenu({ animationManager }: ModulesMenuProps) {
             size="sm"
             aria-label="Toggle modules menu"
             colorPalette="brand"
-            color="gray.400"
+            color="white"
             _hover={{ color: 'gray.200', bg: 'gray.700' }}
           >
             {isMenuOpen ? <ChevronUp /> : <ChevronDown />}
@@ -133,7 +133,7 @@ function ModulesMenu({ animationManager }: ModulesMenuProps) {
                   <Box flex="1" textAlign="left" color="gray.50">
                     {module.name}
                   </Box>
-                  <Accordion.ItemIndicator color="gray.400" />
+                  <Accordion.ItemIndicator color="white" />
                 </Accordion.ItemTrigger>
                 <Accordion.ItemContent pb={4} bg="gray.800">
                   <VStack align="stretch" gap={3}>
@@ -163,7 +163,7 @@ function ModulesMenu({ animationManager }: ModulesMenuProps) {
                     {/* Settings for AI Chat module */}
                     {module.name === 'AI Chat' && (
                       <Field.Root>
-                        <Field.Label fontSize="sm" color="gray.300">Anthropic API Key</Field.Label>
+                        <Field.Label fontSize="sm" color="white">Anthropic API Key</Field.Label>
                         <Input
                           type="password"
                           placeholder="sk-ant-..."
@@ -188,7 +188,7 @@ function ModulesMenu({ animationManager }: ModulesMenuProps) {
                           _hover={{ borderColor: 'gray.500' }}
                           _focus={{ borderColor: 'brand.500', bg: 'gray.700' }}
                         />
-                        <Text fontSize="xs" color="gray.400" mt={1}>
+                        <Text fontSize="xs" color="white" mt={1}>
                           Get your API key from{' '}
                           <a
                             href="https://console.anthropic.com/"

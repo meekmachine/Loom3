@@ -233,11 +233,11 @@ function AUSection({
                           <Text fontSize="sm" color="gray.200" fontWeight="semibold">
                             {label} (AU {pair.negative} ↔ AU {pair.positive})
                           </Text>
-                          <Text fontSize="xs" color="gray.400">
+                          <Text fontSize="xs" color="white">
                             Continuum curves mirror the sliders (morph + bone). Add a snippet that includes both sides of this pair.
                           </Text>
                         </Box>
-                        <Text fontSize="xs" color="gray.500">No curves</Text>
+                        <Text fontSize="xs" color="white">No curves</Text>
                       </HStack>
                     </Box>
                   );
@@ -271,7 +271,7 @@ function AUSection({
               return (
                 <Box key={au.id} w="100%" p={3} bg="gray.700" borderRadius="md" border="1px dashed" borderColor="gray.600">
                   <HStack justify="space-between">
-                    <Text fontSize="sm" color="gray.300">
+                    <Text fontSize="sm" color="white">
                       {au.name} (AU {au.id})
                     </Text>
                     <Button

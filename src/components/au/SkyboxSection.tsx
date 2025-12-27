@@ -53,7 +53,7 @@ function SkyboxSection({ engine, disabled = false, defaultExpanded = false }: Sk
     return (
       <DockableAccordionItem title="Skybox & Lighting" isDefaultExpanded={defaultExpanded}>
         <Box p={2}>
-          <Text fontSize="sm" color="gray.400">Loading...</Text>
+          <Text fontSize="sm" color="white">Loading...</Text>
         </Box>
       </DockableAccordionItem>
     );
@@ -69,15 +69,15 @@ function SkyboxSection({ engine, disabled = false, defaultExpanded = false }: Sk
         {/* Skybox Controls */}
         {isReady && (
           <>
-            <Text fontSize="xs" fontWeight="bold" color="gray.400" textTransform="uppercase" letterSpacing="wider">
+            <Text fontSize="xs" fontWeight="bold" color="white" textTransform="uppercase" letterSpacing="wider">
               Skybox
             </Text>
 
             {/* Blur */}
             <Box>
               <HStack justify="space-between" mb={1}>
-                <Text fontSize="sm" color="gray.300">Blur</Text>
-                <Text fontSize="xs" color="gray.500">{(blur * 100).toFixed(0)}%</Text>
+                <Text fontSize="sm" color="white">Blur</Text>
+                <Text fontSize="xs" color="white">{(blur * 100).toFixed(0)}%</Text>
               </HStack>
               <Slider.Root
                 value={[blur]}
@@ -99,8 +99,8 @@ function SkyboxSection({ engine, disabled = false, defaultExpanded = false }: Sk
             {/* Intensity (uses scene backgroundIntensity) */}
             <Box>
               <HStack justify="space-between" mb={1}>
-                <Text fontSize="sm" color="gray.300">Intensity</Text>
-                <Text fontSize="xs" color="gray.500">{(intensity * 100).toFixed(0)}%</Text>
+                <Text fontSize="sm" color="white">Intensity</Text>
+                <Text fontSize="xs" color="white">{(intensity * 100).toFixed(0)}%</Text>
               </HStack>
               <Slider.Root
                 value={[intensity]}

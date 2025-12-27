@@ -103,7 +103,7 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
     return (
       <DockableAccordionItem title="Eye & Head Tracking" isDefaultExpanded={defaultExpanded}>
         <VStack align="stretch" gap={4}>
-          <Text fontSize="sm" color="gray.500">Eye/head tracking service initializing...</Text>
+          <Text fontSize="sm" color="white">Eye/head tracking service initializing...</Text>
         </VStack>
       </DockableAccordionItem>
     );
@@ -114,7 +114,7 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
       <VStack align="stretch" gap={4}>
         {/* Mode Selection */}
         <Box>
-          <Text fontSize="sm" fontWeight="bold" mb={2} color="gray.300">Tracking Mode</Text>
+          <Text fontSize="sm" fontWeight="bold" mb={2} color="white">Tracking Mode</Text>
           <VStack gap={2} align="stretch">
             <HStack justify="space-between" bg={trackingMode === 'manual' ? 'blue.900' : 'gray.800'} p={2} borderRadius="md">
               <Text fontSize="sm" color={trackingMode === 'manual' ? 'blue.100' : 'gray.400'}>Manual Control</Text>
@@ -144,23 +144,23 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
         {trackingMode === 'webcam' && (
           <Box>
             <HStack gap={2} mb={2}>
-              <Text fontSize="sm" color="gray.300">Face Detection:</Text>
+              <Text fontSize="sm" color="white">Face Detection:</Text>
               <Badge colorPalette={webcamFaceDetected ? 'green' : 'yellow'}>{webcamFaceDetected ? 'Detected' : 'Searching...'}</Badge>
             </HStack>
             <Box ref={videoContainerRef} position="relative" display="inline-block" width="100%" minHeight="200px" bg="black" borderRadius="md" />
-            <Text fontSize="xs" color="gray.500" mt={2}>{eyeHeadTrackingService?.isWebcamActive() ? 'Webcam active - character tracking your face' : 'Initializing webcam...'}</Text>
+            <Text fontSize="xs" color="white" mt={2}>{eyeHeadTrackingService?.isWebcamActive() ? 'Webcam active - character tracking your face' : 'Initializing webcam...'}</Text>
           </Box>
         )}
 
         {/* Manual Control Sliders */}
         {trackingMode === 'manual' && (
           <Box>
-            <Text fontSize="sm" fontWeight="bold" mb={2} color="gray.300">Manual Gaze Control</Text>
+            <Text fontSize="sm" fontWeight="bold" mb={2} color="white">Manual Gaze Control</Text>
             <VStack gap={3} align="stretch">
               <VStack gap={1} align="stretch">
                 <HStack justify="space-between">
-                  <Text fontSize="xs" color="gray.400">Horizontal</Text>
-                  <Text fontSize="xs" color="gray.400" fontFamily="mono">{gazeX.toFixed(2)}</Text>
+                  <Text fontSize="xs" color="white">Horizontal</Text>
+                  <Text fontSize="xs" color="white" fontFamily="mono">{gazeX.toFixed(2)}</Text>
                 </HStack>
                 <Slider.Root value={[gazeX]} onValueChange={(d) => handleManualGazeChange(d.value[0], gazeY)} min={-1} max={1} step={0.01} disabled={disabled}>
                   <Slider.Control><Slider.Track><Slider.Range /></Slider.Track><Slider.Thumb index={0} /></Slider.Control>
@@ -168,8 +168,8 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
               </VStack>
               <VStack gap={1} align="stretch">
                 <HStack justify="space-between">
-                  <Text fontSize="xs" color="gray.400">Vertical</Text>
-                  <Text fontSize="xs" color="gray.400" fontFamily="mono">{gazeY.toFixed(2)}</Text>
+                  <Text fontSize="xs" color="white">Vertical</Text>
+                  <Text fontSize="xs" color="white" fontFamily="mono">{gazeY.toFixed(2)}</Text>
                 </HStack>
                 <Slider.Root value={[gazeY]} onValueChange={(d) => handleManualGazeChange(gazeX, d.value[0])} min={-1} max={1} step={0.01} disabled={disabled}>
                   <Slider.Control><Slider.Track><Slider.Range /></Slider.Track><Slider.Thumb index={0} /></Slider.Control>
@@ -189,12 +189,12 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
 
         {/* Configuration */}
         <Box pt={4} borderTop="1px" borderColor="gray.700">
-          <Text fontSize="sm" fontWeight="bold" mb={3} color="gray.300">Tracking Configuration</Text>
+          <Text fontSize="sm" fontWeight="bold" mb={3} color="white">Tracking Configuration</Text>
           <VStack gap={3} align="stretch">
             {/* Eye Tracking */}
             <Box>
               <HStack justify="space-between" mb={2}>
-                <Text fontSize="xs" color="gray.400">Eye Tracking</Text>
+                <Text fontSize="xs" color="white">Eye Tracking</Text>
                 <Switch.Root checked={eyeTrackingEnabled} onCheckedChange={(d) => { setEyeTrackingEnabled(d.checked); handleConfigChange({ eyeTrackingEnabled: d.checked }); }} size="sm" colorPalette="blue" disabled={disabled}>
                   <Switch.HiddenInput />
                   <Switch.Control><Switch.Thumb /></Switch.Control>
@@ -203,8 +203,8 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
               {eyeTrackingEnabled && (
                 <VStack gap={1} align="stretch">
                   <HStack justify="space-between">
-                    <Text fontSize="xs" color="gray.400">Eye Intensity</Text>
-                    <Text fontSize="xs" color="gray.400" fontFamily="mono">{eyeSaccadeSpeed.toFixed(2)}</Text>
+                    <Text fontSize="xs" color="white">Eye Intensity</Text>
+                    <Text fontSize="xs" color="white" fontFamily="mono">{eyeSaccadeSpeed.toFixed(2)}</Text>
                   </HStack>
                   <Slider.Root value={[eyeSaccadeSpeed]} onValueChange={(d) => { setEyeSaccadeSpeed(d.value[0]); handleConfigChange({ eyeIntensity: d.value[0] }); }} min={0} max={1} step={0.01} disabled={disabled}>
                     <Slider.Control><Slider.Track><Slider.Range /></Slider.Track><Slider.Thumb index={0} /></Slider.Control>
@@ -216,7 +216,7 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
             {/* Head Tracking */}
             <Box>
               <HStack justify="space-between" mb={2}>
-                <Text fontSize="xs" color="gray.400">Head Tracking</Text>
+                <Text fontSize="xs" color="white">Head Tracking</Text>
                 <Switch.Root checked={headTrackingEnabled} onCheckedChange={(d) => { setHeadTrackingEnabled(d.checked); handleConfigChange({ headTrackingEnabled: d.checked }); }} size="sm" colorPalette="green" disabled={disabled}>
                   <Switch.HiddenInput />
                   <Switch.Control><Switch.Thumb /></Switch.Control>
@@ -226,15 +226,15 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
                 <VStack gap={2} align="stretch">
                   <VStack gap={1} align="stretch">
                     <HStack justify="space-between">
-                      <Text fontSize="xs" color="gray.400">Head Intensity</Text>
-                      <Text fontSize="xs" color="gray.400" fontFamily="mono">{headSpeed.toFixed(2)}</Text>
+                      <Text fontSize="xs" color="white">Head Intensity</Text>
+                      <Text fontSize="xs" color="white" fontFamily="mono">{headSpeed.toFixed(2)}</Text>
                     </HStack>
                     <Slider.Root value={[headSpeed]} onValueChange={(d) => { setHeadSpeed(d.value[0]); handleConfigChange({ headIntensity: d.value[0] }); }} min={0} max={1} step={0.01} disabled={disabled}>
                       <Slider.Control><Slider.Track><Slider.Range /></Slider.Track><Slider.Thumb index={0} /></Slider.Control>
                     </Slider.Root>
                   </VStack>
                   <HStack justify="space-between" mt={2}>
-                    <Text fontSize="xs" color="gray.400">Head Follow Eyes</Text>
+                    <Text fontSize="xs" color="white">Head Follow Eyes</Text>
                     <Switch.Root checked={headFollowEyes} onCheckedChange={(d) => { setHeadFollowEyes(d.checked); handleConfigChange({ headFollowEyes: d.checked }); }} size="sm" colorPalette="green" disabled={disabled}>
                       <Switch.HiddenInput />
                       <Switch.Control><Switch.Thumb /></Switch.Control>
@@ -243,8 +243,8 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
                   {headFollowEyes && (
                     <VStack gap={1} align="stretch">
                       <HStack justify="space-between">
-                        <Text fontSize="xs" color="gray.400">Head Follow Delay (ms)</Text>
-                        <Text fontSize="xs" color="gray.400" fontFamily="mono">{headFollowDelay}</Text>
+                        <Text fontSize="xs" color="white">Head Follow Delay (ms)</Text>
+                        <Text fontSize="xs" color="white" fontFamily="mono">{headFollowDelay}</Text>
                       </HStack>
                       <Slider.Root value={[headFollowDelay]} onValueChange={(d) => { setHeadFollowDelay(d.value[0]); handleConfigChange({ headFollowDelay: d.value[0] }); }} min={0} max={1000} step={50} disabled={disabled}>
                         <Slider.Control><Slider.Track><Slider.Range /></Slider.Track><Slider.Thumb index={0} /></Slider.Control>
@@ -259,12 +259,12 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
 
         {/* Blend Weights */}
         <Box pt={4} borderTop="1px" borderColor="gray.700">
-          <Text fontSize="sm" fontWeight="bold" mb={3} color="gray.300">Morph ↔ Bone Blend</Text>
+          <Text fontSize="sm" fontWeight="bold" mb={3} color="white">Morph ↔ Bone Blend</Text>
           <VStack gap={3} align="stretch">
             <VStack gap={1} align="stretch">
               <HStack justify="space-between">
                 <Text fontSize="xs" color="blue.200">Eyes</Text>
-                <Text fontSize="xs" color="gray.400" fontFamily="mono">{eyeBlendWeight.toFixed(2)}</Text>
+                <Text fontSize="xs" color="white" fontFamily="mono">{eyeBlendWeight.toFixed(2)}</Text>
               </HStack>
               <Slider.Root value={[eyeBlendWeight]} onValueChange={(d) => { setEyeBlendWeight(d.value[0]); eyeHeadTrackingService?.setEyeBlendWeight(d.value[0]); }} min={0} max={1} step={0.01} disabled={disabled || !eyeTrackingEnabled}>
                 <Slider.Control><Slider.Track><Slider.Range /></Slider.Track><Slider.Thumb index={0} /></Slider.Control>
@@ -273,7 +273,7 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
             <VStack gap={1} align="stretch">
               <HStack justify="space-between">
                 <Text fontSize="xs" color="green.200">Head</Text>
-                <Text fontSize="xs" color="gray.400" fontFamily="mono">{headBlendWeight.toFixed(2)}</Text>
+                <Text fontSize="xs" color="white" fontFamily="mono">{headBlendWeight.toFixed(2)}</Text>
               </HStack>
               <Slider.Root value={[headBlendWeight]} onValueChange={(d) => { setHeadBlendWeight(d.value[0]); eyeHeadTrackingService?.setHeadBlendWeight(d.value[0]); }} min={0} max={1} step={0.01} disabled={disabled || !headTrackingEnabled}>
                 <Slider.Control><Slider.Track><Slider.Range /></Slider.Track><Slider.Thumb index={0} /></Slider.Control>
@@ -284,12 +284,12 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
 
         {/* Animation Backend Toggle */}
         <Box pt={4} borderTop="1px" borderColor="gray.700">
-          <Text fontSize="sm" fontWeight="bold" mb={3} color="gray.300">Animation Backend</Text>
+          <Text fontSize="sm" fontWeight="bold" mb={3} color="white">Animation Backend</Text>
           <VStack gap={2} align="stretch">
             <HStack justify="space-between" bg={useAnimationAgency ? 'teal.900' : 'gray.800'} p={2} borderRadius="md">
               <VStack align="start" gap={0}>
                 <Text fontSize="xs" color={useAnimationAgency ? 'teal.100' : 'gray.400'}>Animation Agency (Scheduler)</Text>
-                <Text fontSize="xs" color="gray.500">Priority blending, smooth transitions</Text>
+                <Text fontSize="xs" color="white">Priority blending, smooth transitions</Text>
               </VStack>
               <Switch.Root checked={useAnimationAgency} onCheckedChange={(d) => { setUseAnimationAgency(d.checked); handleConfigChange({ useAnimationAgency: d.checked }); }} size="sm" colorPalette="teal" disabled={disabled}>
                 <Switch.HiddenInput />
@@ -301,11 +301,11 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
 
         {/* Return to Neutral */}
         <Box pt={4} borderTop="1px" borderColor="gray.700">
-          <Text fontSize="sm" fontWeight="bold" mb={3} color="gray.300">Return to Neutral</Text>
+          <Text fontSize="sm" fontWeight="bold" mb={3} color="white">Return to Neutral</Text>
           <VStack gap={3} align="stretch">
             <HStack justify="space-between">
               <VStack align="start" gap={0}>
-                <Text fontSize="xs" color="gray.400">Auto-Return to Center</Text>
+                <Text fontSize="xs" color="white">Auto-Return to Center</Text>
                 <Text fontSize="xs" color="gray.600">Gracefully return to neutral after delay</Text>
               </VStack>
               <Switch.Root checked={returnToNeutralEnabled} onCheckedChange={(d) => { setReturnToNeutralEnabled(d.checked); handleConfigChange({ returnToNeutralEnabled: d.checked }); }} size="sm" colorPalette="cyan" disabled={disabled}>
@@ -316,8 +316,8 @@ function EyeHeadTrackingSection({ engine, disabled = false, defaultExpanded = fa
             {returnToNeutralEnabled && (
               <VStack gap={1} align="stretch">
                 <HStack justify="space-between">
-                  <Text fontSize="xs" color="gray.400">Return Delay (ms)</Text>
-                  <Text fontSize="xs" color="gray.400" fontFamily="mono">{returnToNeutralDelay}ms</Text>
+                  <Text fontSize="xs" color="white">Return Delay (ms)</Text>
+                  <Text fontSize="xs" color="white" fontFamily="mono">{returnToNeutralDelay}ms</Text>
                 </HStack>
                 <Slider.Root value={[returnToNeutralDelay]} onValueChange={(d) => { setReturnToNeutralDelay(d.value[0]); handleConfigChange({ returnToNeutralDelay: d.value[0] }); }} min={500} max={10000} step={500} disabled={disabled}>
                   <Slider.Control><Slider.Track><Slider.Range /></Slider.Track><Slider.Thumb index={0} /></Slider.Control>

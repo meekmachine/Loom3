@@ -543,7 +543,7 @@ function PlaybackControls() {
             {enginePaused ? <FaPlay /> : <FaPause />}
             {enginePaused ? 'Resume' : 'Pause'}
           </Button>
-          <Text fontSize="xs" color="gray.300">
+          <Text fontSize="xs" color="white">
             ({engine?.getActiveTransitionCount?.() || 0} active)
           </Text>
         </HStack>
@@ -602,7 +602,7 @@ function PlaybackControls() {
       >
         {snippets.length === 0 ? (
           <Flex align="center" justify="center" h="100%">
-            <Text fontSize="sm" color="gray.400">
+            <Text fontSize="sm" color="white">
               No animations loaded.
             </Text>
           </Flex>

@@ -157,7 +157,7 @@ function SnippetCard({
       </Flex>
 
       <HStack gap={2} mt={2} alignItems="center">
-        <Text fontSize="xs" color="gray.300">Loop:</Text>
+        <Text fontSize="xs" color="white">Loop:</Text>
         <Switch.Root
           size="sm"
           checked={snippet.loop}
@@ -170,7 +170,7 @@ function SnippetCard({
         </Switch.Root>
       </HStack>
 
-      <Text fontSize="xs" mt={1} color="gray.300">
+      <Text fontSize="xs" mt={1} color="white">
         Time: {localTime.toFixed(2)} / {snippet.duration.toFixed(2)} s
       </Text>
       <Slider.Root
@@ -192,7 +192,7 @@ function SnippetCard({
         </Slider.Control>
       </Slider.Root>
 
-      <Text fontSize="xs" color="gray.300">
+      <Text fontSize="xs" color="white">
         Playback Rate: {localRate.toFixed(2)}x
       </Text>
       <Slider.Root
@@ -212,7 +212,7 @@ function SnippetCard({
         </Slider.Control>
       </Slider.Root>
 
-      <Text fontSize="xs" color="gray.300">
+      <Text fontSize="xs" color="white">
         Intensity: {localIntensity.toFixed(1)}
       </Text>
       <Slider.Root

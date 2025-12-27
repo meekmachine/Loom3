@@ -1,10 +1,7 @@
 node_modules
 dist
 .DS_Store
-
-# Large uncompressed GLB (over 100MB - excluded from deployment)
-public/characters/jonathan.glb
-
-## Panda
-styled-system
-styled-system-studio
+.claude
+.vscode
+*.log
+.npmrc

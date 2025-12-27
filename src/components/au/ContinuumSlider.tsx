@@ -7,23 +7,8 @@ import {
   HStack,
   VStack
 } from '@chakra-ui/react';
-import { AUInfo, AU_MIX_DEFAULTS } from '../../engine/arkit/shapeDict';
+import { AUInfo, AU_MIX_DEFAULTS, CONTINUUM_PAIRS_MAP, CONTINUUM_LABELS } from '../../engine/arkit/shapeDict';
 import { EngineThree } from '../../engine/EngineThree';
-
-// Labels for continuum axes
-const CONTINUUM_LABELS: Record<string, string> = {
-  '61-62': 'Eyes — Horizontal',
-  '64-63': 'Eyes — Vertical',
-  '31-32': 'Head — Horizontal',
-  '54-33': 'Head — Vertical',
-  '55-56': 'Head — Tilt',
-  '30-35': 'Jaw — Horizontal',
-  '38-37': 'Tongue — Vertical',
-  '39-40': 'Tongue — Horizontal',
-  '41-42': 'Tongue — Tilt',
-  '73-74': 'Tongue — Width',
-  '76-77': 'Tongue Tip — Vertical',
-};
 
 interface ContinuumSliderProps {
   negativeAU: AUInfo;
@@ -98,15 +83,11 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
     }
   };
 
-  // Determine which AU is the "base" for mix weight:
-  let baseAUId: number;
-  if ((negId === 61 && posId === 62) || (negId === 31 && posId === 32) || (negId === 55 && posId === 56)) {
-    // Horizontal/yaw or tilt: use negative (left) AU
-    baseAUId = negId;
-  } else {
-    // Vertical/pitch: use positive (up) AU
-    baseAUId = posId;
-  }
+  // Determine which AU is the "base" for mix weight using CONTINUUM_PAIRS_MAP
+  // Yaw/roll axes use negative (left) AU, pitch uses positive (up) AU
+  const pairInfo = CONTINUUM_PAIRS_MAP[negId];
+  const axisType = pairInfo?.axis;
+  const baseAUId = (axisType === 'yaw' || axisType === 'roll') ? negId : posId;
 
   // Initialize mix value from AU_MIX_DEFAULTS
   const [mixValue, setMixValue] = useState<number>(AU_MIX_DEFAULTS[baseAUId] ?? 1.0);

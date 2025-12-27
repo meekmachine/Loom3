@@ -87,8 +87,8 @@ setAU(auId: number, value: number)  // value ∈ [0, 1]
 For bidirectional axes (left/right, up/down), use AU pairs:
 - Eyes horizontal: AU 61 (left) / AU 62 (right)
 - Eyes vertical: AU 63 (up) / AU 64 (down)
-- Head horizontal: AU 31 (left) / AU 32 (right)
-- Head vertical: AU 33 (up) / AU 54 (down)
+- Head horizontal: AU 51 (left) / AU 52 (right)
+- Head vertical: AU 53 (up) / AU 54 (down)
 - Head tilt: AU 55 (left) / AU 56 (right)
 
 #### Mix Weight Control
@@ -280,7 +280,7 @@ engine.getPaused(); // Check state
 ## Animation Agency Integration
 
 - The animation agency uses `transitionContinuum(negAU, posAU, value, duration)` for smooth head/eye movements
-- Head/Eye tracking snippets are generated with canonical names (`eyeHeadTracking/eyeYaw`, `headYaw`, etc.). When they reach the scheduler, it samples AU pairs (31/32, 33/54, 55/56, 61/62, 63/64) and calls `transitionContinuum`
+- Head/Eye tracking snippets are generated with canonical names (`eyeHeadTracking/eyeYaw`, `headYaw`, etc.). When they reach the scheduler, it samples AU pairs (51/52, 53/54, 55/56, 61/62, 63/64) and calls `transitionContinuum`
 - Mix weights only apply to morph overlays. UI sliders can call `engine.setAUMixWeight` to bias toward morphs or bones
 
 ## Continuum Pairs (Critical)

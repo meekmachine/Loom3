@@ -117,7 +117,7 @@ Test the `EyeHeadTrackingScheduler` animation snippet generation:
   ```typescript
   scheduler.updateConfig({ headIntensity: 0.3 });
   scheduler.scheduleGazeTransition({ x: 1.0, y: 0 });
-  expect(headSnippet.curves['32'][1].intensity).toBeCloseTo(0.3); // 1.0 * 0.3
+  expect(headSnippet.curves['52'][1].intensity).toBeCloseTo(0.3); // 1.0 * 0.3
   ```
 
 #### Priority Settings

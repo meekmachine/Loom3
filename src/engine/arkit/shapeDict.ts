@@ -1,6 +1,11 @@
 // Mapping-only: ARKit/CC-style blendshape keys and FACS/viseme mappings
 // Exports consumed by UI panels and engine (EngineThree). No runtime logic here.
 
+import type { BoneBinding, CompositeRotation, AUInfo } from '../EngineThree.types';
+
+// Re-export types for consumers that import from shapeDict
+export type { BoneBinding, CompositeRotation, AUInfo } from '../EngineThree.types';
+
 export const AU_TO_MORPHS: Record<number, string[]> = {
   // Brows / Forehead
   1: ['Brow_Raise_Inner_L','Brow_Raise_Inner_R'],
@@ -19,10 +24,10 @@ export const AU_TO_MORPHS: Record<number, string[]> = {
 
   // Mouth / Lips
   8:  ['Mouth_Press_L','Mouth_Press_R','Mouth_Close'],
-  10: ['Mouth_Up_Upper_L','Mouth_Up_Upper_R'],
-  11: ['Mouth_Dimple_L','Mouth_Dimple_R'],
+  10: ['Nose_Sneer_L','Nose_Sneer_R'],  // Upper Lip Raiser (levator labii superioris) - raises upper lip in disgust/sneer
+  11: ['Mouth_Up_Upper_L','Mouth_Up_Upper_R'],  // Nasolabial Deepener (zygomaticus minor) - no dedicated morph
   12: ['Mouth_Smile_L','Mouth_Smile_R'],
-  13: ['Mouth_Stretch_L','Mouth_Stretch_R'],
+  13: ['Mouth_Shrug_Upper'],  // Sharp Lip Puller (levator anguli oris) - no dedicated morph, using shrug as approximation
   14: ['Mouth_Dimple_L','Mouth_Dimple_R'],
   15: ['Mouth_Frown_L','Mouth_Frown_R'],
   16: ['Mouth_Down_Lower_L','Mouth_Down_Lower_R'],
@@ -53,13 +58,16 @@ export const AU_TO_MORPHS: Record<number, string[]> = {
   76: ['Tongue_Tip_Up'],
   77: ['Tongue_Tip_Down'],
 
-  // Jaw / Head (convenience)
+  // Jaw
   29: ['Jaw_Forward'],
   30: ['Jaw_L'],  // Jaw Left - mixed: bone rotation + Jaw_L morph
+  31: [],  // Jaw Clencher (masseter/temporalis) - no dedicated CC4 morph
   35: ['Jaw_R'],  // Jaw Right - mixed: bone rotation + Jaw_R morph
-  31: ['Head_Turn_L'],
-  32: ['Head_Turn_R'],
-  33: ['Head_Turn_Up'],
+
+  // Head position (M51-M56 in FACS notation)
+  51: ['Head_Turn_L'],   // Head turn left
+  52: ['Head_Turn_R'],   // Head turn right
+  53: ['Head_Turn_Up'],  // Head up
   54: ['Head_Turn_Down'],
   55: ['Head_Tilt_L'],
   56: ['Head_Tilt_R'],
@@ -111,26 +119,16 @@ export const VISEME_KEYS: string[] = [
   'EE','Er','IH','Ah','Oh','W_OO','S_Z','Ch_J','F_V','TH','T_L_D_N','B_M_P','K_G_H_NG','AE','R'
 ];
 
-// Bone bindings for rigs that rotate eyeballs via armature rather than morphs.
-// Mapping-only: the engine resolves placeholder node names (EYE_L/EYE_R/etc.) to real nodes using candidates.
-export type BoneBinding = {
-  node: 'EYE_L' | 'EYE_R' | 'JAW' | 'HEAD' | 'NECK' | 'TONGUE' | string;
-  channel: 'rx' | 'ry' | 'rz' | 'tx' | 'ty' | 'tz';  // rotations in radians, translations in model units
-  scale: -1 | 1;
-  maxDegrees?: number;  // for rotation channels
-  maxUnits?: number;    // for translation channels
-};
-
 export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
-  // Head turn and tilt - use HEAD bone only (NECK should not rotate with head)
+  // Head turn and tilt (M51-M56) - use HEAD bone only (NECK should not rotate with head)
   // Three.js Y rotation: positive = counter-clockwise from above = head turns LEFT (character POV)
-  31: [
+  51: [
     { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 },   // Head turn left
   ],
-  32: [
+  52: [
     { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 30 },  // Head turn right
   ],
-  33: [
+  53: [
     { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 20 },  // Head up
   ],
   54: [
@@ -227,27 +225,6 @@ export const hasLeftRightMorphs = (auId: number): boolean => {
   return keys.some(k => /_L$|_R$|Left$|Right$/.test(k));
 };
 
-/**
- * COMPOSITE_ROTATIONS - Defines unified rotation axes for bones that need
- * pitch/yaw/roll tracked together to prevent overwriting.
- *
- * Each composite bone tracks its complete 3D rotation state. When an AU is set,
- * only its specific axis is updated, then the complete rotation is applied.
- */
-export interface RotationAxis {
-  aus: number[];       // AUs that affect this axis
-  axis: 'rx' | 'ry' | 'rz';  // Physical rotation axis
-  negative?: number;   // AU for negative direction (if continuum)
-  positive?: number;   // AU for positive direction (if continuum)
-}
-
-export interface CompositeRotation {
-  node: 'JAW' | 'HEAD' | 'EYE_L' | 'EYE_R' | 'TONGUE';
-  pitch: RotationAxis | null;  // Up/down rotation (typically rx or rz)
-  yaw: RotationAxis | null;    // Left/right rotation (typically ry)
-  roll: RotationAxis | null;   // Tilt rotation (typically rz)
-}
-
 export const COMPOSITE_ROTATIONS: CompositeRotation[] = [
   {
     node: 'JAW',
@@ -257,8 +234,8 @@ export const COMPOSITE_ROTATIONS: CompositeRotation[] = [
   },
   {
     node: 'HEAD',
-    pitch: { aus: [54, 33], axis: 'rx', negative: 54, positive: 33 },  // Head down/up
-    yaw: { aus: [31, 32], axis: 'ry', negative: 31, positive: 32 },  // Head turn left/right
+    pitch: { aus: [54, 53], axis: 'rx', negative: 54, positive: 53 },  // Head down/up
+    yaw: { aus: [51, 52], axis: 'ry', negative: 51, positive: 52 },  // Head turn left/right
     roll: { aus: [55, 56], axis: 'rz', negative: 55, positive: 56 }   // Head tilt left/right
   },
   {
@@ -282,13 +259,68 @@ export const COMPOSITE_ROTATIONS: CompositeRotation[] = [
 ];
 
 /**
- * Eye axis configuration for CC4 rigs.
- * CC4 eyes rotate around Z for horizontal (yaw) movement, not Y.
+ * Continuum pair mappings - precomputed from COMPOSITE_ROTATIONS
+ * Maps AU ID to its continuum partner info for bidirectional axes
+ * (e.g., AU 51 "Head Left" is paired with AU 52 "Head Right")
  */
-export const EYE_AXIS = {
-  yaw: 'rz' as const,
-  pitch: 'rx' as const,
-} as const;
+export const CONTINUUM_PAIRS_MAP: Record<number, {
+  pairId: number;
+  isNegative: boolean;
+  axis: 'pitch' | 'yaw' | 'roll';
+  node: 'JAW' | 'HEAD' | 'EYE_L' | 'EYE_R' | 'TONGUE';
+}> = {
+  // Eyes horizontal (yaw) - both eyes share same AUs
+  61: { pairId: 62, isNegative: true, axis: 'yaw', node: 'EYE_L' },
+  62: { pairId: 61, isNegative: false, axis: 'yaw', node: 'EYE_L' },
+  // Eyes vertical (pitch)
+  64: { pairId: 63, isNegative: true, axis: 'pitch', node: 'EYE_L' },
+  63: { pairId: 64, isNegative: false, axis: 'pitch', node: 'EYE_L' },
+  // Head yaw (turn left/right)
+  51: { pairId: 52, isNegative: true, axis: 'yaw', node: 'HEAD' },
+  52: { pairId: 51, isNegative: false, axis: 'yaw', node: 'HEAD' },
+  // Head pitch (up/down)
+  54: { pairId: 53, isNegative: true, axis: 'pitch', node: 'HEAD' },
+  53: { pairId: 54, isNegative: false, axis: 'pitch', node: 'HEAD' },
+  // Head roll (tilt left/right)
+  55: { pairId: 56, isNegative: true, axis: 'roll', node: 'HEAD' },
+  56: { pairId: 55, isNegative: false, axis: 'roll', node: 'HEAD' },
+  // Jaw yaw (left/right)
+  30: { pairId: 35, isNegative: true, axis: 'yaw', node: 'JAW' },
+  35: { pairId: 30, isNegative: false, axis: 'yaw', node: 'JAW' },
+  // Tongue yaw (left/right)
+  39: { pairId: 40, isNegative: true, axis: 'yaw', node: 'TONGUE' },
+  40: { pairId: 39, isNegative: false, axis: 'yaw', node: 'TONGUE' },
+  // Tongue pitch (up/down)
+  38: { pairId: 37, isNegative: true, axis: 'pitch', node: 'TONGUE' },
+  37: { pairId: 38, isNegative: false, axis: 'pitch', node: 'TONGUE' },
+  // Tongue roll (tilt left/right)
+  41: { pairId: 42, isNegative: true, axis: 'roll', node: 'TONGUE' },
+  42: { pairId: 41, isNegative: false, axis: 'roll', node: 'TONGUE' },
+  // Extended tongue morphs (continuum pairs)
+  73: { pairId: 74, isNegative: true, axis: 'yaw', node: 'TONGUE' },  // Tongue Narrow/Wide
+  74: { pairId: 73, isNegative: false, axis: 'yaw', node: 'TONGUE' },
+  76: { pairId: 77, isNegative: false, axis: 'pitch', node: 'TONGUE' }, // Tongue Tip Up/Down
+  77: { pairId: 76, isNegative: true, axis: 'pitch', node: 'TONGUE' },
+};
+
+/**
+ * Human-readable labels for continuum pairs
+ * Key format: "negativeAU-positiveAU"
+ * Used by UI components (ContinuumSlider, AUSection) to display friendly axis names
+ */
+export const CONTINUUM_LABELS: Record<string, string> = {
+  '61-62': 'Eyes — Horizontal',
+  '64-63': 'Eyes — Vertical',
+  '51-52': 'Head — Horizontal',
+  '54-53': 'Head — Vertical',
+  '55-56': 'Head — Tilt',
+  '30-35': 'Jaw — Horizontal',
+  '38-37': 'Tongue — Vertical',
+  '39-40': 'Tongue — Horizontal',
+  '41-42': 'Tongue — Tilt',
+  '73-74': 'Tongue — Width',
+  '76-77': 'Tongue Tip — Vertical',
+};
 
 // Candidate node names to resolve placeholders per-side on common CC/GLB exports.
 // Canonical CC4 bone + mesh names. Since we only target CC4 rigs now, the mapping is explicit.
@@ -306,18 +338,6 @@ export const CC4_EYE_MESH_NODES = {
   LEFT: 'CC_Base_Eye',
   RIGHT: 'CC_Base_Eye_1'
 } as const;
-
-// --- Metadata (subset) ---
-
-export interface AUInfo {
-  id: string;
-  name: string;
-  muscularBasis?: string;
-  links?: string[];
-  faceArea?: 'Upper' | 'Lower'; // macro region
-  facePart?: 'Forehead' | 'Brow' | 'Eyelids' | 'Eyes' | 'EyeOcclusion' | 'Nose' | 'Cheeks' | 'Mouth' | 'Chin' | 'Jaw' | 'Head' | 'Tongue' | 'Other';
-  faceSection?: string; // back-compat (mirror of facePart)
-}
 
 export const AU_INFO: Record<string, AUInfo> = {
   // Forehead / Brow (Upper)
@@ -378,12 +398,13 @@ export const AU_INFO: Record<string, AUInfo> = {
   '26': { id:'26', name:'Jaw Drop',          muscularBasis:'masseter (relax temporalis)', links:['https://en.wikipedia.org/wiki/Masseter_muscle'], faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
   '29': { id:'29', name:'Jaw Thrust',        faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
   '30': { id:'30', name:'Jaw Left',          faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
+  '31': { id:'31', name:'Jaw Clencher',      muscularBasis:'masseter + temporalis', faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
   '35': { id:'35', name:'Jaw Right',         faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
 
-  // Head (Upper, convenience)
-  '31': { id:'31', name:'Head Turn Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head' },
-  '32': { id:'32', name:'Head Turn Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head' },
-  '33': { id:'33', name:'Head Up',           faceArea:'Upper', facePart:'Head', faceSection:'Head' },
+  // Head position (M51-M56 in FACS notation)
+  '51': { id:'51', name:'Head Turn Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head' },
+  '52': { id:'52', name:'Head Turn Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head' },
+  '53': { id:'53', name:'Head Up',           faceArea:'Upper', facePart:'Head', faceSection:'Head' },
   '54': { id:'54', name:'Head Down',         faceArea:'Upper', facePart:'Head', faceSection:'Head' },
   '55': { id:'55', name:'Head Tilt Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head' },
   '56': { id:'56', name:'Head Tilt Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head' },
@@ -463,179 +484,7 @@ export const CC4_MESHES: Record<string, { category: MeshCategory; morphCount: nu
   'Side_part_wavy_2': { category: 'hair', morphCount: 14 },
 };
 
-/**
- * Continuum pair mappings - precomputed from COMPOSITE_ROTATIONS
- * Maps AU ID to its continuum partner info for bidirectional axes
- * (e.g., AU 31 "Head Left" is paired with AU 32 "Head Right")
- */
-export const CONTINUUM_PAIRS_MAP: Record<number, {
-  pairId: number;
-  isNegative: boolean;
-  axis: 'pitch' | 'yaw' | 'roll';
-  node: 'JAW' | 'HEAD' | 'EYE_L' | 'EYE_R' | 'TONGUE';
-}> = {
-  // Eyes horizontal (yaw) - both eyes share same AUs
-  61: { pairId: 62, isNegative: true, axis: 'yaw', node: 'EYE_L' },
-  62: { pairId: 61, isNegative: false, axis: 'yaw', node: 'EYE_L' },
-  // Eyes vertical (pitch)
-  64: { pairId: 63, isNegative: true, axis: 'pitch', node: 'EYE_L' },
-  63: { pairId: 64, isNegative: false, axis: 'pitch', node: 'EYE_L' },
-  // Head yaw (turn left/right)
-  31: { pairId: 32, isNegative: true, axis: 'yaw', node: 'HEAD' },
-  32: { pairId: 31, isNegative: false, axis: 'yaw', node: 'HEAD' },
-  // Head pitch (up/down)
-  54: { pairId: 33, isNegative: true, axis: 'pitch', node: 'HEAD' },
-  33: { pairId: 54, isNegative: false, axis: 'pitch', node: 'HEAD' },
-  // Head roll (tilt left/right)
-  55: { pairId: 56, isNegative: true, axis: 'roll', node: 'HEAD' },
-  56: { pairId: 55, isNegative: false, axis: 'roll', node: 'HEAD' },
-  // Jaw yaw (left/right)
-  30: { pairId: 35, isNegative: true, axis: 'yaw', node: 'JAW' },
-  35: { pairId: 30, isNegative: false, axis: 'yaw', node: 'JAW' },
-  // Tongue yaw (left/right)
-  39: { pairId: 40, isNegative: true, axis: 'yaw', node: 'TONGUE' },
-  40: { pairId: 39, isNegative: false, axis: 'yaw', node: 'TONGUE' },
-  // Tongue pitch (up/down)
-  38: { pairId: 37, isNegative: true, axis: 'pitch', node: 'TONGUE' },
-  37: { pairId: 38, isNegative: false, axis: 'pitch', node: 'TONGUE' },
-  // Tongue roll (tilt left/right)
-  41: { pairId: 42, isNegative: true, axis: 'roll', node: 'TONGUE' },
-  42: { pairId: 41, isNegative: false, axis: 'roll', node: 'TONGUE' },
-  // Extended tongue morphs (continuum pairs)
-  73: { pairId: 74, isNegative: true, axis: 'yaw', node: 'TONGUE' },  // Tongue Narrow/Wide
-  74: { pairId: 73, isNegative: false, axis: 'yaw', node: 'TONGUE' },
-  76: { pairId: 77, isNegative: false, axis: 'pitch', node: 'TONGUE' }, // Tongue Tip Up/Down
-  77: { pairId: 76, isNegative: true, axis: 'pitch', node: 'TONGUE' },
-};
-
-// ============================================================================
-// CC4 MORPH TARGETS
-// Complete list of morph targets from jonathan.glb, organized by category.
-// Face morphs only need to be applied to CC_Base_Body_1 (the face mesh).
-// ============================================================================
-
 export type MorphCategory = 'face' | 'viseme' | 'eyeOcclusion' | 'tearLine' | 'tongue' | 'hair';
-
-/** All morph targets organized by which mesh they apply to */
-export const CC4_MORPHS = {
-  // Face mesh (CC_Base_Body_1) - 80 morphs
-  face: [
-    // Brows
-    'Brow_Drop_L', 'Brow_Drop_R',
-    'Brow_Raise_Inner_L', 'Brow_Raise_Inner_R',
-    'Brow_Raise_Outer_L', 'Brow_Raise_Outer_R',
-    // Eyes
-    'Eye_Blink_L', 'Eye_Blink_R',
-    'Eye_L_Look_Down', 'Eye_L_Look_L', 'Eye_L_Look_R', 'Eye_L_Look_Up',
-    'Eye_R_Look_Down', 'Eye_R_Look_L', 'Eye_R_Look_R', 'Eye_R_Look_Up',
-    'Eye_Squint_L', 'Eye_Squint_R',
-    'Eye_Wide_L', 'Eye_Wide_R',
-    // Cheeks
-    'Cheek_Puff_L', 'Cheek_Puff_R',
-    'Cheek_Raise_L', 'Cheek_Raise_R',
-    // Nose
-    'Nose_Sneer_L', 'Nose_Sneer_R',
-    // Jaw
-    'Jaw_Forward', 'Jaw_L', 'Jaw_Open', 'Jaw_R',
-    // Mouth
-    'Mouth_Close',
-    'Mouth_Dimple_L', 'Mouth_Dimple_R',
-    'Mouth_Down_Lower_L', 'Mouth_Down_Lower_R',
-    'Mouth_Frown_L', 'Mouth_Frown_R',
-    'Mouth_Funnel',
-    'Mouth_L', 'Mouth_R',
-    'Mouth_Press_L', 'Mouth_Press_R',
-    'Mouth_Pucker',
-    'Mouth_Roll_In_Lower', 'Mouth_Roll_In_Upper',
-    'Mouth_Shrug_Lower', 'Mouth_Shrug_Upper',
-    'Mouth_Smile_L', 'Mouth_Smile_R',
-    'Mouth_Stretch_L', 'Mouth_Stretch_R',
-    'Mouth_Up_Upper_L', 'Mouth_Up_Upper_R',
-    // Head
-    'Head_Backward', 'Head_Forward',
-    'Head_L', 'Head_R',
-    'Head_Tilt_L', 'Head_Tilt_R',
-    'Head_Turn_Down', 'Head_Turn_L', 'Head_Turn_R', 'Head_Turn_Up',
-  ],
-
-  // Visemes (also on face mesh)
-  viseme: [
-    'AE', 'Ah', 'B_M_P', 'Ch_J', 'EE', 'Er', 'F_V', 'IH',
-    'K_G_H_NG', 'Oh', 'R', 'S_Z', 'TH', 'T_L_D_N', 'W_OO',
-  ],
-
-  // Eye Occlusion morphs (CC_Base_EyeOcclusion_1, CC_Base_EyeOcclusion_2)
-  eyeOcclusion: [
-    'EO Bulge L', 'EO Bulge R',
-    'EO Center Lower Depth L', 'EO Center Lower Depth R',
-    'EO Center Lower Height L', 'EO Center Lower Height R',
-    'EO Center Upper Depth L', 'EO Center Upper Depth R',
-    'EO Center Upper Height L', 'EO Center Upper Height R',
-    'EO Depth L', 'EO Depth R',
-    'EO Duct Depth L', 'EO Duct Depth R',
-    'EO Inner Depth L', 'EO Inner Depth R',
-    'EO Inner Height L', 'EO Inner Height R',
-    'EO Inner Lower Depth L', 'EO Inner Lower Depth R',
-    'EO Inner Lower Height L', 'EO Inner Lower Height R',
-    'EO Inner Upper Depth L', 'EO Inner Upper Depth R',
-    'EO Inner Upper Height L', 'EO Inner Upper Height R',
-    'EO Inner Width L', 'EO Inner Width R',
-    'EO Lower Depth L', 'EO Lower Depth R',
-    'EO Outer Depth L', 'EO Outer Depth R',
-    'EO Outer Height L', 'EO Outer Height R',
-    'EO Outer Lower Depth L', 'EO Outer Lower Depth R',
-    'EO Outer Lower Height L', 'EO Outer Lower Height R',
-    'EO Outer Upper Depth L', 'EO Outer Upper Depth R',
-    'EO Outer Upper Height L', 'EO Outer Upper Height R',
-    'EO Outer Width L', 'EO Outer Width R',
-    'EO Upper Depth L', 'EO Upper Depth R',
-  ],
-
-  // Tear Line morphs (CC_Base_TearLine_1, CC_Base_TearLine_2)
-  tearLine: [
-    'TL Center Lower Depth L', 'TL Center Lower Depth R',
-    'TL Center Lower Height L', 'TL Center Lower Height R',
-    'TL Center Upper Depth L', 'TL Center Upper Depth R',
-    'TL Center Upper Height L', 'TL Center Upper Height R',
-    'TL Depth L', 'TL Depth R',
-    'TL Duct Depth L', 'TL Duct Depth R',
-    'TL Inner Depth L', 'TL Inner Depth R',
-    'TL Inner Height L', 'TL Inner Height R',
-    'TL Inner Lower Depth L', 'TL Inner Lower Depth R',
-    'TL Inner Lower Height L', 'TL Inner Lower Height R',
-    'TL Inner Upper Depth L', 'TL Inner Upper Depth R',
-    'TL Inner Upper Height L', 'TL Inner Upper Height R',
-    'TL Inner Width L', 'TL Inner Width R',
-    'TL Lower Depth L', 'TL Lower Depth R',
-    'TL Outer Depth L', 'TL Outer Depth R',
-    'TL Outer Height L', 'TL Outer Height R',
-    'TL Outer Lower Depth L', 'TL Outer Lower Depth R',
-    'TL Outer Lower Height L', 'TL Outer Lower Height R',
-    'TL Outer Upper Depth L', 'TL Outer Upper Depth R',
-    'TL Outer Upper Height L', 'TL Outer Upper Height R',
-    'TL Outer Width L', 'TL Outer Width R',
-    'TL Upper Depth L', 'TL Upper Depth R',
-  ],
-
-  // Tongue morphs (CC_Base_Tongue)
-  tongue: [
-    'Tongue_Bulge_L', 'Tongue_Bulge_R',
-    'Tongue_Down', 'Tongue_L', 'Tongue_R', 'Tongue_Up',
-    'Tongue_Narrow', 'Tongue_Wide',
-    'Tongue_Out', 'Tongue_Roll',
-    'Tongue_Tip_Down', 'Tongue_Tip_Up',
-  ],
-
-  // Hair morphs (Side_part_wavy_1, Side_part_wavy_2)
-  hair: [
-    'Fluffy_Bottom_ALL', 'Fluffy_Right',
-    'Hairline_High_ALL', 'Hairline_High_M', 'Hairline_High_R',
-    'Hairline_Low_ALL', 'Hairline_Low_M', 'Hairline_Low_R',
-    'Hairline_Out_All',
-    'L_Hair_Front', 'L_Hair_Left', 'L_Hair_Right',
-    'Length_Long', 'Length_Short',
-  ],
-} as const;
 
 /** Which mesh each morph category applies to */
 export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {

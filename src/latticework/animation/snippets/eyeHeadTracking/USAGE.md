@@ -101,8 +101,8 @@ All animations in this folder use the **composite motion system**, which means:
 **Use case**: Dramatic head roll or “loopy” emphasis gesture.
 
 **AU Curves**:
-- AU 31/32 (head yaw) drive the horizontal portion of the roll
-- AU 33/54 (head pitch) coordinate the vertical arc
+- AU 51/52 (head yaw) drive the horizontal portion of the roll
+- AU 53/54 (head pitch) coordinate the vertical arc
 - AU 55/56 (head tilt) provide the roll component (marked with `"inherit": true` for seamless looping)
 
 ## Understanding the Continuum System
@@ -250,8 +250,8 @@ For smooth circular paths, use sine/cosine-like curves:
 |-----------|------|-------------|-------------|---------------|
 | Eyes | Horizontal | 61 (left) | 62 (right) | `setEyesHorizontal()` |
 | Eyes | Vertical | 64 (down) | 63 (up) | `setEyesVertical()` |
-| Head | Horizontal | 31 (left) | 32 (right) | `setHeadHorizontal()` |
-| Head | Vertical | 54 (down) | 33 (up) | `setHeadVertical()` |
+| Head | Horizontal | 51 (left) | 52 (right) | `setHeadHorizontal()` |
+| Head | Vertical | 54 (down) | 53 (up) | `setHeadVertical()` |
 | Head | Roll | 55 (tilt left) | 56 (tilt right) | `setHeadRoll()` |
 
 ## See Also

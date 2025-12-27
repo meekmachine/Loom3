@@ -30,6 +30,55 @@ export type TransitionHandle = {
 
 export type BoneKey = 'EYE_L' | 'EYE_R' | 'JAW' | 'HEAD' | 'NECK' | 'TONGUE';
 
+/**
+ * BoneBinding - Defines how an AU maps to bone transformations
+ * Used by shapeDict to specify bone rotations/translations for each AU
+ */
+export type BoneBinding = {
+  node: BoneKey | string;
+  channel: 'rx' | 'ry' | 'rz' | 'tx' | 'ty' | 'tz';  // rotations in radians, translations in model units
+  scale: -1 | 1;
+  maxDegrees?: number;  // for rotation channels
+  maxUnits?: number;    // for translation channels
+};
+
+/**
+ * RotationAxis - Defines which AUs control a specific rotation axis
+ * Used for composite rotation tracking
+ */
+export interface RotationAxis {
+  aus: number[];       // AUs that affect this axis
+  axis: 'rx' | 'ry' | 'rz';  // Physical rotation axis
+  negative?: number;   // AU for negative direction (if continuum)
+  positive?: number;   // AU for positive direction (if continuum)
+}
+
+/**
+ * CompositeRotation - Defines unified rotation axes for bones
+ * Prevents axis stomping when multiple AUs affect the same bone
+ */
+export interface CompositeRotation {
+  node: 'JAW' | 'HEAD' | 'EYE_L' | 'EYE_R' | 'TONGUE';
+  pitch: RotationAxis | null;  // Up/down rotation (typically rx or rz)
+  yaw: RotationAxis | null;    // Left/right rotation (typically ry)
+  roll: RotationAxis | null;   // Tilt rotation (typically rz)
+}
+
+/**
+ * AUInfo - Metadata about an Action Unit
+ * Includes anatomical basis, face region, and reference links
+ */
+export interface AUInfo {
+  id: string;
+  name: string;
+  muscularBasis?: string;
+  links?: string[];
+  faceArea?: 'Upper' | 'Lower';
+  facePart?: 'Forehead' | 'Brow' | 'Eyelids' | 'Eyes' | 'EyeOcclusion' | 'Nose' | 'Cheeks' | 'Mouth' | 'Chin' | 'Jaw' | 'Head' | 'Tongue' | 'Other';
+  /** @deprecated Use facePart instead */
+  faceSection?: string;
+}
+
 export type NodeBase = {
   obj: THREE.Object3D;
   basePos: THREE.Vector3;

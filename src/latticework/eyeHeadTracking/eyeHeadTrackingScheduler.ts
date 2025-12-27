@@ -6,8 +6,8 @@
  * Uses continuum animation snippets for each axis:
  * - Eyes Yaw (horizontal): AU 61 (left) ↔ AU 62 (right)
  * - Eyes Pitch (vertical): AU 64 (down) ↔ AU 63 (up)
- * - Head Yaw (horizontal): AU 31 (left) ↔ AU 32 (right)
- * - Head Pitch (vertical): AU 54 (down) ↔ AU 33 (up)
+ * - Head Yaw (horizontal): AU 51 (left) ↔ AU 52 (right)
+ * - Head Pitch (vertical): AU 54 (down) ↔ AU 53 (up)
  * - Head Roll (tilt): AU 55 (left) ↔ AU 56 (right)
  */
 
@@ -43,10 +43,10 @@ export const EYE_HEAD_AUS = {
   EYE_PITCH_UP: '63',    // Look up
   EYE_PITCH_DOWN: '64',  // Look down
 
-  // Head AUs
-  HEAD_YAW_LEFT: '31',   // Turn left
-  HEAD_YAW_RIGHT: '32',  // Turn right
-  HEAD_PITCH_UP: '33',   // Look up
+  // Head AUs (M51-M56 in FACS notation)
+  HEAD_YAW_LEFT: '51',   // Turn left
+  HEAD_YAW_RIGHT: '52',  // Turn right
+  HEAD_PITCH_UP: '53',   // Look up
   HEAD_PITCH_DOWN: '54', // Look down
   HEAD_ROLL_LEFT: '55',  // Tilt left
   HEAD_ROLL_RIGHT: '56', // Tilt right

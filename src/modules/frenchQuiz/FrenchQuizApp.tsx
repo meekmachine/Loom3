@@ -91,7 +91,7 @@ export default function FrenchQuizApp({ animationManager, settings, toast }: Fre
     );
 
     // Create TTS service with French voice
-    // TTS service now coordinates LipSync and Prosodic agencies internally
+    // TTS fires callbacks; caller coordinates LipSync and Prosodic services
     ttsRef.current = createTTSService(
       {
         engine: 'webSpeech',
@@ -99,24 +99,19 @@ export default function FrenchQuizApp({ animationManager, settings, toast }: Fre
         pitch: 0.9,
         volume: 1.0,
         voiceName: 'Thomas', // Male French voice
-
-        // Agency coordination - TTS now manages these
-        lipSyncService: lipSyncRef.current,
-        animationManager: animationManager,
-        prosodicEnabled: true,
       },
       {
         onStart: () => {
           console.log('[FrenchQuiz] TTS started');
-          // TTS service now handles snippet cleanup and animation play
+          // TODO: Start prosodic service here
         },
         onEnd: () => {
           console.log('[FrenchQuiz] TTS ended');
-          // TTS service now handles all cleanup
+          // TODO: Stop prosodic service here
         },
         onBoundary: ({ word }) => {
-          // TTS service now handles all lip sync and prosodic coordination
-          console.log(`[FrenchQuiz] Word: "${word}" (coordinated by TTS service)`);
+          // TODO: Coordinate lip sync and prosodic services here
+          console.log(`[FrenchQuiz] Word: "${word}"`);
         },
         onError: (error) => {
           console.error('[FrenchQuiz] TTS error:', error);

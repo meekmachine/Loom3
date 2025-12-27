@@ -80,7 +80,7 @@ Each emotion is encoded as a combination of Action Units:
 - AU20: Lip Stretcher
 - AU23: Lip Tightener
 - AU26: Jaw Drop
-- AU33: Head Up
+- AU53: Head Up
 - AU55: Head Tilt Left
 
 ## Architecture

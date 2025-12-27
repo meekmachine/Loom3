@@ -126,7 +126,7 @@ Use direct composite calls for:
 
 ## Implemented Solution: Directional Animation Snippets with Real AU IDs
 
-We've implemented a **directional animation approach** that uses real ARKit AU IDs (61-64, 31-33, 54-56) to schedule eye/head tracking animations.
+We've implemented a **directional animation approach** that uses real ARKit AU IDs (61-64, 51-56) to schedule eye/head tracking animations.
 
 ### How It Works
 
@@ -139,10 +139,10 @@ We've implemented a **directional animation approach** that uses real ARKit AU I
      EYE_PITCH_UP: '63',    // Positive pitch
      EYE_PITCH_DOWN: '64',  // Negative pitch
 
-     // Head AUs (handle blend shapes + head/neck bones via applyCompositeMotion)
-     HEAD_YAW_LEFT: '31',   // Turn left
-     HEAD_YAW_RIGHT: '32',  // Turn right
-     HEAD_PITCH_UP: '33',   // Look up
+     // Head AUs (M51-M56 in FACS notation - handle blend shapes + head/neck bones via applyCompositeMotion)
+     HEAD_YAW_LEFT: '51',   // Turn left
+     HEAD_YAW_RIGHT: '52',  // Turn right
+     HEAD_PITCH_UP: '53',   // Look up
      HEAD_PITCH_DOWN: '54', // Look down
    };
    ```

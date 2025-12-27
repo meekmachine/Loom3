@@ -6,8 +6,8 @@ When multiple agencies control the same AUs, we want them to **combine cumulativ
 
 ### Example: Head Tracking + Prosodic Nod
 
-- **Eye/Head Tracking**: Controls head yaw (looking left/right) - AU 31, 32
-- **Prosodic Expression**: Controls head pitch (nodding up/down) - AU 33, 54
+- **Eye/Head Tracking**: Controls head yaw (looking left/right) - AU 51, 52
+- **Prosodic Expression**: Controls head pitch (nodding up/down) - AU 53, 54
 
 **Desired behavior**: Head should look right AND nod simultaneously
 - Yaw = 0.3 (from tracking)

@@ -148,7 +148,7 @@ export class EyeHeadTrackingService {
     );
 
     [61, 62, 63, 64].forEach((au) => engine.setAUMixWeight(au, eyeMix));
-    [31, 32, 33, 54, 55, 56].forEach((au) => engine.setAUMixWeight(au, headMix));
+    [51, 52, 53, 54, 55, 56].forEach((au) => engine.setAUMixWeight(au, headMix));
   }
 
   /**
@@ -738,17 +738,17 @@ export class EyeHeadTrackingService {
       if (applyHead && this.config.headTrackingEnabled && this.config.headFollowEyes) {
         const headYaw = smoothedTarget.x * headIntensity;
         const headPitch = smoothedTarget.y * headIntensity;
-        // Head horizontal: AU31 (left) / AU32 (right)
+        // Head horizontal: AU51 (left) / AU52 (right)
         if (headYaw < 0) {
-          this.config.engine.transitionAU?.(31, Math.abs(headYaw), headDuration);
+          this.config.engine.transitionAU?.(51, Math.abs(headYaw), headDuration);
         } else {
-          this.config.engine.transitionAU?.(32, headYaw, headDuration);
+          this.config.engine.transitionAU?.(52, headYaw, headDuration);
         }
-        // Head vertical: AU54 (down) / AU33 (up)
+        // Head vertical: AU54 (down) / AU53 (up)
         if (headPitch < 0) {
           this.config.engine.transitionAU?.(54, Math.abs(headPitch), headDuration);
         } else {
-          this.config.engine.transitionAU?.(33, headPitch, headDuration);
+          this.config.engine.transitionAU?.(53, headPitch, headDuration);
         }
       }
     } else {
@@ -835,9 +835,9 @@ export class EyeHeadTrackingService {
             this.config.engine.transitionAU?.(64, 0, duration); // Eyes down
           }
           if (this.config.headTrackingEnabled && this.config.headFollowEyes) {
-            this.config.engine.transitionAU?.(31, 0, duration); // Head left
-            this.config.engine.transitionAU?.(32, 0, duration); // Head right
-            this.config.engine.transitionAU?.(33, 0, duration); // Head up
+            this.config.engine.transitionAU?.(51, 0, duration); // Head left
+            this.config.engine.transitionAU?.(52, 0, duration); // Head right
+            this.config.engine.transitionAU?.(53, 0, duration); // Head up
             this.config.engine.transitionAU?.(54, 0, duration); // Head down
           }
         }

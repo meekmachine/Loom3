@@ -7,8 +7,8 @@ This document shows how to set up and test the smooth coordination between eye/h
 ## Problem Being Solved
 
 When multiple agencies control the same AUs (Action Units), we need smooth transitions:
-- **Eye/Head Tracking** controls head AUs (31, 32, 33, 54) for gaze direction
-- **Prosodic Gestures** control head AUs (33, 54) for nods and speech-synchronized movements
+- **Eye/Head Tracking** controls head AUs (51, 52, 53, 54) for gaze direction
+- **Prosodic Gestures** control head AUs (53, 54) for nods and speech-synchronized movements
 
 Without animation continuity, head movements would snap/jitter when switching between agencies. With continuity, transitions are smooth and natural.
 
@@ -283,10 +283,10 @@ const callbacks = {
 ```typescript
 // Add to console
 setInterval(() => {
-  console.log('Current head pitch up:', animationAgency.getCurrentValue('33'));
+  console.log('Current head pitch up:', animationAgency.getCurrentValue('53'));
   console.log('Current head pitch down:', animationAgency.getCurrentValue('54'));
-  console.log('Current head yaw left:', animationAgency.getCurrentValue('31'));
-  console.log('Current head yaw right:', animationAgency.getCurrentValue('32'));
+  console.log('Current head yaw left:', animationAgency.getCurrentValue('51'));
+  console.log('Current head yaw right:', animationAgency.getCurrentValue('52'));
 }, 1000);
 ```
 
@@ -311,7 +311,7 @@ animationAgency.debug();
 ### Problem: Head snaps when prosodic nod triggers
 **Solution**: Check that prosodic scheduler is using `getCurrentValue()`:
 ```typescript
-const currentHeadPitchUp = this.host.getCurrentValue?.('33') ?? 0;
+const currentHeadPitchUp = this.host.getCurrentValue?.('53') ?? 0;
 // Start curve from currentHeadPitchUp, NOT from 0
 ```
 

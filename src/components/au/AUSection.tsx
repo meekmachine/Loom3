@@ -6,7 +6,7 @@ import DockableAccordionItem from './DockableAccordionItem';
 import AUSlider from './AUSlider';
 import ContinuumSlider from './ContinuumSlider';
 import { CurveEditor } from '../CurveEditor';
-import { AUInfo, CONTINUUM_PAIRS_MAP } from '../../engine/arkit/shapeDict';
+import { AUInfo, CONTINUUM_PAIRS_MAP, CONTINUUM_LABELS } from '../../engine/arkit/shapeDict';
 import { EngineThree } from '../../engine/EngineThree';
 
 // Build CONTINUUM_PAIRS from CONTINUUM_PAIRS_MAP
@@ -37,21 +37,6 @@ type SnippetCurveData = {
 };
 
 type ContinuumPair = typeof CONTINUUM_PAIRS[number];
-
-// Labels for continuum axes so curve editors match the slider language
-const CONTINUUM_LABELS: Record<string, string> = {
-  '61-62': 'Eyes — Horizontal',
-  '64-63': 'Eyes — Vertical',
-  '31-32': 'Head — Horizontal',
-  '54-33': 'Head — Vertical',
-  '55-56': 'Head — Tilt',
-  '30-35': 'Jaw — Horizontal',
-  '38-37': 'Tongue — Vertical',
-  '39-40': 'Tongue — Horizontal',
-  '41-42': 'Tongue — Tilt',
-  '73-74': 'Tongue — Width',
-  '76-77': 'Tongue Tip — Vertical',
-};
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 

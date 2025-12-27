@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-When multiple agencies control the same AUs (e.g., head AUs 31, 32, 33, 54), animations should **transition smoothly** from the current value instead of always jumping back to keyframe intensity 0.
+When multiple agencies control the same AUs (e.g., head AUs 51, 52, 53, 54), animations should **transition smoothly** from the current value instead of always jumping back to keyframe intensity 0.
 
 ## ✅ AUTOMATIC CONTINUITY (Current Implementation)
 

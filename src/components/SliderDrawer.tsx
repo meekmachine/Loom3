@@ -637,7 +637,6 @@ export default function SliderDrawer({
         onOpenChange={(details) => { if (!details.open) onToggle(); }}
         size="md"
       >
-        <Drawer.Backdrop />
         <Drawer.Positioner>
           {!isOpen && !hasBeenOpened ? null : (
             <Drawer.Content zIndex={9999} bg="gray.800">

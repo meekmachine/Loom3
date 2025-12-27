@@ -171,7 +171,7 @@ function TTSSection({ engine, disabled = false, defaultExpanded = false }: TTSSe
               anim.schedule({
                 name: gestureName,
                 curves: {
-                  '33': [ // Head turn up (AU33) - nod down motion (increased intensity)
+                  '53': [ // Head up (AU53 per FACS M51-M56) - nod motion
                     { time: 0.0, intensity: 0 },
                     { time: 0.15, intensity: 40 },  // Faster attack, higher intensity
                     { time: 0.4, intensity: 50 },   // Higher peak

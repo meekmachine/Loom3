@@ -13,11 +13,6 @@ export interface TTSConfig {
   pitch?: number; // 0.0 - 2.0
   volume?: number; // 0.0 - 1.0
   voiceName?: string;
-
-  // Agency coordination
-  lipSyncService?: any; // LipSyncService
-  animationManager?: any; // AnimationManager for scheduling snippets
-  prosodicEnabled?: boolean; // Enable prosodic gestures (brow raises, nods, etc.)
 }
 
 export interface TTSVoice {

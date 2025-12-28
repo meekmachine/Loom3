@@ -6,6 +6,7 @@
  * morph targets, visemes, and bone transformations.
  */
 
+import { Clock } from 'three';
 import type {
   LoomLarge,
   LoomMesh,
@@ -70,6 +71,11 @@ export class LoomLargeThree implements LoomLarge {
   // Viseme state
   private visemeValues: number[] = new Array(15).fill(0);
 
+  // Internal RAF loop
+  private clock = new Clock();
+  private rafId: number | null = null;
+  private running = false;
+
   // Viseme jaw amounts
   private static readonly VISEME_JAW_AMOUNTS: number[] = [
     0.15, 0.35, 0.25, 0.70, 0.55, 0.30, 0.10, 0.20, 0.08,
@@ -133,7 +139,34 @@ export class LoomLargeThree implements LoomLarge {
     this.flushPendingComposites();
   }
 
+  /** Start the internal RAF loop */
+  start(): void {
+    if (this.running) return;
+    this.running = true;
+    this.clock.start();
+
+    const tick = () => {
+      if (!this.running) return;
+      const dt = this.clock.getDelta();
+      this.update(dt);
+      this.rafId = requestAnimationFrame(tick);
+    };
+
+    this.rafId = requestAnimationFrame(tick);
+  }
+
+  /** Stop the internal RAF loop */
+  stop(): void {
+    this.running = false;
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    this.clock.stop();
+  }
+
   dispose(): void {
+    this.stop();
     this.clearTransitions();
     this.meshes = [];
     this.model = null;

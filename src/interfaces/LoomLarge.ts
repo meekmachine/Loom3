@@ -94,7 +94,7 @@ export interface MeshInfo {
  */
 export interface LoomLarge {
   // ============================================================================
-  // INITIALIZATION
+  // INITIALIZATION & LIFECYCLE
   // ============================================================================
 
   /**
@@ -105,11 +105,24 @@ export interface LoomLarge {
 
   /**
    * Update animation state. Call each frame with delta time in seconds.
+   * If using start(), this is called automatically.
    */
   update(deltaSeconds: number): void;
 
   /**
+   * Start the internal animation loop (RAF-based).
+   * Automatically calls update() each frame with delta time.
+   */
+  start(): void;
+
+  /**
+   * Stop the internal animation loop.
+   */
+  stop(): void;
+
+  /**
    * Dispose engine resources and cleanup.
+   * Stops the animation loop and clears all transitions.
    */
   dispose(): void;
 

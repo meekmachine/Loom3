@@ -92,6 +92,24 @@ export type { AUMappingConfig, MorphCategory } from './mappings/types';
 
 export { CC4_PRESET } from './presets/cc4';
 
+// Individual CC4 preset components (for apps that need direct access)
+export {
+  AU_TO_MORPHS,
+  BONE_AU_TO_BINDINGS,
+  AU_MIX_DEFAULTS,
+  CC4_BONE_NODES,
+  CC4_EYE_MESH_NODES,
+  CC4_MESHES,
+  VISEME_KEYS,
+  MORPH_TO_MESH,
+  AU_INFO,
+  COMPOSITE_ROTATIONS,
+  CONTINUUM_PAIRS_MAP,
+  CONTINUUM_LABELS,
+  isMixedAU,
+  hasLeftRightMorphs,
+} from './presets/cc4';
+
 // ============================================================================
 // PHYSICS
 // ============================================================================

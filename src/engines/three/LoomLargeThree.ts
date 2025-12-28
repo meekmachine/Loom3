@@ -19,7 +19,7 @@ import type { Animation } from '../../interfaces/Animation';
 import type { TransitionHandle, BoneKey, RotationsState } from '../../core/types';
 import type { AUMappingConfig } from '../../mappings/types';
 import { AnimationThree } from './AnimationThree';
-import { CC4_PRESET } from '../../presets/cc4';
+import { CC4_PRESET, CC4_MESHES } from '../../presets/cc4';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 
@@ -129,6 +129,9 @@ export class LoomLargeThree implements LoomLarge {
     this.rigReady = true;
     this.missingBoneWarnings.clear();
     this.initBoneRotations();
+
+    // Apply render order and material settings from CC4_MESHES
+    this.applyMeshMaterialSettings(model);
   }
 
   update(deltaSeconds: number): void {
@@ -645,6 +648,42 @@ export class LoomLargeThree implements LoomLarge {
       resume: () => handles.forEach((h) => h.resume()),
       cancel: () => handles.forEach((h) => h.cancel()),
     };
+  }
+
+  /**
+   * Apply render order and material settings from CC4_MESHES to all meshes.
+   * This ensures proper layering (e.g., hair renders on top of eyebrows).
+   */
+  private applyMeshMaterialSettings(root: LoomObject3D): void {
+    root.traverse((obj: any) => {
+      if (!obj.isMesh || !obj.name) return;
+
+      const meshInfo = CC4_MESHES[obj.name];
+      if (!meshInfo?.material) return;
+
+      const settings = meshInfo.material;
+
+      // Apply renderOrder to the mesh itself
+      if (typeof settings.renderOrder === 'number') {
+        obj.renderOrder = settings.renderOrder;
+      }
+
+      // Apply material settings if the mesh has a material
+      if (obj.material) {
+        if (typeof settings.transparent === 'boolean') {
+          obj.material.transparent = settings.transparent;
+        }
+        if (typeof settings.opacity === 'number') {
+          obj.material.opacity = settings.opacity;
+        }
+        if (typeof settings.depthWrite === 'boolean') {
+          obj.material.depthWrite = settings.depthWrite;
+        }
+        if (typeof settings.depthTest === 'boolean') {
+          obj.material.depthTest = settings.depthTest;
+        }
+      }
+    });
   }
 }
 

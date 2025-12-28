@@ -66,25 +66,45 @@ loader.load('/character.glb', (gltf) => {
 
   // 5. Initialize LoomLarge with the meshes and model
   loom.onReady({ meshes, model: gltf.scene });
-
-  console.log(`Loaded ${meshes.length} meshes with morph targets`);
 });
 
-// 6. Animation loop - call loom.update() every frame
-let lastTime = performance.now();
-function animate() {
-  requestAnimationFrame(animate);
+// 6. In your animation loop, call loom.update(deltaSeconds)
+// This drives all transitions and animations
+```
 
-  const now = performance.now();
-  const deltaSeconds = (now - lastTime) / 1000;
-  lastTime = now;
+### Quick start examples
 
-  // Update LoomLarge transitions
-  loom.update(deltaSeconds);
+Once your character is loaded, you can control facial expressions immediately:
 
-  renderer.render(scene, camera);
-}
-animate();
+```typescript
+// Make the character smile
+loom.setAU(12, 0.8);
+
+// Raise eyebrows
+loom.setAU(1, 0.6);
+loom.setAU(2, 0.6);
+
+// Blink
+loom.setAU(45, 1.0);
+
+// Open jaw
+loom.setAU(26, 0.5);
+
+// Turn head left
+loom.setAU(51, 0.4);
+
+// Look up
+loom.setAU(63, 0.6);
+```
+
+Animate smoothly with transitions:
+
+```typescript
+// Smile over 200ms
+await loom.transitionAU(12, 0.8, 200).promise;
+
+// Then fade back to neutral
+await loom.transitionAU(12, 0, 300).promise;
 ```
 
 ### The `collectMorphMeshes` helper

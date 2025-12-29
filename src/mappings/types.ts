@@ -5,7 +5,7 @@
  * Allows the engine to work with different character rigs (CC4, Mixamo, etc.)
  */
 
-import type { BoneBinding, AUInfo } from '../core/types';
+import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
 
 /**
  * AUMappingConfig - Complete configuration for AU-to-morph/bone mappings
@@ -40,6 +40,9 @@ export interface AUMappingConfig {
     LEFT: string;
     RIGHT: string;
   };
+
+  /** Optional: Composite rotation definitions for bones (defaults to CC4 composites) */
+  compositeRotations?: CompositeRotation[];
 }
 
 /**

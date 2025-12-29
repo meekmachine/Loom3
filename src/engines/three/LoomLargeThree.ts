@@ -19,7 +19,8 @@ import type { Animation } from '../../interfaces/Animation';
 import type { TransitionHandle, BoneKey, RotationsState } from '../../core/types';
 import type { AUMappingConfig } from '../../mappings/types';
 import { AnimationThree } from './AnimationThree';
-import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS, BONE_AU_TO_BINDINGS } from '../../presets/cc4';
+import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS, BONE_AU_TO_BINDINGS as CC4_BONE_AU_TO_BINDINGS } from '../../presets/cc4';
+import type { CompositeRotation, BoneBinding } from '../../core/types';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 
@@ -28,34 +29,29 @@ const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
 
-type CompositeNode = 'JAW' | 'HEAD' | 'EYE_L' | 'EYE_R' | 'TONGUE';
-
 /**
- * AU_TO_COMPOSITE_MAP - Built from COMPOSITE_ROTATIONS
- * Maps AU ID to { nodes, axis } so we know which semantic axis (pitch/yaw/roll) to use
- * and which nodes are affected, without needing redundant axis property in bindings.
+ * Build AU to composite map from composite rotations config.
+ * Maps AU ID to { nodes, axis } so we know which semantic axis (pitch/yaw/roll) to use.
  */
-const AU_TO_COMPOSITE_MAP = new Map<number, {
-  nodes: CompositeNode[];
-  axis: 'pitch' | 'yaw' | 'roll';
-}>();
-
-// Build the reverse mapping from COMPOSITE_ROTATIONS
-COMPOSITE_ROTATIONS.forEach(comp => {
-  (['pitch', 'yaw', 'roll'] as const).forEach(axisName => {
-    const axisConfig = comp[axisName];
-    if (axisConfig) {
-      axisConfig.aus.forEach(auId => {
-        const existing = AU_TO_COMPOSITE_MAP.get(auId);
-        if (existing) {
-          existing.nodes.push(comp.node as CompositeNode);
-        } else {
-          AU_TO_COMPOSITE_MAP.set(auId, { nodes: [comp.node as CompositeNode], axis: axisName });
-        }
-      });
-    }
+function buildAUToCompositeMap(composites: CompositeRotation[]): Map<number, { nodes: string[]; axis: 'pitch' | 'yaw' | 'roll' }> {
+  const map = new Map<number, { nodes: string[]; axis: 'pitch' | 'yaw' | 'roll' }>();
+  composites.forEach(comp => {
+    (['pitch', 'yaw', 'roll'] as const).forEach(axisName => {
+      const axisConfig = comp[axisName];
+      if (axisConfig) {
+        axisConfig.aus.forEach(auId => {
+          const existing = map.get(auId);
+          if (existing) {
+            existing.nodes.push(comp.node);
+          } else {
+            map.set(auId, { nodes: [comp.node], axis: axisName });
+          }
+        });
+      }
+    });
   });
-});
+  return map;
+}
 
 function clamp01(x: number) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
@@ -79,6 +75,10 @@ export class LoomLargeThree implements LoomLarge {
 
   // Animation system (injectable)
   private animation: Animation;
+
+  // Composite rotation mappings (built from config or default CC4)
+  private compositeRotations: CompositeRotation[];
+  private auToCompositeMap: Map<number, { nodes: string[]; axis: 'pitch' | 'yaw' | 'roll' }>;
 
   // State
   private auValues: Record<number, number> = {};
@@ -117,10 +117,39 @@ export class LoomLargeThree implements LoomLarge {
   ];
   private static readonly JAW_MAX_DEGREES = 28;
 
+  // Hair physics state
+  private hairPhysicsEnabled = false;
+  private hairPhysicsConfig = {
+    stiffness: 7.5,
+    damping: 0.18,
+    inertia: 3.5,
+    gravity: 12,
+    responseScale: 2.5,
+    idleSwayAmount: 0.12,
+    idleSwaySpeed: 1.0,
+    windStrength: 0,
+    windDirectionX: 1.0,
+    windDirectionZ: 0,
+    windTurbulence: 0.3,
+    windFrequency: 1.4,
+  };
+  private hairWindIdleState = {
+    windTime: 0,
+    idlePhase: 0,
+    smoothedWindX: 0,
+    smoothedWindZ: 0,
+  };
+  private registeredHairObjects = new Map<string, LoomMesh>();
+  private cachedHairMeshNames: string[] | null = null;
+
   constructor(config: LoomLargeConfig = {}, animation?: Animation) {
     this.config = config.auMappings || CC4_PRESET;
     this.mixWeights = { ...this.config.auMixDefaults };
     this.animation = animation || new AnimationThree();
+
+    // Use config's composite rotations or default to CC4
+    this.compositeRotations = this.config.compositeRotations || CC4_COMPOSITE_ROTATIONS;
+    this.auToCompositeMap = buildAUToCompositeMap(this.compositeRotations);
   }
 
   // ============================================================================
@@ -174,6 +203,9 @@ export class LoomLargeThree implements LoomLarge {
 
     this.animation.tick(dtSeconds);
     this.flushPendingComposites();
+
+    // Wind/idle hair animations (only when physics enabled)
+    this.updateHairWindIdle(dtSeconds);
   }
 
   /** Start the internal RAF loop */
@@ -257,13 +289,13 @@ export class LoomLargeThree implements LoomLarge {
       }
     }
 
-    // Check if this AU affects composite rotations (derived from COMPOSITE_ROTATIONS)
-    const compositeInfo = AU_TO_COMPOSITE_MAP.get(id);
+    // Check if this AU affects composite rotations
+    const compositeInfo = this.auToCompositeMap.get(id);
 
     if (compositeInfo) {
-      // This AU affects composite bone rotations - use axis from COMPOSITE_ROTATIONS
+      // This AU affects composite bone rotations - use axis from compositeRotations
       for (const nodeKey of compositeInfo.nodes) {
-        const config = COMPOSITE_ROTATIONS.find(c => c.node === nodeKey);
+        const config = this.compositeRotations.find((c: CompositeRotation) => c.node === nodeKey);
         if (!config) continue;
 
         const axisConfig = config[compositeInfo.axis];
@@ -278,7 +310,7 @@ export class LoomLargeThree implements LoomLarge {
           axisValue = posValue - negValue;
         } else if (axisConfig.aus.length > 1) {
           // Multiple AUs affect same axis (e.g., jaw drop) - use max
-          axisValue = Math.max(...axisConfig.aus.map(auId => this.auValues[auId] ?? 0));
+          axisValue = Math.max(...axisConfig.aus.map((auId: number) => this.auValues[auId] ?? 0));
         } else {
           // Single AU controls this axis
           axisValue = v;
@@ -338,11 +370,11 @@ export class LoomLargeThree implements LoomLarge {
       handles.push(this.transitionMorph(k, base, durationMs, meshNames));
     }
 
-    // Handle bone rotations using AU_TO_COMPOSITE_MAP
-    const compositeInfo = AU_TO_COMPOSITE_MAP.get(numId);
+    // Handle bone rotations using auToCompositeMap
+    const compositeInfo = this.auToCompositeMap.get(numId);
     if (compositeInfo) {
       for (const nodeKey of compositeInfo.nodes) {
-        const config = COMPOSITE_ROTATIONS.find(c => c.node === nodeKey);
+        const config = this.compositeRotations.find((c: CompositeRotation) => c.node === nodeKey);
         if (!config) continue;
 
         const axisConfig = config[compositeInfo.axis];
@@ -355,7 +387,7 @@ export class LoomLargeThree implements LoomLarge {
           const posValue = this.auValues[axisConfig.positive] ?? 0;
           axisValue = posValue - negValue;
         } else if (axisConfig.aus.length > 1) {
-          axisValue = Math.max(...axisConfig.aus.map(auId => this.auValues[auId] ?? 0));
+          axisValue = Math.max(...axisConfig.aus.map((auId: number) => this.auValues[auId] ?? 0));
         } else {
           axisValue = target;
         }
@@ -819,6 +851,310 @@ export class LoomLargeThree implements LoomLarge {
   getAUMappings(): AUMappingConfig { return this.config; }
 
   // ============================================================================
+  // HAIR PHYSICS
+  // ============================================================================
+
+  /**
+   * Register hair objects for physics simulation.
+   * Call this after loading the model with objects that should respond to physics.
+   * Returns metadata about registered objects for service layer use.
+   */
+  registerHairObjects(objects: LoomObject3D[]): Array<{ name: string; isMesh: boolean; isEyebrow: boolean }> {
+    this.registeredHairObjects.clear();
+    this.cachedHairMeshNames = null;
+
+    const result: Array<{ name: string; isMesh: boolean; isEyebrow: boolean }> = [];
+
+    for (const obj of objects) {
+      if ((obj as any).isMesh) {
+        const mesh = obj as unknown as LoomMesh;
+        this.registeredHairObjects.set(mesh.name, mesh);
+
+        const meshInfo = CC4_MESHES[mesh.name];
+        const isEyebrow = meshInfo?.category === 'eyebrow';
+
+        result.push({
+          name: mesh.name,
+          isMesh: true,
+          isEyebrow,
+        });
+      }
+    }
+
+    return result;
+  }
+
+  /** Get registered hair objects (for service layer) */
+  getRegisteredHairObjects(): LoomMesh[] {
+    return Array.from(this.registeredHairObjects.values());
+  }
+
+  /** Enable or disable hair physics simulation */
+  setHairPhysicsEnabled(enabled: boolean): void {
+    this.hairPhysicsEnabled = enabled;
+    if (!enabled) {
+      // Reset hair morphs to neutral
+      // Note: L_ prefix = "Long section", not "Left side"
+      const duration = 200;
+      const hairMeshNames = this.getHairMeshNames();
+      this.transitionMorph('L_Hair_Left', 0, duration, hairMeshNames);
+      this.transitionMorph('L_Hair_Right', 0, duration, hairMeshNames);
+      this.transitionMorph('L_Hair_Front', 0, duration, hairMeshNames);
+      this.transitionMorph('Fluffy_Right', 0, duration, hairMeshNames);
+      this.transitionMorph('Fluffy_Bottom_ALL', 0, duration, hairMeshNames);
+    }
+  }
+
+  /** Check if hair physics is enabled */
+  isHairPhysicsEnabled(): boolean {
+    return this.hairPhysicsEnabled;
+  }
+
+  /** Update hair physics configuration */
+  setHairPhysicsConfig(config: Partial<typeof this.hairPhysicsConfig>): void {
+    this.hairPhysicsConfig = { ...this.hairPhysicsConfig, ...config };
+  }
+
+  /** Get current hair physics config */
+  getHairPhysicsConfig(): typeof this.hairPhysicsConfig {
+    return { ...this.hairPhysicsConfig };
+  }
+
+  /** Get head rotation values for hair physics (range -1 to 1) */
+  getHeadRotation(): { yaw: number; pitch: number; roll: number } {
+    return {
+      yaw: this.rotations.HEAD?.yaw ?? 0,
+      pitch: this.rotations.HEAD?.pitch ?? 0,
+      roll: this.rotations.HEAD?.roll ?? 0,
+    };
+  }
+
+  /** Get hair mesh names (excludes eyebrows) */
+  private getHairMeshNames(): string[] {
+    if (this.cachedHairMeshNames) return this.cachedHairMeshNames;
+
+    const names: string[] = [];
+    this.registeredHairObjects.forEach((mesh, name) => {
+      const info = CC4_MESHES[name];
+      // Check CC4_MESHES category first
+      if (info?.category === 'hair') {
+        names.push(name);
+      }
+      // For pattern-detected hair, check if it has hair morph targets
+      else if (info?.category !== 'eyebrow') {
+        const dict = mesh.morphTargetDictionary;
+        if (dict && ('L_Hair_Left' in dict || 'L_Hair_Right' in dict || 'L_Hair_Front' in dict)) {
+          names.push(name);
+        }
+      }
+    });
+    this.cachedHairMeshNames = names;
+    return names;
+  }
+
+  /**
+   * Lightweight per-frame update for wind and idle sway.
+   * Only runs when wind or idle is enabled. Called automatically in update().
+   */
+  private updateHairWindIdle(dt: number): void {
+    if (!this.hairPhysicsEnabled) return;
+    if (this.registeredHairObjects.size === 0) return;
+
+    const cfg = this.hairPhysicsConfig;
+    const st = this.hairWindIdleState;
+
+    // Skip if neither wind nor idle is active
+    const hasWind = cfg.windStrength > 0;
+    const hasIdle = cfg.idleSwayAmount > 0;
+    if (!hasWind && !hasIdle) return;
+
+    // Update time-based state
+    st.idlePhase += dt * cfg.idleSwaySpeed;
+    st.windTime += dt;
+
+    // Calculate wind contribution
+    let windOffset = 0;
+    if (hasWind) {
+      const primaryWave = Math.sin(st.windTime * cfg.windFrequency);
+      const secondaryWave = Math.sin(st.windTime * cfg.windFrequency * 1.7) * 0.3;
+      const waveStrength = primaryWave + secondaryWave;
+
+      const targetWind = cfg.windDirectionX * waveStrength * cfg.windStrength * 0.1;
+      const smoothFactor = 1 - Math.exp(-dt * 8);
+      st.smoothedWindX += (targetWind - st.smoothedWindX) * smoothFactor;
+      windOffset = st.smoothedWindX;
+    }
+
+    // Calculate idle sway contribution
+    let idleOffset = 0;
+    if (hasIdle) {
+      idleOffset = Math.sin(st.idlePhase * Math.PI * 2) * cfg.idleSwayAmount;
+    }
+
+    // Apply wind/idle offset to hair morphs
+    const hairMeshNames = this.getHairMeshNames();
+    if (hairMeshNames.length === 0) return;
+
+    const duration = 50;
+
+    // Map offset to left/right morphs (L_ = Long section, not Left side)
+    const combinedOffset = idleOffset + windOffset;
+    const leftValue = clamp01(combinedOffset > 0 ? combinedOffset : 0);
+    const rightValue = clamp01(combinedOffset < 0 ? -combinedOffset : 0);
+    const fluffyRightValue = clamp01(rightValue * 0.7);
+    const fluffyBottomValue = clamp01(Math.abs(combinedOffset) * 0.25);
+
+    // Only apply if there's meaningful movement
+    if (Math.abs(combinedOffset) > 0.001) {
+      this.transitionMorph('L_Hair_Left', leftValue, duration, hairMeshNames);
+      this.transitionMorph('L_Hair_Right', rightValue, duration, hairMeshNames);
+      this.transitionMorph('Fluffy_Right', fluffyRightValue, duration, hairMeshNames);
+      this.transitionMorph('Fluffy_Bottom_ALL', fluffyBottomValue, duration, hairMeshNames);
+    }
+  }
+
+  /**
+   * Update hair morphs in response to head rotation changes.
+   * Called automatically when HEAD bone changes.
+   */
+  private updateHairForHeadChange(): void {
+    if (!this.hairPhysicsEnabled) return;
+    if (this.registeredHairObjects.size === 0) return;
+
+    const cfg = this.hairPhysicsConfig;
+    const headYaw = this.rotations.HEAD?.yaw ?? 0;
+    const headPitch = this.rotations.HEAD?.pitch ?? 0;
+
+    // Calculate hair offset based on head position
+    // Hair swings opposite to head rotation (inertia effect)
+    const horizontal = -headYaw * cfg.inertia * cfg.responseScale;
+    const vertical = headPitch * cfg.gravity * 0.1 * cfg.responseScale;
+
+    // Map to morph targets (L_ = Long section, not Left side)
+    const leftValue = clamp01(horizontal > 0 ? horizontal : 0);
+    const rightValue = clamp01(horizontal < 0 ? -horizontal : 0);
+    const frontValue = clamp01(vertical * 0.5);
+    const fluffyRightValue = clamp01(rightValue * 0.7);
+    const movementIntensity = Math.abs(horizontal) + Math.abs(vertical);
+    const fluffyBottomValue = clamp01(movementIntensity * 0.25);
+
+    // Schedule transitions for each hair morph
+    const hairMeshNames = this.getHairMeshNames();
+    if (hairMeshNames.length === 0) return;
+
+    const duration = 150; // ms - short for responsive feel
+
+    // Hair morphs (L_ prefix = "Long section" of hair)
+    this.transitionMorph('L_Hair_Left', leftValue, duration, hairMeshNames);
+    this.transitionMorph('L_Hair_Right', rightValue, duration, hairMeshNames);
+    this.transitionMorph('L_Hair_Front', frontValue, duration, hairMeshNames);
+    // Fluffy morphs
+    this.transitionMorph('Fluffy_Right', fluffyRightValue, duration, hairMeshNames);
+    this.transitionMorph('Fluffy_Bottom_ALL', fluffyBottomValue, duration, hairMeshNames);
+  }
+
+  /**
+   * Update hair physics for wind and idle sway.
+   * @deprecated Use the internal update() loop instead - physics now runs automatically.
+   */
+  updateHairPhysics(dt: number): void {
+    this.updateHairWindIdle(dt);
+  }
+
+  /**
+   * Get available hair morph targets from registered hair meshes.
+   */
+  getHairMorphTargets(meshName?: string): string[] {
+    let targetMesh: LoomMesh | undefined;
+
+    if (meshName) {
+      targetMesh = this.registeredHairObjects.get(meshName);
+    } else {
+      // Get first non-eyebrow hair mesh
+      for (const [name, mesh] of this.registeredHairObjects) {
+        const info = CC4_MESHES[name];
+        if (info?.category === 'hair') {
+          targetMesh = mesh;
+          break;
+        }
+      }
+    }
+
+    if (!targetMesh) return [];
+
+    const dict = targetMesh.morphTargetDictionary;
+    if (!dict) return [];
+
+    return Object.keys(dict);
+  }
+
+  /**
+   * Set morph on specific meshes (for hair physics).
+   */
+  setMorphOnMeshes(meshNames: string[], morphKey: string, value: number): void {
+    const val = clamp01(value);
+    for (const name of meshNames) {
+      const mesh = this.registeredHairObjects.get(name) || this.meshByName.get(name);
+      if (!mesh) continue;
+
+      const dict = mesh.morphTargetDictionary;
+      const infl = mesh.morphTargetInfluences;
+      if (!dict || !infl) continue;
+
+      const idx = dict[morphKey];
+      if (idx !== undefined) {
+        infl[idx] = val;
+      }
+    }
+  }
+
+  /**
+   * Apply hair state from HairService.
+   * Used by HairService to update hair appearance (color, outline, etc.)
+   */
+  applyHairStateToObject(objectName: string, state: {
+    color?: { baseColor: string; emissive: string; emissiveIntensity: number };
+    outline?: { show: boolean; color: string; opacity: number };
+    visible?: boolean;
+    scale?: { x: number; y: number; z: number };
+    position?: { x: number; y: number; z: number };
+    isEyebrow?: boolean;
+  }): void {
+    const mesh = this.registeredHairObjects.get(objectName);
+    if (!mesh) return;
+
+    const obj = mesh as any;
+
+    // Set visibility
+    if (state.visible !== undefined) {
+      obj.visible = state.visible;
+    }
+
+    // Set scale
+    if (state.scale) {
+      obj.scale.set(state.scale.x, state.scale.y, state.scale.z);
+    }
+
+    // Set position offset
+    if (state.position) {
+      obj.position.set(state.position.x, state.position.y, state.position.z);
+    }
+
+    // Set material colors
+    if (state.color && obj.material) {
+      const mat = obj.material;
+      if (mat.color) {
+        mat.color.set(state.color.baseColor);
+      }
+      if (mat.emissive !== undefined) {
+        mat.emissive.set(state.color.emissive);
+        mat.emissiveIntensity = state.color.emissiveIntensity;
+      }
+      mat.needsUpdate = true;
+    }
+  }
+
+  // ============================================================================
   // PRIVATE METHODS
   // ============================================================================
 
@@ -912,10 +1248,19 @@ export class LoomLargeThree implements LoomLarge {
 
   private flushPendingComposites(): void {
     if (this.pendingCompositeNodes.size === 0) return;
+
+    // Check if HEAD changed - triggers hair physics update
+    const headChanged = this.pendingCompositeNodes.has('HEAD');
+
     for (const nodeKey of this.pendingCompositeNodes) {
       this.applyCompositeRotation(nodeKey as BoneKey);
     }
     this.pendingCompositeNodes.clear();
+
+    // Update hair when head rotation changes
+    if (headChanged && this.hairPhysicsEnabled) {
+      this.updateHairForHeadChange();
+    }
   }
 
   /**
@@ -936,7 +1281,7 @@ export class LoomLargeThree implements LoomLarge {
     if (!rotState) return;
 
     // Find the composite rotation config for this node
-    const config = COMPOSITE_ROTATIONS.find(c => c.node === nodeKey);
+    const config = this.compositeRotations.find((c: CompositeRotation) => c.node === nodeKey);
     if (!config) return;
 
     // Helper to get binding from the correct AU for an axis based on direction
@@ -949,7 +1294,7 @@ export class LoomLargeThree implements LoomLarge {
       // For continuum pairs, select the AU based on direction
       if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
         const auId = direction < 0 ? axisConfig.negative : axisConfig.positive;
-        return BONE_AU_TO_BINDINGS[auId]?.find(b => b.node === nodeKey);
+        return this.config.auToBones[auId]?.find((b: BoneBinding) => b.node === nodeKey);
       }
 
       // If multiple AUs, find which one is active (has highest value)
@@ -963,11 +1308,11 @@ export class LoomLargeThree implements LoomLarge {
             maxAU = auId;
           }
         }
-        return BONE_AU_TO_BINDINGS[maxAU]?.find(b => b.node === nodeKey);
+        return this.config.auToBones[maxAU]?.find((b: BoneBinding) => b.node === nodeKey);
       }
 
       // Single AU
-      return BONE_AU_TO_BINDINGS[axisConfig.aus[0]]?.find(b => b.node === nodeKey);
+      return this.config.auToBones[axisConfig.aus[0]]?.find((b: BoneBinding) => b.node === nodeKey);
     };
 
     // Helper to get Vector3 axis from channel
@@ -1071,12 +1416,67 @@ export class LoomLargeThree implements LoomLarge {
   /**
    * Apply render order and material settings from CC4_MESHES to all meshes.
    * This ensures proper layering (e.g., hair renders on top of eyebrows).
+   * Also auto-registers hair and eyebrow meshes for hair physics.
    */
   private applyMeshMaterialSettings(root: LoomObject3D): void {
+    // Clear and rebuild hair object registry
+    this.registeredHairObjects.clear();
+    this.cachedHairMeshNames = null;
+
     root.traverse((obj: any) => {
       if (!obj.isMesh || !obj.name) return;
 
       const meshInfo = CC4_MESHES[obj.name];
+      let category = meshInfo?.category;
+
+      // Pattern-based detection for hair/eyebrow meshes not in CC4_MESHES
+      // This allows any CC4 hair style to be detected automatically
+      if (!category) {
+        const lowerName = obj.name.toLowerCase();
+        // Eyebrow patterns: contains 'brow', 'eyebrow', etc.
+        if (lowerName.includes('brow') || lowerName.includes('eyebrow')) {
+          category = 'eyebrow';
+        }
+        // Hair patterns: meshes that end with _1, _2 and have hair-like morph targets
+        // or mesh names that suggest hair (wavy, curly, straight, short, long, etc.)
+        else if (
+          lowerName.includes('hair') ||
+          lowerName.includes('wavy') ||
+          lowerName.includes('curly') ||
+          lowerName.includes('straight') ||
+          lowerName.includes('ponytail') ||
+          lowerName.includes('braided') ||
+          lowerName.includes('afro') ||
+          lowerName.includes('bob') ||
+          lowerName.includes('pixie') ||
+          lowerName.includes('bangs') ||
+          lowerName.includes('fringe') ||
+          lowerName.includes('mohawk') ||
+          lowerName.includes('dreadlock') ||
+          lowerName.includes('bald') === false && lowerName.includes('part_') // Side_part_wavy, etc.
+        ) {
+          // Check if it has hair-like morph targets (L_Hair_Left, R_Hair_Right, etc.)
+          const dict = obj.morphTargetDictionary;
+          if (dict && (
+            'L_Hair_Left' in dict ||
+            'L_Hair_Right' in dict ||
+            'R_Hair_Left' in dict ||
+            'R_Hair_Right' in dict ||
+            'L_Hair_Front' in dict ||
+            'R_Hair_Front' in dict
+          )) {
+            category = 'hair';
+          }
+        }
+      }
+
+      // Auto-register hair and eyebrow meshes for hair physics
+      if (category === 'hair' || category === 'eyebrow') {
+        this.registeredHairObjects.set(obj.name, obj);
+        // Set render order: eyebrows=5, hair=10
+        obj.renderOrder = category === 'eyebrow' ? 5 : 10;
+      }
+
       if (!meshInfo?.material) return;
 
       const settings = meshInfo.material;
@@ -1109,6 +1509,11 @@ export class LoomLargeThree implements LoomLarge {
         obj.material.needsUpdate = true;
       }
     });
+
+    // Log detected hair objects for debugging
+    if (this.registeredHairObjects.size > 0) {
+      console.log('[LoomLargeThree] Registered hair/eyebrow objects:', Array.from(this.registeredHairObjects.keys()));
+    }
   }
 }
 

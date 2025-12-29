@@ -1,6 +1,6 @@
 {
   "name": "loomlarge",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "Lightweight 3D character animation engine for facial AUs, visemes, and bone-driven motion",
   "type": "module",
   "main": "./dist/index.cjs",

@@ -75,7 +75,6 @@ export type {
   AUInfo,
   RotationAxis,
   CompositeRotation,
-  RotationAxisState,
   CompositeRotationState,
   RotationsState,
 } from './core/types';

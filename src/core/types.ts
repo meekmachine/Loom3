@@ -32,8 +32,6 @@ export interface BoneBinding {
   scale: -1 | 1;
   maxDegrees?: number;  // for rotation channels
   maxUnits?: number;    // for translation channels
-  /** Rotation axis this binding affects (pitch/yaw/roll). Required for rotation channels. */
-  axis?: 'pitch' | 'yaw' | 'roll';
 }
 
 /**
@@ -68,16 +66,11 @@ export interface AUInfo {
   facePart?: string;
 }
 
-/** Per-axis rotation state */
-export interface RotationAxisState {
-  value: number;
-  maxRadians: number;
-}
-
+/** Per-axis rotation state - simple -1 to 1 values like stable version */
 export interface CompositeRotationState {
-  pitch: RotationAxisState;
-  yaw: RotationAxisState;
-  roll: RotationAxisState;
+  pitch: number;
+  yaw: number;
+  roll: number;
 }
 
 export type RotationsState = Record<string, CompositeRotationState>;

@@ -6,7 +6,7 @@
  * morph targets, visemes, and bone transformations.
  */
 
-import { Clock } from 'three';
+import { Clock, Quaternion, Vector3 } from 'three';
 import type {
   LoomLarge,
   LoomMesh,
@@ -19,9 +19,43 @@ import type { Animation } from '../../interfaces/Animation';
 import type { TransitionHandle, BoneKey, RotationsState } from '../../core/types';
 import type { AUMappingConfig } from '../../mappings/types';
 import { AnimationThree } from './AnimationThree';
-import { CC4_PRESET, CC4_MESHES } from '../../presets/cc4';
+import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS, BONE_AU_TO_BINDINGS } from '../../presets/cc4';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
+
+// Axis vectors for quaternion rotation (like stable version)
+const X_AXIS = new Vector3(1, 0, 0);
+const Y_AXIS = new Vector3(0, 1, 0);
+const Z_AXIS = new Vector3(0, 0, 1);
+
+type CompositeNode = 'JAW' | 'HEAD' | 'EYE_L' | 'EYE_R' | 'TONGUE';
+
+/**
+ * AU_TO_COMPOSITE_MAP - Built from COMPOSITE_ROTATIONS
+ * Maps AU ID to { nodes, axis } so we know which semantic axis (pitch/yaw/roll) to use
+ * and which nodes are affected, without needing redundant axis property in bindings.
+ */
+const AU_TO_COMPOSITE_MAP = new Map<number, {
+  nodes: CompositeNode[];
+  axis: 'pitch' | 'yaw' | 'roll';
+}>();
+
+// Build the reverse mapping from COMPOSITE_ROTATIONS
+COMPOSITE_ROTATIONS.forEach(comp => {
+  (['pitch', 'yaw', 'roll'] as const).forEach(axisName => {
+    const axisConfig = comp[axisName];
+    if (axisConfig) {
+      axisConfig.aus.forEach(auId => {
+        const existing = AU_TO_COMPOSITE_MAP.get(auId);
+        if (existing) {
+          existing.nodes.push(comp.node as CompositeNode);
+        } else {
+          AU_TO_COMPOSITE_MAP.set(auId, { nodes: [comp.node as CompositeNode], axis: axisName });
+        }
+      });
+    }
+  });
+});
 
 function clamp01(x: number) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
@@ -223,14 +257,43 @@ export class LoomLargeThree implements LoomLarge {
       }
     }
 
+    // Check if this AU affects composite rotations (derived from COMPOSITE_ROTATIONS)
+    const compositeInfo = AU_TO_COMPOSITE_MAP.get(id);
+
+    if (compositeInfo) {
+      // This AU affects composite bone rotations - use axis from COMPOSITE_ROTATIONS
+      for (const nodeKey of compositeInfo.nodes) {
+        const config = COMPOSITE_ROTATIONS.find(c => c.node === nodeKey);
+        if (!config) continue;
+
+        const axisConfig = config[compositeInfo.axis];
+        if (!axisConfig) continue;
+
+        // Calculate axis value based on whether it's a continuum pair
+        let axisValue: number;
+        if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
+          // Continuum: calculate difference between positive and negative AUs
+          const negValue = this.auValues[axisConfig.negative] ?? 0;
+          const posValue = this.auValues[axisConfig.positive] ?? 0;
+          axisValue = posValue - negValue;
+        } else if (axisConfig.aus.length > 1) {
+          // Multiple AUs affect same axis (e.g., jaw drop) - use max
+          axisValue = Math.max(...axisConfig.aus.map(auId => this.auValues[auId] ?? 0));
+        } else {
+          // Single AU controls this axis
+          axisValue = v;
+        }
+
+        this.updateBoneRotation(nodeKey, compositeInfo.axis, axisValue);
+        this.pendingCompositeNodes.add(nodeKey);
+      }
+    }
+
+    // Handle translations (non-composite)
     const bindings = this.config.auToBones[id];
     if (bindings) {
       for (const binding of bindings) {
-        if (binding.channel === 'rx' || binding.channel === 'ry' || binding.channel === 'rz') {
-          if (binding.axis) {
-            this.updateBoneRotation(binding.node, binding.axis, v * binding.scale, binding.maxDegrees ?? 0);
-          }
-        } else if (binding.channel === 'tx' || binding.channel === 'ty' || binding.channel === 'tz') {
+        if (binding.channel === 'tx' || binding.channel === 'ty' || binding.channel === 'tz') {
           if (binding.maxUnits !== undefined) {
             this.updateBoneTranslation(binding.node, binding.channel, v * binding.scale, binding.maxUnits);
           }
@@ -275,12 +338,35 @@ export class LoomLargeThree implements LoomLarge {
       handles.push(this.transitionMorph(k, base, durationMs, meshNames));
     }
 
-    for (const binding of bindings) {
-      if (binding.channel === 'rx' || binding.channel === 'ry' || binding.channel === 'rz') {
-        if (binding.axis) {
-          handles.push(this.transitionBoneRotation(binding.node, binding.axis, target * binding.scale, binding.maxDegrees ?? 0, durationMs));
+    // Handle bone rotations using AU_TO_COMPOSITE_MAP
+    const compositeInfo = AU_TO_COMPOSITE_MAP.get(numId);
+    if (compositeInfo) {
+      for (const nodeKey of compositeInfo.nodes) {
+        const config = COMPOSITE_ROTATIONS.find(c => c.node === nodeKey);
+        if (!config) continue;
+
+        const axisConfig = config[compositeInfo.axis];
+        if (!axisConfig) continue;
+
+        // Calculate axis value based on whether it's a continuum pair
+        let axisValue: number;
+        if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
+          const negValue = this.auValues[axisConfig.negative] ?? 0;
+          const posValue = this.auValues[axisConfig.positive] ?? 0;
+          axisValue = posValue - negValue;
+        } else if (axisConfig.aus.length > 1) {
+          axisValue = Math.max(...axisConfig.aus.map(auId => this.auValues[auId] ?? 0));
+        } else {
+          axisValue = target;
         }
-      } else if (binding.channel === 'tx' || binding.channel === 'ty' || binding.channel === 'tz') {
+
+        handles.push(this.transitionBoneRotation(nodeKey, compositeInfo.axis, axisValue, durationMs));
+      }
+    }
+
+    // Handle translations
+    for (const binding of bindings) {
+      if (binding.channel === 'tx' || binding.channel === 'ty' || binding.channel === 'tz') {
         if (binding.maxUnits !== undefined) {
           handles.push(this.transitionBoneTranslation(binding.node, binding.channel, target * binding.scale, binding.maxUnits, durationMs));
         }
@@ -292,6 +378,54 @@ export class LoomLargeThree implements LoomLarge {
 
   getAU(id: number): number {
     return this.auValues[id] ?? 0;
+  }
+
+  // ============================================================================
+  // CONTINUUM CONTROL (for paired AUs like eyes left/right, head up/down)
+  // ============================================================================
+
+  /**
+   * Set a continuum AU pair immediately (no animation).
+   *
+   * Sign convention:
+   * - Negative value (-1 to 0): activates negAU (e.g., head left, eyes left)
+   * - Positive value (0 to +1): activates posAU (e.g., head right, eyes right)
+   *
+   * @param negAU - AU ID for negative direction (e.g., 61 for eyes left)
+   * @param posAU - AU ID for positive direction (e.g., 62 for eyes right)
+   * @param continuumValue - Value from -1 (full negative) to +1 (full positive)
+   */
+  setContinuum(negAU: number, posAU: number, continuumValue: number): void {
+    const value = Math.max(-1, Math.min(1, continuumValue));
+
+    // Negative value = activate negAU, zero posAU
+    // Positive value = activate posAU, zero negAU
+    const negVal = value < 0 ? Math.abs(value) : 0;
+    const posVal = value > 0 ? value : 0;
+
+    this.setAU(negAU, negVal);
+    this.setAU(posAU, posVal);
+  }
+
+  /**
+   * Smoothly transition a continuum AU pair (e.g., eyes left/right, head up/down).
+   * Takes a continuum value from -1 to +1 and internally manages both AU values.
+   *
+   * @param negAU - AU ID for negative direction (e.g., 61 for eyes left)
+   * @param posAU - AU ID for positive direction (e.g., 62 for eyes right)
+   * @param continuumValue - Target value from -1 (full negative) to +1 (full positive)
+   * @param durationMs - Transition duration in milliseconds
+   */
+  transitionContinuum(negAU: number, posAU: number, continuumValue: number, durationMs = 200): TransitionHandle {
+    const target = Math.max(-1, Math.min(1, continuumValue));
+    const driverKey = `continuum_${negAU}_${posAU}`;
+
+    // Get current continuum value: positive if posAU active, negative if negAU active
+    const currentNeg = this.auValues[negAU] ?? 0;
+    const currentPos = this.auValues[posAU] ?? 0;
+    const currentContinuum = currentPos - currentNeg;
+
+    return this.animation.addTransition(driverKey, currentContinuum, target, durationMs, (value) => this.setContinuum(negAU, posAU, value));
   }
 
   // ============================================================================
@@ -441,7 +575,7 @@ export class LoomLargeThree implements LoomLarge {
 
     const jawAmount = LoomLargeThree.VISEME_JAW_AMOUNTS[visemeIndex] * val * jawScale;
     if (Math.abs(jawScale) > 1e-6 && Math.abs(jawAmount) > 1e-6) {
-      this.updateBoneRotation('JAW', 'roll', jawAmount, LoomLargeThree.JAW_MAX_DEGREES);
+      this.updateBoneRotation('JAW', 'pitch', jawAmount);
     }
   }
 
@@ -461,7 +595,7 @@ export class LoomLargeThree implements LoomLarge {
       return morphHandle;
     }
 
-    const jawHandle = this.transitionBoneRotation('JAW', 'roll', jawAmount, LoomLargeThree.JAW_MAX_DEGREES, durationMs);
+    const jawHandle = this.transitionBoneRotation('JAW', 'pitch', jawAmount, durationMs);
     return this.combineHandles([morphHandle, jawHandle]);
   }
 
@@ -730,7 +864,6 @@ export class LoomLargeThree implements LoomLarge {
   }
 
   private initBoneRotations(): void {
-    const zeroAxis = { value: 0, maxRadians: 0 };
     this.rotations = {};
     this.pendingCompositeNodes.clear();
 
@@ -739,14 +872,15 @@ export class LoomLargeThree implements LoomLarge {
     );
 
     for (const node of allBoneKeys) {
-      this.rotations[node] = { pitch: { ...zeroAxis }, yaw: { ...zeroAxis }, roll: { ...zeroAxis } };
+      this.rotations[node] = { pitch: 0, yaw: 0, roll: 0 };
       this.pendingCompositeNodes.add(node);
     }
   }
 
-  private updateBoneRotation(nodeKey: string, axis: 'pitch' | 'yaw' | 'roll', value: number, maxDegrees: number): void {
+  /** Update rotation state - just stores -1 to 1 value like stable version */
+  private updateBoneRotation(nodeKey: string, axis: 'pitch' | 'yaw' | 'roll', value: number): void {
     if (!this.rotations[nodeKey]) return;
-    this.rotations[nodeKey][axis] = { value: Math.max(-1, Math.min(1, value)), maxRadians: deg2rad(maxDegrees) };
+    this.rotations[nodeKey][axis] = Math.max(-1, Math.min(1, value));
     this.pendingCompositeNodes.add(nodeKey);
   }
 
@@ -760,11 +894,11 @@ export class LoomLargeThree implements LoomLarge {
     this.pendingCompositeNodes.add(nodeKey);
   }
 
-  private transitionBoneRotation(nodeKey: string, axis: 'pitch' | 'yaw' | 'roll', to: number, maxDegrees: number, durationMs = 200): TransitionHandle {
+  private transitionBoneRotation(nodeKey: string, axis: 'pitch' | 'yaw' | 'roll', to: number, durationMs = 200): TransitionHandle {
     const transitionKey = `bone_${nodeKey}_${axis}`;
-    const from = this.rotations[nodeKey]?.[axis]?.value ?? 0;
+    const from = this.rotations[nodeKey]?.[axis] ?? 0;
     const target = Math.max(-1, Math.min(1, to));
-    return this.animation.addTransition(transitionKey, from, target, durationMs, (value) => this.updateBoneRotation(nodeKey, axis, value, maxDegrees));
+    return this.animation.addTransition(transitionKey, from, target, durationMs, (value) => this.updateBoneRotation(nodeKey, axis, value));
   }
 
   private transitionBoneTranslation(nodeKey: string, channel: 'tx' | 'ty' | 'tz', to: number, maxUnits: number, durationMs = 200): TransitionHandle {
@@ -784,6 +918,10 @@ export class LoomLargeThree implements LoomLarge {
     this.pendingCompositeNodes.clear();
   }
 
+  /**
+   * Apply composite rotation using quaternion composition like stable version.
+   * Looks up maxDegrees and channel from BONE_AU_TO_BINDINGS.
+   */
   private applyCompositeRotation(nodeKey: BoneKey): void {
     const entry = this.bones[nodeKey];
     if (!entry || !this.model) {
@@ -793,14 +931,86 @@ export class LoomLargeThree implements LoomLarge {
       return;
     }
 
-    const { obj, basePos, baseEuler } = entry;
+    const { obj, basePos, baseQuat } = entry;
     const rotState = this.rotations[nodeKey];
     if (!rotState) return;
 
-    const yawRad = rotState.yaw.maxRadians * rotState.yaw.value;
-    const pitchRad = rotState.pitch.maxRadians * rotState.pitch.value;
-    const rollRad = rotState.roll.maxRadians * rotState.roll.value;
+    // Find the composite rotation config for this node
+    const config = COMPOSITE_ROTATIONS.find(c => c.node === nodeKey);
+    if (!config) return;
 
+    // Helper to get binding from the correct AU for an axis based on direction
+    const getBindingForAxis = (
+      axisConfig: typeof config.pitch | typeof config.yaw | typeof config.roll,
+      direction: number
+    ) => {
+      if (!axisConfig) return null;
+
+      // For continuum pairs, select the AU based on direction
+      if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
+        const auId = direction < 0 ? axisConfig.negative : axisConfig.positive;
+        return BONE_AU_TO_BINDINGS[auId]?.find(b => b.node === nodeKey);
+      }
+
+      // If multiple AUs, find which one is active (has highest value)
+      if (axisConfig.aus.length > 1) {
+        let maxAU = axisConfig.aus[0];
+        let maxValue = this.auValues[maxAU] ?? 0;
+        for (const auId of axisConfig.aus) {
+          const val = this.auValues[auId] ?? 0;
+          if (val > maxValue) {
+            maxValue = val;
+            maxAU = auId;
+          }
+        }
+        return BONE_AU_TO_BINDINGS[maxAU]?.find(b => b.node === nodeKey);
+      }
+
+      // Single AU
+      return BONE_AU_TO_BINDINGS[axisConfig.aus[0]]?.find(b => b.node === nodeKey);
+    };
+
+    // Helper to get Vector3 axis from channel
+    const getAxis = (channel: 'rx' | 'ry' | 'rz') =>
+      channel === 'rx' ? X_AXIS : channel === 'ry' ? Y_AXIS : Z_AXIS;
+
+    // Build composite quaternion from base
+    const compositeQ = new Quaternion().copy(baseQuat);
+
+    // Apply yaw rotation
+    if (config.yaw && rotState.yaw !== 0) {
+      const binding = getBindingForAxis(config.yaw, rotState.yaw);
+      if (binding?.maxDegrees && binding.channel) {
+        const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.yaw) * binding.scale;
+        const axis = getAxis(binding.channel as 'rx' | 'ry' | 'rz');
+        const deltaQ = new Quaternion().setFromAxisAngle(axis, radians);
+        compositeQ.multiply(deltaQ);
+      }
+    }
+
+    // Apply pitch rotation
+    if (config.pitch && rotState.pitch !== 0) {
+      const binding = getBindingForAxis(config.pitch, rotState.pitch);
+      if (binding?.maxDegrees && binding.channel) {
+        const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.pitch) * binding.scale;
+        const axis = getAxis(binding.channel as 'rx' | 'ry' | 'rz');
+        const deltaQ = new Quaternion().setFromAxisAngle(axis, radians);
+        compositeQ.multiply(deltaQ);
+      }
+    }
+
+    // Apply roll rotation
+    if (config.roll && rotState.roll !== 0) {
+      const binding = getBindingForAxis(config.roll, rotState.roll);
+      if (binding?.maxDegrees && binding.channel) {
+        const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.roll) * binding.scale;
+        const axis = getAxis(binding.channel as 'rx' | 'ry' | 'rz');
+        const deltaQ = new Quaternion().setFromAxisAngle(axis, radians);
+        compositeQ.multiply(deltaQ);
+      }
+    }
+
+    // Apply position
     obj.position.copy(basePos as any);
     const t = this.translations[nodeKey];
     if (t) {
@@ -809,7 +1019,8 @@ export class LoomLargeThree implements LoomLarge {
       obj.position.z += t.z;
     }
 
-    obj.rotation.set(baseEuler.x + pitchRad, baseEuler.y + yawRad, baseEuler.z + rollRad, baseEuler.order);
+    // Apply composite quaternion rotation
+    (obj.quaternion as any).copy(compositeQ);
     obj.updateMatrixWorld(false);
     this.model.updateMatrixWorld(true);
   }

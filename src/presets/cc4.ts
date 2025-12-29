@@ -138,97 +138,96 @@ export const VISEME_KEYS: string[] = [
 
 export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
   // Head turn and tilt (M51-M56) - use HEAD bone only (NECK should not rotate with head)
-  // Three.js Y rotation: positive = counter-clockwise from above = head turns LEFT (character POV)
   51: [
-    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 },   // Head turn left
+    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30, axis: 'yaw' },   // Head turn left
   ],
   52: [
-    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 30 },  // Head turn right
+    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 30, axis: 'yaw' },  // Head turn right
   ],
   53: [
-    { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 20 },  // Head up
+    { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 20, axis: 'pitch' },  // Head up
   ],
   54: [
-    { node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 20 },   // Head down
+    { node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 20, axis: 'pitch' },   // Head down
   ],
   55: [
-    { node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 15 },  // Head tilt left
+    { node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 15, axis: 'roll' },  // Head tilt left
   ],
   56: [
-    { node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 15 },   // Head tilt right
+    { node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 15, axis: 'roll' },   // Head tilt right
   ],
   // Eyes horizontal (yaw) - CC4 rigs use rz for horizontal eye rotation
   61: [
-    { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 32 },   // Eyes look left
-    { node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 32 },
+    { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 32, axis: 'yaw' },   // Eyes look left
+    { node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 32, axis: 'yaw' },
   ],
   62: [
-    { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 32 },  // Eyes look right
-    { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 32 },
+    { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 32, axis: 'yaw' },  // Eyes look right
+    { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 32, axis: 'yaw' },
   ],
   63: [
-    { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 32 },  // Eyes Up
-    { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 32 },
+    { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 32, axis: 'pitch' },  // Eyes Up
+    { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 32, axis: 'pitch' },
   ],
   64: [
-    { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 32 },   // Eyes Down
-    { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 32 },
+    { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 32, axis: 'pitch' },   // Eyes Down
+    { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 32, axis: 'pitch' },
   ],
   // Single-eye (Left) — horizontal (rz for CC4) and vertical (rx)
-  65: [ { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 15 } ],
-  66: [ { node: 'EYE_L', channel: 'rz', scale:  1, maxDegrees: 15 } ],
-  67: [ { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 12 } ],  // Left Eye Up
-  68: [ { node: 'EYE_L', channel: 'rx', scale:  1, maxDegrees: 12 } ],  // Left Eye Down
+  65: [ { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 15, axis: 'yaw' } ],
+  66: [ { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 15, axis: 'yaw' } ],
+  67: [ { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 12, axis: 'pitch' } ],  // Left Eye Up
+  68: [ { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 12, axis: 'pitch' } ],   // Left Eye Down
   // Single-eye (Right) — horizontal (rz for CC4) and vertical (rx)
-  69: [ { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 15 } ],
-  70: [ { node: 'EYE_R', channel: 'rz', scale:  1, maxDegrees: 15 } ],
-  71: [ { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 12 } ],  // Right Eye Up
-  72: [ { node: 'EYE_R', channel: 'rx', scale:  1, maxDegrees: 12 } ],  // Right Eye Down
+  69: [ { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 15, axis: 'yaw' } ],
+  70: [ { node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 15, axis: 'yaw' } ],
+  71: [ { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 12, axis: 'pitch' } ],  // Right Eye Up
+  72: [ { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 12, axis: 'pitch' } ],   // Right Eye Down
 
   // Jaw / Mouth
   8: [ // Lips Toward Each Other - slight jaw open helps sell the lip press
-    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 8 },  // Small downward rotation (jaw opening slightly)
+    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 8, axis: 'roll' },
   ],
   25: [ // Lips Part — small jaw open
-    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 5.84 },  // 73% of 8
+    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 5.84, axis: 'roll' },
   ],
   26: [
-    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 28 },  // 73% of 20
+    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 28, axis: 'roll' },
   ],
   27: [ // Mouth Stretch — larger jaw open
-    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 32 }, // 73% of 25
+    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 32, axis: 'roll' },
   ],
   29: [
-    { node: 'JAW', channel: 'tz', scale: -1, maxUnits: 0.02 },  // Negative for forward thrust
+    { node: 'JAW', channel: 'tz', scale: -1, maxUnits: 0.02 },  // Translation - no axis needed
   ],
   30: [ // Jaw Left
-    { node: 'JAW', channel: 'ry', scale: -1, maxDegrees: 5 },
+    { node: 'JAW', channel: 'ry', scale: -1, maxDegrees: 5, axis: 'yaw' },
   ],
   35: [ // Jaw Right
-    { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 5 },
+    { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 5, axis: 'yaw' },
   ],
 
   // Tongue
   19: [
-    { node: 'TONGUE', channel: 'tz', scale: -1, maxUnits: 0.008 },
+    { node: 'TONGUE', channel: 'tz', scale: -1, maxUnits: 0.008 },  // Translation - no axis needed
   ],
   37: [ // Tongue Up
-    { node: 'TONGUE', channel: 'rz', scale: -1, maxDegrees: 45 },
+    { node: 'TONGUE', channel: 'rz', scale: -1, maxDegrees: 45, axis: 'pitch' },
   ],
   38: [ // Tongue Down
-    { node: 'TONGUE', channel: 'rz', scale: 1, maxDegrees: 45 },
+    { node: 'TONGUE', channel: 'rz', scale: 1, maxDegrees: 45, axis: 'pitch' },
   ],
   39: [ // Tongue Left
-    { node: 'TONGUE', channel: 'ry', scale: -1, maxDegrees: 10 },
+    { node: 'TONGUE', channel: 'ry', scale: -1, maxDegrees: 10, axis: 'yaw' },
   ],
   40: [ // Tongue Right
-    { node: 'TONGUE', channel: 'ry', scale: 1, maxDegrees: 10 },
+    { node: 'TONGUE', channel: 'ry', scale: 1, maxDegrees: 10, axis: 'yaw' },
   ],
   41: [ // Tongue Tilt Left
-    { node: 'TONGUE', channel: 'rx', scale: -1, maxDegrees: 20 },
+    { node: 'TONGUE', channel: 'rx', scale: -1, maxDegrees: 20, axis: 'roll' },
   ],
   42: [ // Tongue Tilt Right
-    { node: 'TONGUE', channel: 'rx', scale: 1, maxDegrees: 20 },
+    { node: 'TONGUE', channel: 'rx', scale: 1, maxDegrees: 20, axis: 'roll' },
   ],
 };
 

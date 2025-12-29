@@ -19,27 +19,12 @@ import type { Animation } from '../../interfaces/Animation';
 import type { TransitionHandle, BoneKey, RotationsState } from '../../core/types';
 import type { AUMappingConfig } from '../../mappings/types';
 import { AnimationThree } from './AnimationThree';
-import { CC4_PRESET, CC4_MESHES, CONTINUUM_PAIRS_MAP } from '../../presets/cc4';
+import { CC4_PRESET, CC4_MESHES } from '../../presets/cc4';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 
 function clamp01(x: number) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
-}
-
-/**
- * Get the correct rotation axis for an AU.
- * Uses CONTINUUM_PAIRS_MAP for proper axis mapping (e.g., eyes use rz for yaw).
- * Falls back to inferring from channel if not in the map.
- */
-function getAxisForAU(auId: number, channel: string): 'pitch' | 'yaw' | 'roll' {
-  // Check if this AU is in the continuum pairs map (has correct axis info)
-  const pairInfo = CONTINUUM_PAIRS_MAP[auId];
-  if (pairInfo) {
-    return pairInfo.axis;
-  }
-  // Fallback: infer from channel (works for non-continuum AUs)
-  return channel === 'rx' ? 'pitch' : channel === 'ry' ? 'yaw' : 'roll';
 }
 
 /**
@@ -242,8 +227,9 @@ export class LoomLargeThree implements LoomLarge {
     if (bindings) {
       for (const binding of bindings) {
         if (binding.channel === 'rx' || binding.channel === 'ry' || binding.channel === 'rz') {
-          const axis = getAxisForAU(id, binding.channel);
-          this.updateBoneRotation(binding.node, axis, v * binding.scale, binding.maxDegrees ?? 0);
+          if (binding.axis) {
+            this.updateBoneRotation(binding.node, binding.axis, v * binding.scale, binding.maxDegrees ?? 0);
+          }
         } else if (binding.channel === 'tx' || binding.channel === 'ty' || binding.channel === 'tz') {
           if (binding.maxUnits !== undefined) {
             this.updateBoneTranslation(binding.node, binding.channel, v * binding.scale, binding.maxUnits);
@@ -291,8 +277,9 @@ export class LoomLargeThree implements LoomLarge {
 
     for (const binding of bindings) {
       if (binding.channel === 'rx' || binding.channel === 'ry' || binding.channel === 'rz') {
-        const axis = getAxisForAU(numId, binding.channel);
-        handles.push(this.transitionBoneRotation(binding.node, axis, target * binding.scale, binding.maxDegrees ?? 0, durationMs));
+        if (binding.axis) {
+          handles.push(this.transitionBoneRotation(binding.node, binding.axis, target * binding.scale, binding.maxDegrees ?? 0, durationMs));
+        }
       } else if (binding.channel === 'tx' || binding.channel === 'ty' || binding.channel === 'tz') {
         if (binding.maxUnits !== undefined) {
           handles.push(this.transitionBoneTranslation(binding.node, binding.channel, target * binding.scale, binding.maxUnits, durationMs));

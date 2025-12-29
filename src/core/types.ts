@@ -32,6 +32,8 @@ export interface BoneBinding {
   scale: -1 | 1;
   maxDegrees?: number;  // for rotation channels
   maxUnits?: number;    // for translation channels
+  /** Rotation axis this binding affects (pitch/yaw/roll). Required for rotation channels. */
+  axis?: 'pitch' | 'yaw' | 'roll';
 }
 
 /**

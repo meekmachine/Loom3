@@ -525,10 +525,12 @@ export class LoomLargeThree implements LoomLarge {
     const result: MeshInfo[] = [];
     this.model.traverse((obj: any) => {
       if (obj.isMesh) {
+        const meshInfo = CC4_MESHES[obj.name];
         result.push({
           name: obj.name,
           visible: obj.visible,
           morphCount: obj.morphTargetInfluences?.length || 0,
+          category: meshInfo?.category || 'other',
         });
       }
     });

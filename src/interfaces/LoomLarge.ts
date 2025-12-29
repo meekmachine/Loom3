@@ -84,6 +84,7 @@ export interface MeshInfo {
   name: string;
   visible: boolean;
   morphCount: number;
+  category?: string;
 }
 
 /**

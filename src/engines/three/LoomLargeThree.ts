@@ -1437,12 +1437,16 @@ export class LoomLargeThree implements LoomLarge {
       const meshInfo = CC4_MESHES[obj.name];
       let category = meshInfo?.category;
 
-      // Pattern-based detection for hair/eyebrow meshes not in CC4_MESHES
-      // This allows any CC4 hair style to be detected automatically
+      // Pattern-based detection for meshes not in CC4_MESHES
+      // This allows any CC4 character to be detected automatically
       if (!category) {
         const lowerName = obj.name.toLowerCase();
+        // Body patterns: CC_Base_Body, body mesh, etc.
+        if (lowerName.includes('body') || lowerName.includes('cc_base_body')) {
+          category = 'body';
+        }
         // Eyebrow patterns: contains 'brow', 'eyebrow', etc.
-        if (lowerName.includes('brow') || lowerName.includes('eyebrow')) {
+        else if (lowerName.includes('brow') || lowerName.includes('eyebrow')) {
           category = 'eyebrow';
         }
         // Hair patterns: meshes that end with _1, _2 and have hair-like morph targets
@@ -1483,6 +1487,20 @@ export class LoomLargeThree implements LoomLarge {
         this.registeredHairObjects.set(obj.name, obj);
         // Set render order: eyebrows=5, hair=10
         obj.renderOrder = category === 'eyebrow' ? 5 : 10;
+
+        // Enable depth write and depth test for proper rendering
+        if (obj.material) {
+          obj.material.depthWrite = true;
+          obj.material.depthTest = true;
+          obj.material.needsUpdate = true;
+        }
+      }
+
+      // Also ensure body meshes have depth write/test enabled
+      if (category === 'body' && obj.material) {
+        obj.material.depthWrite = true;
+        obj.material.depthTest = true;
+        obj.material.needsUpdate = true;
       }
 
       if (!meshInfo?.material) return;

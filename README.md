@@ -10,16 +10,17 @@ LoomLarge provides pre-built mappings that connect [Facial Action Coding System 
 
 1. [Installation & Setup](#1-installation--setup)
 2. [Using Presets](#2-using-presets)
-3. [Extending & Custom Presets](#3-extending--custom-presets)
-4. [Action Unit Control](#4-action-unit-control)
-5. [Mix Weight System](#5-mix-weight-system)
-6. [Composite Rotation System](#6-composite-rotation-system)
-7. [Continuum Pairs](#7-continuum-pairs)
-8. [Direct Morph Control](#8-direct-morph-control)
-9. [Viseme System](#9-viseme-system)
-10. [Transition System](#10-transition-system)
-11. [Playback & State Control](#11-playback--state-control)
-12. [Hair Physics](#12-hair-physics)
+3. [Getting to Know Your Character](#3-getting-to-know-your-character)
+4. [Extending & Custom Presets](#4-extending--custom-presets)
+5. [Action Unit Control](#5-action-unit-control)
+6. [Mix Weight System](#6-mix-weight-system)
+7. [Composite Rotation System](#7-composite-rotation-system)
+8. [Continuum Pairs](#8-continuum-pairs)
+9. [Direct Morph Control](#9-direct-morph-control)
+10. [Viseme System](#10-viseme-system)
+11. [Transition System](#11-transition-system)
+12. [Playback & State Control](#12-playback--state-control)
+13. [Hair Physics](#13-hair-physics)
 
 ---
 
@@ -198,7 +199,112 @@ const loom = new LoomLargeThree({ auMappings: CC4_PRESET });
 
 ---
 
-## 3. Extending & Custom Presets
+## 3. Getting to Know Your Character
+
+Before customizing presets or extending mappings, it's helpful to understand what's actually in your character model. LoomLarge provides several methods to inspect meshes, morph targets, and bones.
+
+### Listing meshes
+
+Get all meshes in your character with their visibility and morph target counts:
+
+```typescript
+const meshes = loom.getMeshList();
+console.log(meshes);
+// [
+//   { name: 'CC_Base_Body', visible: true, morphCount: 142 },
+//   { name: 'CC_Base_Tongue', visible: true, morphCount: 12 },
+//   { name: 'CC_Base_EyeOcclusion_L', visible: true, morphCount: 8 },
+//   { name: 'CC_Base_EyeOcclusion_R', visible: true, morphCount: 8 },
+//   { name: 'Male_Bushy_1', visible: true, morphCount: 142 },
+//   ...
+// ]
+```
+
+### Listing morph targets
+
+Get all morph target names grouped by mesh:
+
+```typescript
+const morphs = loom.getMorphTargets();
+console.log(morphs);
+// {
+//   'CC_Base_Body': [
+//     'A01_Brow_Inner_Up', 'A02_Brow_Down_Left', 'A02_Brow_Down_Right',
+//     'A04_Brow_Outer_Up_Left', 'A04_Brow_Outer_Up_Right',
+//     'Mouth_Smile_L', 'Mouth_Smile_R', 'Eye_Blink_L', 'Eye_Blink_R',
+//     ...
+//   ],
+//   'CC_Base_Tongue': [
+//     'V_Tongue_Out', 'V_Tongue_Up', 'V_Tongue_Down', ...
+//   ],
+//   ...
+// }
+```
+
+This is invaluable when creating custom presets—you need to know the exact morph target names your character uses.
+
+### Listing bones
+
+Get all resolved bones with their current positions and rotations (in degrees):
+
+```typescript
+const bones = loom.getBones();
+console.log(bones);
+// {
+//   'HEAD': { position: [0, 156.2, 0], rotation: [0, 0, 0] },
+//   'JAW': { position: [0, 154.1, 2.3], rotation: [0, 0, 0] },
+//   'EYE_L': { position: [-3.2, 160.5, 8.1], rotation: [0, 0, 0] },
+//   'EYE_R': { position: [3.2, 160.5, 8.1], rotation: [0, 0, 0] },
+//   'TONGUE': { position: [0, 152.3, 1.8], rotation: [0, 0, 0] },
+// }
+```
+
+### Controlling mesh visibility
+
+Hide or show individual meshes:
+
+```typescript
+// Hide hair mesh
+loom.setMeshVisible('Side_part_wavy_1', false);
+
+// Show it again
+loom.setMeshVisible('Side_part_wavy_1', true);
+```
+
+### Adjusting material properties
+
+Fine-tune render order, transparency, and blending for each mesh:
+
+```typescript
+// Get current material config
+const config = loom.getMeshMaterialConfig('CC_Base_Body');
+console.log(config);
+// {
+//   renderOrder: 0,
+//   transparent: false,
+//   opacity: 1,
+//   depthWrite: true,
+//   depthTest: true,
+//   blending: 'Normal'
+// }
+
+// Set custom material config
+loom.setMeshMaterialConfig('CC_Base_EyeOcclusion_L', {
+  renderOrder: 10,
+  transparent: true,
+  opacity: 0.8,
+  blending: 'Normal'  // 'Normal', 'Additive', 'Subtractive', 'Multiply', 'None'
+});
+```
+
+This is especially useful for:
+- Fixing render order issues (eyebrows behind hair, etc.)
+- Making meshes semi-transparent for debugging
+- Adjusting blending modes for special effects
+
+---
+
+## 4. Extending & Custom Presets
 
 ### Extending an existing preset
 
@@ -275,7 +381,7 @@ const current = loom.getAUMappings();
 
 ---
 
-## 4. Action Unit Control
+## 5. Action Unit Control
 
 Action Units are the core of FACS. Each AU represents a specific muscular movement of the face.
 
@@ -349,7 +455,7 @@ loom.setAU(12, 0.8, 1);    // Right side only
 
 ---
 
-## 5. Mix Weight System
+## 6. Mix Weight System
 
 Some AUs can be driven by both morph targets (blend shapes) AND bone rotations. The mix weight controls the blend between them.
 
@@ -394,7 +500,7 @@ if (isMixedAU(26)) {
 
 ---
 
-## 6. Composite Rotation System
+## 7. Composite Rotation System
 
 Bones like the head and eyes need multi-axis rotation (pitch, yaw, roll). The composite rotation system handles this automatically.
 
@@ -452,7 +558,7 @@ loom.setAU(64, 0.4);
 
 ---
 
-## 7. Continuum Pairs
+## 8. Continuum Pairs
 
 Continuum pairs are bidirectional AU pairs that represent opposite directions on the same axis. They're linked so that activating one should deactivate the other.
 
@@ -498,7 +604,7 @@ const pair = CONTINUUM_PAIRS_MAP[51];
 
 ---
 
-## 8. Direct Morph Control
+## 9. Direct Morph Control
 
 Sometimes you need to control morph targets directly by name, bypassing the AU system.
 
@@ -537,7 +643,7 @@ LoomLarge caches morph target lookups for performance. The first time you access
 
 ---
 
-## 9. Viseme System
+## 10. Viseme System
 
 Visemes are mouth shapes used for lip-sync. LoomLarge includes 15 visemes with automatic jaw coupling.
 
@@ -622,7 +728,7 @@ speak([5, 0, 10, 4]);
 
 ---
 
-## 10. Transition System
+## 11. Transition System
 
 All animated changes in LoomLarge go through the transition system, which provides smooth interpolation with easing.
 
@@ -702,7 +808,7 @@ loom.clearTransitions();
 
 ---
 
-## 11. Playback & State Control
+## 12. Playback & State Control
 
 ### Pausing and resuming
 
@@ -757,7 +863,7 @@ loom.dispose();
 
 ---
 
-## 12. Hair Physics
+## 13. Hair Physics
 
 LoomLarge includes an experimental hair physics system that simulates hair movement based on head motion.
 

@@ -19,12 +19,27 @@ import type { Animation } from '../../interfaces/Animation';
 import type { TransitionHandle, BoneKey, RotationsState } from '../../core/types';
 import type { AUMappingConfig } from '../../mappings/types';
 import { AnimationThree } from './AnimationThree';
-import { CC4_PRESET, CC4_MESHES } from '../../presets/cc4';
+import { CC4_PRESET, CC4_MESHES, CONTINUUM_PAIRS_MAP } from '../../presets/cc4';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 
 function clamp01(x: number) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+/**
+ * Get the correct rotation axis for an AU.
+ * Uses CONTINUUM_PAIRS_MAP for proper axis mapping (e.g., eyes use rz for yaw).
+ * Falls back to inferring from channel if not in the map.
+ */
+function getAxisForAU(auId: number, channel: string): 'pitch' | 'yaw' | 'roll' {
+  // Check if this AU is in the continuum pairs map (has correct axis info)
+  const pairInfo = CONTINUUM_PAIRS_MAP[auId];
+  if (pairInfo) {
+    return pairInfo.axis;
+  }
+  // Fallback: infer from channel (works for non-continuum AUs)
+  return channel === 'rx' ? 'pitch' : channel === 'ry' ? 'yaw' : 'roll';
 }
 
 /**
@@ -227,7 +242,7 @@ export class LoomLargeThree implements LoomLarge {
     if (bindings) {
       for (const binding of bindings) {
         if (binding.channel === 'rx' || binding.channel === 'ry' || binding.channel === 'rz') {
-          const axis = binding.channel === 'rx' ? 'pitch' : binding.channel === 'ry' ? 'yaw' : 'roll';
+          const axis = getAxisForAU(id, binding.channel);
           this.updateBoneRotation(binding.node, axis, v * binding.scale, binding.maxDegrees ?? 0);
         } else if (binding.channel === 'tx' || binding.channel === 'ty' || binding.channel === 'tz') {
           if (binding.maxUnits !== undefined) {
@@ -276,7 +291,7 @@ export class LoomLargeThree implements LoomLarge {
 
     for (const binding of bindings) {
       if (binding.channel === 'rx' || binding.channel === 'ry' || binding.channel === 'rz') {
-        const axis = binding.channel === 'rx' ? 'pitch' : binding.channel === 'ry' ? 'yaw' : 'roll';
+        const axis = getAxisForAU(numId, binding.channel);
         handles.push(this.transitionBoneRotation(binding.node, axis, target * binding.scale, binding.maxDegrees ?? 0, durationMs));
       } else if (binding.channel === 'tx' || binding.channel === 'ty' || binding.channel === 'tz') {
         if (binding.maxUnits !== undefined) {
@@ -533,10 +548,33 @@ export class LoomLargeThree implements LoomLarge {
     return result;
   }
 
-  /** Debug helper: log all mesh names to console */
-  logMeshNames(): void {
-    const meshes = this.getMeshList();
-    console.log('[LoomLargeThree] Mesh names:', meshes.map(m => m.name));
+  /** Get all morph targets grouped by mesh name */
+  getMorphTargets(): Record<string, string[]> {
+    const result: Record<string, string[]> = {};
+    for (const mesh of this.meshes) {
+      const dict = mesh.morphTargetDictionary;
+      if (dict) {
+        result[mesh.name] = Object.keys(dict).sort();
+      }
+    }
+    return result;
+  }
+
+  /** Get all resolved bone names and their current transforms */
+  getBones(): Record<string, { position: [number, number, number]; rotation: [number, number, number] }> {
+    const result: Record<string, { position: [number, number, number]; rotation: [number, number, number] }> = {};
+    for (const name of Object.keys(this.bones)) {
+      const entry = this.bones[name];
+      if (entry) {
+        const pos = entry.obj.position;
+        const rot = entry.obj.rotation;
+        result[name] = {
+          position: [pos.x, pos.y, pos.z],
+          rotation: [rot.x * 180 / Math.PI, rot.y * 180 / Math.PI, rot.z * 180 / Math.PI],
+        };
+      }
+    }
+    return result;
   }
 
   setMeshVisible(meshName: string, visible: boolean): void {

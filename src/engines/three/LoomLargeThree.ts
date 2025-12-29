@@ -537,12 +537,15 @@ export class LoomLargeThree implements LoomLarge {
    * Use this when you need to set the same morph many times (e.g., in animation loops).
    */
   resolveMorphTargets(key: string, meshNames?: string[]): { infl: number[]; idx: number }[] {
+    // Cache key includes mesh names to avoid conflicts between face and hair morphs
+    const targetMeshes = meshNames || this.config.morphToMesh?.face || [];
+    const cacheKey = meshNames?.length ? `${key}@${meshNames.join(',')}` : key;
+
     // Check cache first
-    const cached = this.morphCache.get(key);
+    const cached = this.morphCache.get(cacheKey);
     if (cached) return cached;
 
     // Resolve and cache
-    const targetMeshes = meshNames || this.config.morphToMesh?.face || [];
     const targets: { infl: number[]; idx: number }[] = [];
 
     if (targetMeshes.length) {
@@ -570,18 +573,20 @@ export class LoomLargeThree implements LoomLarge {
     }
 
     if (targets.length > 0) {
-      this.morphCache.set(key, targets);
+      this.morphCache.set(cacheKey, targets);
     }
     return targets;
   }
 
   transitionMorph(key: string, to: number, durationMs = 120, meshNames?: string[]): TransitionHandle {
-    const transitionKey = `morph_${key}`;
-    const from = this.getMorphValue(key);
+    const transitionKey = meshNames?.length ? `morph_${key}@${meshNames.join(',')}` : `morph_${key}`;
     const target = clamp01(to);
 
     // Pre-resolve targets once, then use direct access during animation
     const targets = this.resolveMorphTargets(key, meshNames);
+
+    // Get "from" value from the resolved targets (more accurate for hair meshes)
+    const from = targets.length > 0 ? (targets[0].infl[targets[0].idx] ?? 0) : this.getMorphValue(key);
 
     return this.animation.addTransition(transitionKey, from, target, durationMs, (value) => {
       // Ultra-fast path: direct array access, no lookups
@@ -1016,9 +1021,12 @@ export class LoomLargeThree implements LoomLarge {
   /**
    * Update hair morphs in response to head rotation changes.
    * Called automatically when HEAD bone changes.
+   * Note: This runs regardless of hairPhysicsEnabled - head-driven hair motion
+   * is a basic feature. Only wind/idle sway is gated by hairPhysicsEnabled.
    */
   private updateHairForHeadChange(): void {
-    if (!this.hairPhysicsEnabled) return;
+    // Only check for registered hair objects - NOT hairPhysicsEnabled
+    // Head-driven motion should always work when hair is registered
     if (this.registeredHairObjects.size === 0) return;
 
     const cfg = this.hairPhysicsConfig;

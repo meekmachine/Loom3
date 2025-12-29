@@ -167,23 +167,23 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
     { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 32 },
   ],
   63: [
-    { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 32 },
+    { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 32 },  // Eyes Up
     { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 32 },
   ],
   64: [
-    { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 32 },
+    { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 32 },   // Eyes Down
     { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 32 },
   ],
   // Single-eye (Left) — horizontal (rz for CC4) and vertical (rx)
   65: [ { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 15 } ],
   66: [ { node: 'EYE_L', channel: 'rz', scale:  1, maxDegrees: 15 } ],
-  67: [ { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 12 } ],
-  68: [ { node: 'EYE_L', channel: 'rx', scale:  1, maxDegrees: 12 } ],
+  67: [ { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 12 } ],  // Left Eye Up
+  68: [ { node: 'EYE_L', channel: 'rx', scale:  1, maxDegrees: 12 } ],  // Left Eye Down
   // Single-eye (Right) — horizontal (rz for CC4) and vertical (rx)
   69: [ { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 15 } ],
   70: [ { node: 'EYE_R', channel: 'rz', scale:  1, maxDegrees: 15 } ],
-  71: [ { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 12 } ],
-  72: [ { node: 'EYE_R', channel: 'rx', scale:  1, maxDegrees: 12 } ],
+  71: [ { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 12 } ],  // Right Eye Up
+  72: [ { node: 'EYE_R', channel: 'rx', scale:  1, maxDegrees: 12 } ],  // Right Eye Down
 
   // Jaw / Mouth
   8: [ // Lips Toward Each Other - slight jaw open helps sell the lip press

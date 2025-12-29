@@ -296,10 +296,32 @@ export class LoomLargeThree implements LoomLarge {
   // MORPH CONTROL
   // ============================================================================
 
-  setMorph(key: string, v: number, meshNames?: string[]): void {
+  /**
+   * Set a morph target value.
+   *
+   * Fast paths (in order of speed):
+   * 1. Pass pre-resolved { infl, idx } array directly - zero lookups
+   * 2. String key with cache hit - one Map lookup
+   * 3. String key cache miss - dictionary lookup, then cached for next time
+   */
+  setMorph(key: string, v: number, meshNames?: string[]): void;
+  setMorph(key: string, v: number, targets: { infl: number[]; idx: number }[]): void;
+  setMorph(key: string, v: number, meshNamesOrTargets?: string[] | { infl: number[]; idx: number }[]): void {
     const val = clamp01(v);
+
+    // Fast path: pre-resolved targets array (from transitionMorph)
+    if (Array.isArray(meshNamesOrTargets) && meshNamesOrTargets.length > 0 && typeof meshNamesOrTargets[0] === 'object' && 'infl' in meshNamesOrTargets[0]) {
+      const targets = meshNamesOrTargets as { infl: number[]; idx: number }[];
+      for (const target of targets) {
+        target.infl[target.idx] = val;
+      }
+      return;
+    }
+
+    const meshNames = meshNamesOrTargets as string[] | undefined;
     const targetMeshes = meshNames || this.config.morphToMesh?.face || [];
 
+    // Fast path: cache hit
     const cached = this.morphCache.get(key);
     if (cached) {
       for (const target of cached) {
@@ -308,6 +330,7 @@ export class LoomLargeThree implements LoomLarge {
       return;
     }
 
+    // Slow path: resolve and cache
     const targets: { infl: number[]; idx: number }[] = [];
 
     if (targetMeshes.length) {
@@ -341,11 +364,64 @@ export class LoomLargeThree implements LoomLarge {
     }
   }
 
+  /**
+   * Resolve morph key to direct targets for ultra-fast repeated access.
+   * Use this when you need to set the same morph many times (e.g., in animation loops).
+   */
+  resolveMorphTargets(key: string, meshNames?: string[]): { infl: number[]; idx: number }[] {
+    // Check cache first
+    const cached = this.morphCache.get(key);
+    if (cached) return cached;
+
+    // Resolve and cache
+    const targetMeshes = meshNames || this.config.morphToMesh?.face || [];
+    const targets: { infl: number[]; idx: number }[] = [];
+
+    if (targetMeshes.length) {
+      for (const name of targetMeshes) {
+        const mesh = this.meshByName.get(name);
+        if (!mesh) continue;
+        const dict = mesh.morphTargetDictionary;
+        const infl = mesh.morphTargetInfluences;
+        if (!dict || !infl) continue;
+        const idx = dict[key];
+        if (idx !== undefined) {
+          targets.push({ infl, idx });
+        }
+      }
+    } else {
+      for (const mesh of this.meshes) {
+        const dict = mesh.morphTargetDictionary;
+        const infl = mesh.morphTargetInfluences;
+        if (!dict || !infl) continue;
+        const idx = dict[key];
+        if (idx !== undefined) {
+          targets.push({ infl, idx });
+        }
+      }
+    }
+
+    if (targets.length > 0) {
+      this.morphCache.set(key, targets);
+    }
+    return targets;
+  }
+
   transitionMorph(key: string, to: number, durationMs = 120, meshNames?: string[]): TransitionHandle {
     const transitionKey = `morph_${key}`;
     const from = this.getMorphValue(key);
     const target = clamp01(to);
-    return this.animation.addTransition(transitionKey, from, target, durationMs, (value) => this.setMorph(key, value, meshNames));
+
+    // Pre-resolve targets once, then use direct access during animation
+    const targets = this.resolveMorphTargets(key, meshNames);
+
+    return this.animation.addTransition(transitionKey, from, target, durationMs, (value) => {
+      // Ultra-fast path: direct array access, no lookups
+      const val = clamp01(value);
+      for (const t of targets) {
+        t.infl[t.idx] = val;
+      }
+    });
   }
 
   // ============================================================================
@@ -457,11 +533,115 @@ export class LoomLargeThree implements LoomLarge {
     return result;
   }
 
+  /** Debug helper: log all mesh names to console */
+  logMeshNames(): void {
+    const meshes = this.getMeshList();
+    console.log('[LoomLargeThree] Mesh names:', meshes.map(m => m.name));
+  }
+
   setMeshVisible(meshName: string, visible: boolean): void {
     if (!this.model) return;
     this.model.traverse((obj: any) => {
       if (obj.isMesh && obj.name === meshName) {
         obj.visible = visible;
+      }
+    });
+  }
+
+  /** Blending mode options for Three.js materials */
+  private static readonly BLENDING_MODES: Record<string, number> = {
+    'Normal': 1,      // THREE.NormalBlending
+    'Additive': 2,    // THREE.AdditiveBlending
+    'Subtractive': 3, // THREE.SubtractiveBlending
+    'Multiply': 4,    // THREE.MultiplyBlending
+    'None': 0,        // THREE.NoBlending
+  };
+
+  /** Get material config for a mesh */
+  getMeshMaterialConfig(meshName: string): {
+    renderOrder: number;
+    transparent: boolean;
+    opacity: number;
+    depthWrite: boolean;
+    depthTest: boolean;
+    blending: string;
+  } | null {
+    if (!this.model) return null;
+    let result: ReturnType<LoomLargeThree['getMeshMaterialConfig']> = null;
+
+    this.model.traverse((obj: any) => {
+      if (obj.isMesh && obj.name === meshName) {
+        const mat = obj.material;
+        if (mat) {
+          // Reverse lookup blending mode name
+          let blendingName = 'Normal';
+          for (const [name, value] of Object.entries(LoomLargeThree.BLENDING_MODES)) {
+            if (mat.blending === value) {
+              blendingName = name;
+              break;
+            }
+          }
+          result = {
+            renderOrder: obj.renderOrder,
+            transparent: mat.transparent,
+            opacity: mat.opacity,
+            depthWrite: mat.depthWrite,
+            depthTest: mat.depthTest,
+            blending: blendingName,
+          };
+        }
+      }
+    });
+
+    return result;
+  }
+
+  /** Set material config for a mesh */
+  setMeshMaterialConfig(meshName: string, config: {
+    renderOrder?: number;
+    transparent?: boolean;
+    opacity?: number;
+    depthWrite?: boolean;
+    depthTest?: boolean;
+    blending?: string;
+  }): void {
+    if (!this.model) return;
+
+    this.model.traverse((obj: any) => {
+      if (obj.isMesh && obj.name === meshName) {
+        const mat = obj.material;
+
+        if (config.renderOrder !== undefined) {
+          obj.renderOrder = config.renderOrder;
+        }
+
+        if (mat) {
+          // Handle transparency - auto-enable when opacity < 1
+          if (config.opacity !== undefined) {
+            mat.opacity = config.opacity;
+            // Auto-enable transparency when opacity is reduced
+            if (config.opacity < 1 && config.transparent === undefined) {
+              mat.transparent = true;
+            }
+          }
+          if (config.transparent !== undefined) {
+            mat.transparent = config.transparent;
+          }
+          if (config.depthWrite !== undefined) {
+            mat.depthWrite = config.depthWrite;
+          }
+          if (config.depthTest !== undefined) {
+            mat.depthTest = config.depthTest;
+          }
+          if (config.blending !== undefined) {
+            const blendValue = LoomLargeThree.BLENDING_MODES[config.blending];
+            if (blendValue !== undefined) {
+              mat.blending = blendValue;
+            }
+          }
+          // Always mark material as needing update after any change
+          mat.needsUpdate = true;
+        }
       }
     });
   }
@@ -682,6 +862,13 @@ export class LoomLargeThree implements LoomLarge {
         if (typeof settings.depthTest === 'boolean') {
           obj.material.depthTest = settings.depthTest;
         }
+        if (typeof settings.blending === 'string') {
+          const blendValue = LoomLargeThree.BLENDING_MODES[settings.blending];
+          if (blendValue !== undefined) {
+            obj.material.blending = blendValue;
+          }
+        }
+        obj.material.needsUpdate = true;
       }
     });
   }

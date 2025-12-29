@@ -46,3 +46,46 @@ export interface AUMappingConfig {
  * Helper type for mesh categories in morphToMesh
  */
 export type MorphCategory = 'face' | 'viseme' | 'eye' | 'tearLine' | 'tongue' | 'hair';
+
+/**
+ * Mesh category types for character mesh classification
+ */
+export type MeshCategory = 'body' | 'eye' | 'eyeOcclusion' | 'tearLine' | 'teeth' | 'tongue' | 'hair' | 'eyebrow' | 'cornea' | 'eyelash';
+
+/**
+ * Blending mode names (matches Three.js constants)
+ */
+export type BlendingMode = 'Normal' | 'Additive' | 'Subtractive' | 'Multiply' | 'None';
+
+/**
+ * Blending mode options for Three.js materials
+ * Maps mode name to Three.js blending constant value
+ */
+export const BLENDING_MODES: Record<BlendingMode, number> = {
+  'Normal': 1,      // THREE.NormalBlending
+  'Additive': 2,    // THREE.AdditiveBlending
+  'Subtractive': 3, // THREE.SubtractiveBlending
+  'Multiply': 4,    // THREE.MultiplyBlending
+  'None': 0,        // THREE.NoBlending
+};
+
+/**
+ * Material settings for mesh rendering
+ */
+export interface MeshMaterialSettings {
+  renderOrder?: number;
+  transparent?: boolean;
+  opacity?: number;
+  depthWrite?: boolean;
+  depthTest?: boolean;
+  blending?: BlendingMode;
+}
+
+/**
+ * Mesh info including category, morph count, and optional material settings
+ */
+export interface MeshInfo {
+  category: MeshCategory;
+  morphCount: number;
+  material?: MeshMaterialSettings;
+}

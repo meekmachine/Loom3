@@ -6,7 +6,7 @@
  * and AU metadata that we painstakingly worked through.
  */
 
-import type { AUMappingConfig } from '../mappings/types';
+import type { AUMappingConfig, MeshCategory, BlendingMode, MeshMaterialSettings, MeshInfo, MorphCategory } from '../mappings/types';
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
 
 // ============================================================================
@@ -496,32 +496,11 @@ export const AU_MIX_DEFAULTS: Record<number, number> = {
 
 // ============================================================================
 // CC4 MESH CLASSIFICATION
+// Types imported from '../mappings/types'
 // ============================================================================
 
-export type MeshCategory = 'body' | 'eye' | 'eyeOcclusion' | 'tearLine' | 'teeth' | 'tongue' | 'hair' | 'eyebrow' | 'cornea' | 'eyelash';
-
-/** Blending mode names (matches Three.js constants) */
-export type BlendingMode = 'Normal' | 'Additive' | 'Subtractive' | 'Multiply' | 'None';
-
-/** Material settings for mesh rendering */
-export interface MeshMaterialSettings {
-  renderOrder?: number;
-  transparent?: boolean;
-  opacity?: number;
-  depthWrite?: boolean;
-  depthTest?: boolean;
-  blending?: BlendingMode;
-}
-
-/** Mesh info including category, morph count, and optional material settings */
-export interface CC4MeshInfo {
-  category: MeshCategory;
-  morphCount: number;
-  material?: MeshMaterialSettings;
-}
-
 /** Exact mesh name -> category mapping from the character GLB */
-export const CC4_MESHES: Record<string, CC4MeshInfo> = {
+export const CC4_MESHES: Record<string, MeshInfo> = {
   // Body (6 meshes, 80 morphs each) - default render order 0
   'CC_Base_Body_1': { category: 'body', morphCount: 80 },
   'CC_Base_Body_2': { category: 'body', morphCount: 80 },
@@ -559,9 +538,8 @@ export const CC4_MESHES: Record<string, CC4MeshInfo> = {
 
 // ============================================================================
 // MORPH TO MESH MAPPING
+// MorphCategory type imported from '../mappings/types'
 // ============================================================================
-
-export type MorphCategory = 'face' | 'viseme' | 'eye' | 'tearLine' | 'tongue' | 'hair';
 
 /** Which mesh each morph category applies to */
 export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {

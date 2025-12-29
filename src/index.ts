@@ -84,7 +84,16 @@ export type {
 // MAPPINGS
 // ============================================================================
 
-export type { AUMappingConfig, MorphCategory } from './mappings/types';
+export type {
+  AUMappingConfig,
+  MorphCategory,
+  MeshCategory,
+  BlendingMode,
+  MeshMaterialSettings,
+  MeshInfo as MeshMaterialInfo,
+} from './mappings/types';
+
+export { BLENDING_MODES } from './mappings/types';
 
 // ============================================================================
 // PRESETS

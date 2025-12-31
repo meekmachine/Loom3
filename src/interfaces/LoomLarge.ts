@@ -5,7 +5,13 @@
  * Implementations can target different 3D frameworks (Three.js, Babylon.js, etc.)
  */
 
-import type { TransitionHandle } from '../core/types';
+import type {
+  TransitionHandle,
+  AnimationPlayOptions,
+  AnimationClipInfo,
+  AnimationState,
+  AnimationActionHandle,
+} from '../core/types';
 import type { AUMappingConfig } from '../mappings/types';
 
 /**
@@ -205,6 +211,12 @@ export interface LoomLarge {
    */
   getAUMixWeight(id: number): number;
 
+  /**
+   * Check if an AU has bilateral bone bindings (L and R nodes)
+   * Used to determine if a balance slider should be shown for bone-only bilateral AUs
+   */
+  hasLeftRightBones(auId: number): boolean;
+
   // ============================================================================
   // PLAYBACK CONTROL
   // ============================================================================
@@ -266,4 +278,101 @@ export interface LoomLarge {
    * Get current AU mappings configuration
    */
   getAUMappings(): AUMappingConfig;
+
+  // ============================================================================
+  // BAKED ANIMATION CONTROL (Three.js AnimationMixer)
+  // ============================================================================
+
+  /**
+   * Load animation clips from a GLTF/GLB file.
+   * Call this after onReady() with the animations array from the GLTF loader.
+   * @param clips - Array of AnimationClip objects from GLTF loader
+   */
+  loadAnimationClips(clips: unknown[]): void;
+
+  /**
+   * Get list of all loaded animation clips.
+   */
+  getAnimationClips(): AnimationClipInfo[];
+
+  /**
+   * Play a baked animation by name.
+   * @param clipName - Name of the animation clip to play
+   * @param options - Playback options (speed, intensity, loop, etc.)
+   * @returns Handle for controlling the animation, or null if clip not found
+   */
+  playAnimation(clipName: string, options?: AnimationPlayOptions): AnimationActionHandle | null;
+
+  /**
+   * Stop a specific animation by name.
+   * @param clipName - Name of the animation to stop
+   */
+  stopAnimation(clipName: string): void;
+
+  /**
+   * Stop all currently playing animations.
+   */
+  stopAllAnimations(): void;
+
+  /**
+   * Pause a specific animation by name.
+   * @param clipName - Name of the animation to pause
+   */
+  pauseAnimation(clipName: string): void;
+
+  /**
+   * Resume a paused animation by name.
+   * @param clipName - Name of the animation to resume
+   */
+  resumeAnimation(clipName: string): void;
+
+  /**
+   * Pause all currently playing animations.
+   */
+  pauseAllAnimations(): void;
+
+  /**
+   * Resume all paused animations.
+   */
+  resumeAllAnimations(): void;
+
+  /**
+   * Set the playback speed for a specific animation.
+   * @param clipName - Name of the animation
+   * @param speed - Playback speed multiplier (1.0 = normal, 0.5 = half, 2.0 = double)
+   */
+  setAnimationSpeed(clipName: string, speed: number): void;
+
+  /**
+   * Set the intensity/weight for a specific animation.
+   * @param clipName - Name of the animation
+   * @param intensity - Weight value from 0 (no effect) to 1 (full effect)
+   */
+  setAnimationIntensity(clipName: string, intensity: number): void;
+
+  /**
+   * Set the global time scale for all animations.
+   * @param timeScale - Global time scale multiplier
+   */
+  setAnimationTimeScale(timeScale: number): void;
+
+  /**
+   * Get the current state of a specific animation.
+   * @param clipName - Name of the animation
+   * @returns Animation state or null if not found/playing
+   */
+  getAnimationState(clipName: string): AnimationState | null;
+
+  /**
+   * Get states of all currently playing animations.
+   */
+  getPlayingAnimations(): AnimationState[];
+
+  /**
+   * Crossfade from current animation(s) to a new animation.
+   * @param clipName - Name of the target animation
+   * @param duration - Crossfade duration in seconds
+   * @param options - Additional playback options for the target animation
+   */
+  crossfadeTo(clipName: string, duration?: number, options?: AnimationPlayOptions): AnimationActionHandle | null;
 }

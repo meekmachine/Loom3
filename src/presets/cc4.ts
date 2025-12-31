@@ -557,6 +557,9 @@ export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {
 // ============================================================================
 
 export const CC4_PRESET: AUMappingConfig = {
+  name: 'Character Creator 4',
+  animalType: 'human',
+  emoji: '😊',
   auToMorphs: AU_TO_MORPHS,
   auToBones: BONE_AU_TO_BINDINGS,
   boneNodes: CC4_BONE_NODES,
@@ -565,6 +568,7 @@ export const CC4_PRESET: AUMappingConfig = {
   auMixDefaults: AU_MIX_DEFAULTS,
   auInfo: AU_INFO,
   eyeMeshNodes: CC4_EYE_MESH_NODES,
+  continuumPairs: CONTINUUM_PAIRS_MAP,
 };
 
 export default CC4_PRESET;

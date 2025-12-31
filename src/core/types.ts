@@ -82,3 +82,85 @@ export interface LoomLargeConfig {
   /** AU to morph target mappings (defaults to CC4_PRESET) */
   auMappings?: import('../mappings/types').AUMappingConfig;
 }
+
+// ============================================================================
+// BAKED ANIMATION TYPES (Three.js AnimationMixer support)
+// ============================================================================
+
+/**
+ * Options for playing a baked animation clip.
+ */
+export interface AnimationPlayOptions {
+  /** Playback speed multiplier (default: 1.0) */
+  speed?: number;
+  /** Animation intensity/weight (0-1, default: 1.0) */
+  intensity?: number;
+  /** Whether the animation should loop (default: true) */
+  loop?: boolean;
+  /** Loop mode: 'repeat' (restart from beginning), 'pingpong' (reverse direction), 'once' (no loop) */
+  loopMode?: 'repeat' | 'pingpong' | 'once';
+  /** Crossfade duration in seconds when transitioning from another animation (default: 0.3) */
+  crossfadeDuration?: number;
+  /** Clamp animation at end when not looping (default: true) */
+  clampWhenFinished?: boolean;
+  /** Start time offset in seconds (default: 0) */
+  startTime?: number;
+}
+
+/**
+ * Information about a loaded animation clip.
+ */
+export interface AnimationClipInfo {
+  /** Name of the animation clip */
+  name: string;
+  /** Duration of the animation in seconds */
+  duration: number;
+  /** Number of tracks (bones/morphs being animated) */
+  trackCount: number;
+}
+
+/**
+ * State of a currently playing animation.
+ */
+export interface AnimationState {
+  /** Name of the animation */
+  name: string;
+  /** Whether the animation is currently playing */
+  isPlaying: boolean;
+  /** Whether the animation is paused */
+  isPaused: boolean;
+  /** Current playback time in seconds */
+  time: number;
+  /** Duration of the animation in seconds */
+  duration: number;
+  /** Current playback speed */
+  speed: number;
+  /** Current weight/intensity (0-1) */
+  weight: number;
+  /** Whether the animation is looping */
+  isLooping: boolean;
+}
+
+/**
+ * Handle returned when playing an animation, providing control methods.
+ */
+export interface AnimationActionHandle {
+  /** Stop the animation */
+  stop: () => void;
+  /** Pause the animation */
+  pause: () => void;
+  /** Resume a paused animation */
+  resume: () => void;
+  /** Set playback speed */
+  setSpeed: (speed: number) => void;
+  /** Set animation weight/intensity (0-1) */
+  setWeight: (weight: number) => void;
+  /** Seek to a specific time in seconds */
+  seekTo: (time: number) => void;
+  /** Get current animation state */
+  getState: () => AnimationState;
+  /** Crossfade to another animation */
+  crossfadeTo: (clipName: string, duration?: number) => AnimationActionHandle | null;
+  /** Promise that resolves when animation completes (only for non-looping) */
+  finished: Promise<void>;
+}

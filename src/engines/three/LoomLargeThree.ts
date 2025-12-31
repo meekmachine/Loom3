@@ -6,7 +6,17 @@
  * morph targets, visemes, and bone transformations.
  */
 
-import { Clock, Quaternion, Vector3 } from 'three';
+import {
+  Clock,
+  Quaternion,
+  Vector3,
+  AnimationMixer,
+  AnimationAction,
+  AnimationClip,
+  LoopRepeat,
+  LoopPingPong,
+  LoopOnce,
+} from 'three';
 import type {
   LoomLarge,
   LoomMesh,
@@ -16,10 +26,18 @@ import type {
   MeshInfo,
 } from '../../interfaces/LoomLarge';
 import type { Animation } from '../../interfaces/Animation';
-import type { TransitionHandle, BoneKey, RotationsState } from '../../core/types';
+import type {
+  TransitionHandle,
+  BoneKey,
+  RotationsState,
+  AnimationPlayOptions,
+  AnimationClipInfo,
+  AnimationState,
+  AnimationActionHandle,
+} from '../../core/types';
 import type { AUMappingConfig } from '../../mappings/types';
 import { AnimationThree } from './AnimationThree';
-import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS, BONE_AU_TO_BINDINGS as CC4_BONE_AU_TO_BINDINGS } from '../../presets/cc4';
+import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import type { CompositeRotation, BoneBinding } from '../../core/types';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
@@ -82,6 +100,7 @@ export class LoomLargeThree implements LoomLarge {
 
   // State
   private auValues: Record<number, number> = {};
+  private auBalances: Record<number, number> = {};  // Balance values per AU (-1 to 1)
   private rigReady = false;
   private missingBoneWarnings = new Set<string>();
 
@@ -115,7 +134,6 @@ export class LoomLargeThree implements LoomLarge {
     0.15, 0.35, 0.25, 0.70, 0.55, 0.30, 0.10, 0.20, 0.08,
     0.12, 0.18, 0.02, 0.25, 0.60, 0.40,
   ];
-  private static readonly JAW_MAX_DEGREES = 28;
 
   // Hair physics state
   private hairPhysicsEnabled = false;
@@ -141,6 +159,12 @@ export class LoomLargeThree implements LoomLarge {
   };
   private registeredHairObjects = new Map<string, LoomMesh>();
   private cachedHairMeshNames: string[] | null = null;
+
+  // Baked animation state (Three.js AnimationMixer)
+  private animationMixer: AnimationMixer | null = null;
+  private animationClips: AnimationClip[] = [];
+  private animationActions = new Map<string, AnimationAction>();
+  private animationFinishedCallbacks = new Map<string, () => void>();
 
   constructor(config: LoomLargeConfig = {}, animation?: Animation) {
     this.config = config.auMappings || CC4_PRESET;
@@ -204,6 +228,11 @@ export class LoomLargeThree implements LoomLarge {
     this.animation.tick(dtSeconds);
     this.flushPendingComposites();
 
+    // Update baked animations via AnimationMixer
+    if (this.animationMixer) {
+      this.animationMixer.update(dtSeconds);
+    }
+
     // Wind/idle hair animations (only when physics enabled)
     this.updateHairWindIdle(dtSeconds);
   }
@@ -237,6 +266,14 @@ export class LoomLargeThree implements LoomLarge {
   dispose(): void {
     this.stop();
     this.clearTransitions();
+    this.stopAllAnimations();
+    if (this.animationMixer) {
+      this.animationMixer.stopAllAction();
+      this.animationMixer = null;
+    }
+    this.animationClips = [];
+    this.animationActions.clear();
+    this.animationFinishedCallbacks.clear();
     this.meshes = [];
     this.model = null;
     this.bones = {};
@@ -263,7 +300,23 @@ export class LoomLargeThree implements LoomLarge {
       return;
     }
 
+    // Handle negative values for continuum pairs:
+    // If v < 0 and this AU has a continuum pair, activate the opposite AU instead
+    if (v < 0 && this.config.continuumPairs) {
+      const pairInfo = this.config.continuumPairs[id];
+      if (pairInfo) {
+        // Activate the pair AU with the absolute value, deactivate this AU
+        this.setAU(pairInfo.pairId, Math.abs(v), balance);
+        this.setAU(id, 0, balance);
+        return;
+      }
+    }
+
     this.auValues[id] = v;
+    // Store balance for this AU (used by bilateral bone AUs like fish gills)
+    if (balance !== undefined) {
+      this.auBalances[id] = balance;
+    }
 
     const keys = this.config.auToMorphs[id] || [];
     if (keys.length) {
@@ -293,6 +346,10 @@ export class LoomLargeThree implements LoomLarge {
     const compositeInfo = this.auToCompositeMap.get(id);
 
     if (compositeInfo) {
+      // Compute balance-adjusted values for bilateral bone AUs
+      const storedBalance = this.auBalances[id] ?? 0;
+      const { left: leftVal, right: rightVal } = this.computeSideValues(clamp01(v), storedBalance);
+
       // This AU affects composite bone rotations - use axis from compositeRotations
       for (const nodeKey of compositeInfo.nodes) {
         const config = this.compositeRotations.find((c: CompositeRotation) => c.node === nodeKey);
@@ -316,6 +373,16 @@ export class LoomLargeThree implements LoomLarge {
           axisValue = v;
         }
 
+        // Apply balance for bilateral bone nodes (L/R pattern in node name)
+        // This allows balance slider control for bone-only bilateral AUs like fish gills
+        const isLeftNode = /_L$|_L_|^GILL_L/.test(nodeKey);
+        const isRightNode = /_R$|_R_|^GILL_R/.test(nodeKey);
+        if (isLeftNode) {
+          axisValue = axisValue * (leftVal / clamp01(v || 1));
+        } else if (isRightNode) {
+          axisValue = axisValue * (rightVal / clamp01(v || 1));
+        }
+
         this.updateBoneRotation(nodeKey, compositeInfo.axis, axisValue);
         this.pendingCompositeNodes.add(nodeKey);
       }
@@ -336,6 +403,19 @@ export class LoomLargeThree implements LoomLarge {
 
   transitionAU(id: number | string, to: number, durationMs = 200, balance?: number): TransitionHandle {
     const numId = typeof id === 'string' ? Number(id.replace(/[^\d]/g, '')) : id;
+
+    // Handle negative values for continuum pairs:
+    // If to < 0 and this AU has a continuum pair, transition the opposite AU instead
+    if (to < 0 && this.config.continuumPairs) {
+      const pairInfo = this.config.continuumPairs[numId];
+      if (pairInfo) {
+        // Transition the pair AU to the absolute value, and this AU to 0
+        const pairHandle = this.transitionAU(pairInfo.pairId, Math.abs(to), durationMs, balance);
+        const thisHandle = this.transitionAU(numId, 0, durationMs, balance);
+        return this.combineHandles([pairHandle, thisHandle]);
+      }
+    }
+
     const target = clamp01(to);
 
     const morphKeys = this.config.auToMorphs[numId] || [];
@@ -655,6 +735,21 @@ export class LoomLargeThree implements LoomLarge {
 
   getAUMixWeight(id: number): number {
     return this.mixWeights[id] ?? this.config.auMixDefaults?.[id] ?? 1.0;
+  }
+
+  /**
+   * Check if an AU has bilateral bone bindings (L and R nodes)
+   * Used to determine if a balance slider should be shown for bone-only bilateral AUs
+   */
+  hasLeftRightBones(auId: number): boolean {
+    const compositeInfo = this.auToCompositeMap.get(auId);
+    if (!compositeInfo) return false;
+
+    const nodes = compositeInfo.nodes;
+    const hasLeft = nodes.some(n => /_L$|_L_|^GILL_L/.test(n));
+    const hasRight = nodes.some(n => /_R$|_R_|^GILL_R/.test(n));
+
+    return hasLeft && hasRight;
   }
 
   // ============================================================================
@@ -1286,11 +1381,15 @@ export class LoomLargeThree implements LoomLarge {
 
     const { obj, basePos, baseQuat } = entry;
     const rotState = this.rotations[nodeKey];
-    if (!rotState) return;
+    if (!rotState) {
+      return;
+    }
 
     // Find the composite rotation config for this node
     const config = this.compositeRotations.find((c: CompositeRotation) => c.node === nodeKey);
-    if (!config) return;
+    if (!config) {
+      return;
+    }
 
     // Helper to get binding from the correct AU for an axis based on direction
     const getBindingForAxis = (
@@ -1395,16 +1494,22 @@ export class LoomLargeThree implements LoomLarge {
 
     for (const [key, nodeName] of Object.entries(this.config.boneNodes)) {
       const node = findNode(nodeName);
-      if (node) resolved[key] = snapshot(node);
+      if (node) {
+        resolved[key] = snapshot(node);
+      }
     }
 
     if (!resolved.EYE_L && this.config.eyeMeshNodes) {
       const node = findNode(this.config.eyeMeshNodes.LEFT);
-      if (node) resolved.EYE_L = snapshot(node);
+      if (node) {
+        resolved.EYE_L = snapshot(node);
+      }
     }
     if (!resolved.EYE_R && this.config.eyeMeshNodes) {
       const node = findNode(this.config.eyeMeshNodes.RIGHT);
-      if (node) resolved.EYE_R = snapshot(node);
+      if (node) {
+        resolved.EYE_R = snapshot(node);
+      }
     }
 
     return resolved;
@@ -1434,7 +1539,8 @@ export class LoomLargeThree implements LoomLarge {
     root.traverse((obj: any) => {
       if (!obj.isMesh || !obj.name) return;
 
-      const meshInfo = CC4_MESHES[obj.name];
+      // Try config.meshes first, then fall back to CC4_MESHES for backwards compatibility
+      const meshInfo = this.config.meshes?.[obj.name] ?? CC4_MESHES[obj.name];
       let category = meshInfo?.category;
 
       // Pattern-based detection for meshes not in CC4_MESHES
@@ -1487,20 +1593,6 @@ export class LoomLargeThree implements LoomLarge {
         this.registeredHairObjects.set(obj.name, obj);
         // Set render order: eyebrows=5, hair=10
         obj.renderOrder = category === 'eyebrow' ? 5 : 10;
-
-        // Enable depth write and depth test for proper rendering
-        if (obj.material) {
-          obj.material.depthWrite = true;
-          obj.material.depthTest = true;
-          obj.material.needsUpdate = true;
-        }
-      }
-
-      // Also ensure body meshes have depth write/test enabled
-      if (category === 'body' && obj.material) {
-        obj.material.depthWrite = true;
-        obj.material.depthTest = true;
-        obj.material.needsUpdate = true;
       }
 
       if (!meshInfo?.material) return;
@@ -1536,10 +1628,291 @@ export class LoomLargeThree implements LoomLarge {
       }
     });
 
-    // Log detected hair objects for debugging
-    if (this.registeredHairObjects.size > 0) {
-      console.log('[LoomLargeThree] Registered hair/eyebrow objects:', Array.from(this.registeredHairObjects.keys()));
+  }
+
+  // ============================================================================
+  // BAKED ANIMATION CONTROL (Three.js AnimationMixer)
+  // ============================================================================
+
+  /**
+   * Load animation clips from a GLTF/GLB file.
+   * Call this after onReady() with the animations array from the GLTF loader.
+   */
+  loadAnimationClips(clips: unknown[]): void {
+    if (!this.model) {
+      console.warn('LoomLarge: Cannot load animation clips before calling onReady()');
+      return;
     }
+
+    // Create mixer if not exists
+    if (!this.animationMixer) {
+      this.animationMixer = new AnimationMixer(this.model as any);
+
+      // Listen for animation finished events
+      this.animationMixer.addEventListener('finished', (event: any) => {
+        const action = event.action as AnimationAction;
+        const clip = action.getClip();
+        const callback = this.animationFinishedCallbacks.get(clip.name);
+        if (callback) {
+          callback();
+          this.animationFinishedCallbacks.delete(clip.name);
+        }
+      });
+    }
+
+    // Store clips
+    this.animationClips = clips as AnimationClip[];
+
+    // Pre-create actions for all clips
+    for (const clip of this.animationClips) {
+      if (!this.animationActions.has(clip.name)) {
+        const action = this.animationMixer.clipAction(clip);
+        this.animationActions.set(clip.name, action);
+      }
+    }
+  }
+
+  /**
+   * Get list of all loaded animation clips.
+   */
+  getAnimationClips(): AnimationClipInfo[] {
+    return this.animationClips.map(clip => ({
+      name: clip.name,
+      duration: clip.duration,
+      trackCount: clip.tracks.length,
+    }));
+  }
+
+  /**
+   * Play a baked animation by name.
+   */
+  playAnimation(clipName: string, options: AnimationPlayOptions = {}): AnimationActionHandle | null {
+    const action = this.animationActions.get(clipName);
+    if (!action) {
+      console.warn(`LoomLarge: Animation clip "${clipName}" not found`);
+      return null;
+    }
+
+    const {
+      speed = 1.0,
+      intensity = 1.0,
+      loop = true,
+      loopMode = 'repeat',
+      crossfadeDuration = 0,
+      clampWhenFinished = true,
+      startTime = 0,
+    } = options;
+
+    // Configure action
+    action.setEffectiveTimeScale(speed);
+    action.setEffectiveWeight(intensity);
+    action.clampWhenFinished = clampWhenFinished;
+
+    // Set loop mode
+    if (!loop || loopMode === 'once') {
+      action.setLoop(LoopOnce, 1);
+    } else if (loopMode === 'pingpong') {
+      action.setLoop(LoopPingPong, Infinity);
+    } else {
+      action.setLoop(LoopRepeat, Infinity);
+    }
+
+    // Set start time
+    if (startTime > 0) {
+      action.time = startTime;
+    }
+
+    // Handle crossfade
+    if (crossfadeDuration > 0) {
+      action.reset();
+      action.fadeIn(crossfadeDuration);
+    } else {
+      action.reset();
+    }
+
+    // Play the action
+    action.play();
+
+    // Create finished promise
+    let resolveFinished: () => void;
+    const finishedPromise = new Promise<void>((resolve) => {
+      resolveFinished = resolve;
+    });
+
+    // Store callback for non-looping animations
+    if (!loop || loopMode === 'once') {
+      this.animationFinishedCallbacks.set(clipName, () => resolveFinished());
+    }
+
+    // Return handle
+    return this.createAnimationHandle(clipName, action, finishedPromise);
+  }
+
+  /**
+   * Stop a specific animation by name.
+   */
+  stopAnimation(clipName: string): void {
+    const action = this.animationActions.get(clipName);
+    if (action) {
+      action.stop();
+      this.animationFinishedCallbacks.delete(clipName);
+    }
+  }
+
+  /**
+   * Stop all currently playing animations.
+   */
+  stopAllAnimations(): void {
+    for (const [name, action] of this.animationActions) {
+      action.stop();
+      this.animationFinishedCallbacks.delete(name);
+    }
+  }
+
+  /**
+   * Pause a specific animation by name.
+   */
+  pauseAnimation(clipName: string): void {
+    const action = this.animationActions.get(clipName);
+    if (action) {
+      action.paused = true;
+    }
+  }
+
+  /**
+   * Resume a paused animation by name.
+   */
+  resumeAnimation(clipName: string): void {
+    const action = this.animationActions.get(clipName);
+    if (action) {
+      action.paused = false;
+    }
+  }
+
+  /**
+   * Pause all currently playing animations.
+   */
+  pauseAllAnimations(): void {
+    for (const action of this.animationActions.values()) {
+      if (action.isRunning()) {
+        action.paused = true;
+      }
+    }
+  }
+
+  /**
+   * Resume all paused animations.
+   */
+  resumeAllAnimations(): void {
+    for (const action of this.animationActions.values()) {
+      if (action.paused) {
+        action.paused = false;
+      }
+    }
+  }
+
+  /**
+   * Set the playback speed for a specific animation.
+   */
+  setAnimationSpeed(clipName: string, speed: number): void {
+    const action = this.animationActions.get(clipName);
+    if (action) {
+      action.setEffectiveTimeScale(speed);
+    }
+  }
+
+  /**
+   * Set the intensity/weight for a specific animation.
+   */
+  setAnimationIntensity(clipName: string, intensity: number): void {
+    const action = this.animationActions.get(clipName);
+    if (action) {
+      action.setEffectiveWeight(Math.max(0, Math.min(1, intensity)));
+    }
+  }
+
+  /**
+   * Set the global time scale for all animations.
+   */
+  setAnimationTimeScale(timeScale: number): void {
+    if (this.animationMixer) {
+      this.animationMixer.timeScale = timeScale;
+    }
+  }
+
+  /**
+   * Get the current state of a specific animation.
+   */
+  getAnimationState(clipName: string): AnimationState | null {
+    const action = this.animationActions.get(clipName);
+    if (!action) return null;
+
+    const clip = action.getClip();
+    return {
+      name: clip.name,
+      isPlaying: action.isRunning() && !action.paused,
+      isPaused: action.paused,
+      time: action.time,
+      duration: clip.duration,
+      speed: action.getEffectiveTimeScale(),
+      weight: action.getEffectiveWeight(),
+      isLooping: action.loop !== LoopOnce,
+    };
+  }
+
+  /**
+   * Get states of all currently playing animations.
+   */
+  getPlayingAnimations(): AnimationState[] {
+    const playing: AnimationState[] = [];
+    for (const [name, action] of this.animationActions) {
+      if (action.isRunning()) {
+        const state = this.getAnimationState(name);
+        if (state) playing.push(state);
+      }
+    }
+    return playing;
+  }
+
+  /**
+   * Crossfade from current animation(s) to a new animation.
+   */
+  crossfadeTo(clipName: string, duration = 0.3, options: AnimationPlayOptions = {}): AnimationActionHandle | null {
+    // Fade out all currently playing animations
+    for (const action of this.animationActions.values()) {
+      if (action.isRunning()) {
+        action.fadeOut(duration);
+      }
+    }
+
+    // Play new animation with fade in
+    return this.playAnimation(clipName, {
+      ...options,
+      crossfadeDuration: duration,
+    });
+  }
+
+  /**
+   * Create an animation handle for controlling a playing animation.
+   */
+  private createAnimationHandle(
+    clipName: string,
+    action: AnimationAction,
+    finishedPromise: Promise<void>
+  ): AnimationActionHandle {
+    return {
+      stop: () => this.stopAnimation(clipName),
+      pause: () => this.pauseAnimation(clipName),
+      resume: () => this.resumeAnimation(clipName),
+      setSpeed: (speed: number) => this.setAnimationSpeed(clipName, speed),
+      setWeight: (weight: number) => this.setAnimationIntensity(clipName, weight),
+      seekTo: (time: number) => {
+        action.time = Math.max(0, Math.min(time, action.getClip().duration));
+      },
+      getState: () => this.getAnimationState(clipName)!,
+      crossfadeTo: (targetClip: string, dur?: number) => this.crossfadeTo(targetClip, dur),
+      finished: finishedPromise,
+    };
   }
 }
 

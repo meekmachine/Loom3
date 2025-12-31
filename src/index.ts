@@ -77,6 +77,11 @@ export type {
   CompositeRotation,
   CompositeRotationState,
   RotationsState,
+  // Baked animation types
+  AnimationPlayOptions,
+  AnimationClipInfo,
+  AnimationState,
+  AnimationActionHandle,
 } from './core/types';
 
 // ============================================================================
@@ -117,6 +122,22 @@ export {
   isMixedAU,
   hasLeftRightMorphs,
 } from './presets/cc4';
+
+// Fish preset (Betta Fish model)
+export { BETTA_FISH_PRESET, FISH_AU_MAPPING_CONFIG } from './presets/bettaFish';
+export {
+  FISH_BONES,
+  FISH_BONE_NODES,
+  FISH_BONE_BINDINGS,
+  FISH_AU_INFO,
+  FISH_CONTINUUM_PAIRS_MAP,
+  FISH_CONTINUUM_LABELS,
+  FISH_COMPOSITE_ROTATIONS,
+  FISH_EYE_MESH_NODES,
+  FISH_MESHES,
+  FishAction,
+  fishHasLeftRightBones,
+} from './presets/bettaFish';
 
 // ============================================================================
 // PHYSICS

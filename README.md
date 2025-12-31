@@ -1,8 +1,10 @@
 # LoomLarge
 
-A FACS-based morph and bone mapping library for controlling high-definition 3D characters in Three.js.
+The missing character control pluging for webGL, allowing you to bring all your humaniod, and even animal,characters to life. Loom Large is based on the Facial Action Coding System (facs) as the basis of its mappings, thus suppoting morph and bone mapping library for controlling high-definition 3D characters in Three.js.
 
 LoomLarge provides pre-built mappings that connect [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units to the morph targets and bone transforms found in Character Creator 4 (CC4) characters. Instead of manually figuring out which blend shapes correspond to which facial movements, you can simply say `setAU(12, 0.8)` and the library handles the rest.
+
+> **Screenshot placeholder:** Add a hero image showing a character with facial expressions controlled by LoomLarge
 
 ---
 
@@ -12,19 +14,22 @@ LoomLarge provides pre-built mappings that connect [Facial Action Coding System 
 2. [Using Presets](#2-using-presets)
 3. [Getting to Know Your Character](#3-getting-to-know-your-character)
 4. [Extending & Custom Presets](#4-extending--custom-presets)
-5. [Action Unit Control](#5-action-unit-control)
-6. [Mix Weight System](#6-mix-weight-system)
-7. [Composite Rotation System](#7-composite-rotation-system)
-8. [Continuum Pairs](#8-continuum-pairs)
-9. [Direct Morph Control](#9-direct-morph-control)
-10. [Viseme System](#10-viseme-system)
-11. [Transition System](#11-transition-system)
-12. [Playback & State Control](#12-playback--state-control)
-13. [Hair Physics](#13-hair-physics)
+5. [Creating Skeletal Animation Presets](#5-creating-skeletal-animation-presets)
+6. [Action Unit Control](#6-action-unit-control)
+7. [Mix Weight System](#7-mix-weight-system)
+8. [Composite Rotation System](#8-composite-rotation-system)
+9. [Continuum Pairs](#9-continuum-pairs)
+10. [Direct Morph Control](#10-direct-morph-control)
+11. [Viseme System](#11-viseme-system)
+12. [Transition System](#12-transition-system)
+13. [Playback & State Control](#13-playback--state-control)
+14. [Hair Physics](#14-hair-physics)
 
 ---
 
 ## 1. Installation & Setup
+
+> **Screenshot placeholder:** Add a screenshot of a project structure with LoomLarge installed
 
 ### Install the package
 
@@ -119,9 +124,13 @@ const meshes = collectMorphMeshes(gltf.scene);
 // Returns: Array of THREE.Mesh objects with morph targets
 ```
 
+> **Screenshot placeholder:** Add a screenshot of a loaded character in the Three.js scene
+
 ---
 
 ## 2. Using Presets
+
+> **Screenshot placeholder:** Add a diagram showing how presets connect AUs to morphs and bones
 
 Presets define how FACS Action Units map to your character's morph targets and bones. LoomLarge ships with `CC4_PRESET` for Character Creator 4 characters.
 
@@ -197,9 +206,13 @@ import { LoomLargeThree, CC4_PRESET } from 'loomlarge';
 const loom = new LoomLargeThree({ auMappings: CC4_PRESET });
 ```
 
+> **Screenshot placeholder:** Add a screenshot showing the preset being applied to a character
+
 ---
 
 ## 3. Getting to Know Your Character
+
+> **Screenshot placeholder:** Add a screenshot of the console output showing mesh and morph target information
 
 Before customizing presets or extending mappings, it's helpful to understand what's actually in your character model. LoomLarge provides several methods to inspect meshes, morph targets, and bones.
 
@@ -302,9 +315,13 @@ This is especially useful for:
 - Making meshes semi-transparent for debugging
 - Adjusting blending modes for special effects
 
+> **Screenshot placeholder:** Add before/after screenshots showing render order adjustments
+
 ---
 
 ## 4. Extending & Custom Presets
+
+> **Screenshot placeholder:** Add a diagram showing preset inheritance/extension
 
 ### Extending an existing preset
 
@@ -379,9 +396,294 @@ loom.setAUMappings(ANOTHER_PRESET);
 const current = loom.getAUMappings();
 ```
 
+> **Screenshot placeholder:** Add a screenshot showing custom preset in action
+
 ---
 
-## 5. Action Unit Control
+## 5. Creating Skeletal Animation Presets
+
+> **Screenshot placeholder:** Add a screenshot showing the fish model with labeled bones
+
+LoomLarge isn't limited to humanoid characters with morph targets. You can create presets for any 3D model that uses skeletal animation, such as fish, animals, or fantasy creatures. This section explains how to create a preset for a betta fish model that has no morph targets—only bone-driven animation.
+
+### Understanding skeletal-only models
+
+Some models (like fish) rely entirely on bone rotations for animation:
+- **No morph targets:** All movement is skeletal
+- **Hierarchical bones:** Fins and body parts follow parent rotations
+- **Custom "Action Units":** Instead of FACS AUs, you define model-specific actions
+
+### Example: Betta Fish Preset
+
+Here's a complete example of a preset for a betta fish:
+
+```typescript
+import type { BoneBinding, AUInfo, CompositeRotation } from 'loomlarge';
+
+// Define semantic bone mappings
+export const FISH_BONE_NODES = {
+  ROOT: 'Armature_rootJoint',
+  BODY_ROOT: 'Bone_Armature',
+  HEAD: 'Bone001_Armature',
+  BODY_FRONT: 'Bone002_Armature',
+  BODY_MID: 'Bone003_Armature',
+  BODY_BACK: 'Bone004_Armature',
+  TAIL_BASE: 'Bone005_Armature',
+
+  // Pectoral fins (side fins)
+  PECTORAL_L: 'Bone046_Armature',
+  PECTORAL_R: 'Bone047_Armature',
+
+  // Dorsal fin (top fin)
+  DORSAL_ROOT: 'Bone006_Armature',
+
+  // Eyes (single mesh for both)
+  EYE_L: 'EYES_0',
+  EYE_R: 'EYES_0',
+} as const;
+
+// Define custom fish actions (analogous to FACS AUs)
+export enum FishAction {
+  // Body orientation
+  TURN_LEFT = 2,
+  TURN_RIGHT = 3,
+  PITCH_UP = 4,
+  PITCH_DOWN = 5,
+  ROLL_LEFT = 6,
+  ROLL_RIGHT = 7,
+
+  // Tail movements
+  TAIL_SWEEP_LEFT = 12,
+  TAIL_SWEEP_RIGHT = 13,
+  TAIL_FIN_SPREAD = 14,
+  TAIL_FIN_CLOSE = 15,
+
+  // Pectoral fins
+  PECTORAL_L_UP = 20,
+  PECTORAL_L_DOWN = 21,
+  PECTORAL_R_UP = 22,
+  PECTORAL_R_DOWN = 23,
+
+  // Eye rotation
+  EYE_LEFT = 61,
+  EYE_RIGHT = 62,
+  EYE_UP = 63,
+  EYE_DOWN = 64,
+}
+```
+
+### Defining bone bindings for movement
+
+Map each action to bone rotations:
+
+```typescript
+export const FISH_BONE_BINDINGS: Record<number, BoneBinding[]> = {
+  // Turn the fish left - affects head, front body, and mid body
+  [FishAction.TURN_LEFT]: [
+    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 },
+    { node: 'BODY_FRONT', channel: 'ry', scale: 1, maxDegrees: 14 },
+    { node: 'BODY_MID', channel: 'ry', scale: 1, maxDegrees: 5 },
+  ],
+
+  // Tail sweep left - cascading motion through tail bones
+  [FishAction.TAIL_SWEEP_LEFT]: [
+    { node: 'BODY_BACK', channel: 'rz', scale: 1, maxDegrees: 15 },
+    { node: 'TAIL_BASE', channel: 'rz', scale: 1, maxDegrees: 30 },
+    { node: 'TAIL_TOP', channel: 'rz', scale: 1, maxDegrees: 20 },
+    { node: 'TAIL_MID', channel: 'rz', scale: 1, maxDegrees: 20 },
+  ],
+
+  // Pectoral fin movements
+  [FishAction.PECTORAL_L_UP]: [
+    { node: 'PECTORAL_L', channel: 'rz', scale: 1, maxDegrees: 40 },
+    { node: 'PECTORAL_L_MID', channel: 'rz', scale: 1, maxDegrees: 20 },
+  ],
+
+  // Eye rotation
+  [FishAction.EYE_LEFT]: [
+    { node: 'EYE_L', channel: 'ry', scale: 1, maxDegrees: 25 },
+  ],
+};
+```
+
+### Composite rotations for multi-axis control
+
+Define how multiple AUs combine for smooth rotation:
+
+```typescript
+export const FISH_COMPOSITE_ROTATIONS: CompositeRotation[] = [
+  {
+    node: 'HEAD',
+    pitch: {
+      aus: [FishAction.PITCH_UP, FishAction.PITCH_DOWN],
+      axis: 'rx',
+      negative: FishAction.PITCH_DOWN,
+      positive: FishAction.PITCH_UP
+    },
+    yaw: {
+      aus: [FishAction.TURN_LEFT, FishAction.TURN_RIGHT],
+      axis: 'ry',
+      negative: FishAction.TURN_LEFT,
+      positive: FishAction.TURN_RIGHT
+    },
+    roll: null,
+  },
+  {
+    node: 'TAIL_BASE',
+    pitch: null,
+    yaw: null,
+    roll: {
+      aus: [FishAction.TAIL_SWEEP_LEFT, FishAction.TAIL_SWEEP_RIGHT],
+      axis: 'rz',
+      negative: FishAction.TAIL_SWEEP_RIGHT,
+      positive: FishAction.TAIL_SWEEP_LEFT
+    },
+  },
+  {
+    node: 'EYE_L',
+    pitch: {
+      aus: [FishAction.EYE_UP, FishAction.EYE_DOWN],
+      axis: 'rx',
+      negative: FishAction.EYE_DOWN,
+      positive: FishAction.EYE_UP
+    },
+    yaw: {
+      aus: [FishAction.EYE_LEFT, FishAction.EYE_RIGHT],
+      axis: 'ry',
+      negative: FishAction.EYE_RIGHT,
+      positive: FishAction.EYE_LEFT
+    },
+    roll: null,
+  },
+];
+```
+
+### Action metadata for UI and debugging
+
+```typescript
+export const FISH_AU_INFO: Record<string, AUInfo> = {
+  '2': { id: '2', name: 'Turn Left', facePart: 'Body Orientation' },
+  '3': { id: '3', name: 'Turn Right', facePart: 'Body Orientation' },
+  '4': { id: '4', name: 'Pitch Up', facePart: 'Body Orientation' },
+  '5': { id: '5', name: 'Pitch Down', facePart: 'Body Orientation' },
+  '12': { id: '12', name: 'Tail Sweep Left', facePart: 'Tail' },
+  '13': { id: '13', name: 'Tail Sweep Right', facePart: 'Tail' },
+  '20': { id: '20', name: 'Pectoral L Up', facePart: 'Pectoral Fins' },
+  '61': { id: '61', name: 'Eyes Left', facePart: 'Eyes' },
+  // ... more actions
+};
+```
+
+### Continuum pairs for bidirectional sliders
+
+```typescript
+export const FISH_CONTINUUM_PAIRS_MAP: Record<number, {
+  pairId: number;
+  isNegative: boolean;
+  axis: 'pitch' | 'yaw' | 'roll';
+  node: string;
+}> = {
+  [FishAction.TURN_LEFT]: {
+    pairId: FishAction.TURN_RIGHT,
+    isNegative: true,
+    axis: 'yaw',
+    node: 'HEAD'
+  },
+  [FishAction.TURN_RIGHT]: {
+    pairId: FishAction.TURN_LEFT,
+    isNegative: false,
+    axis: 'yaw',
+    node: 'HEAD'
+  },
+  [FishAction.TAIL_SWEEP_LEFT]: {
+    pairId: FishAction.TAIL_SWEEP_RIGHT,
+    isNegative: true,
+    axis: 'roll',
+    node: 'TAIL_BASE'
+  },
+  // ... more pairs
+};
+```
+
+### Creating the final preset config
+
+```typescript
+export const FISH_AU_MAPPING_CONFIG = {
+  auToBones: FISH_BONE_BINDINGS,
+  boneNodes: FISH_BONE_NODES,
+  auToMorphs: {} as Record<number, string[]>,  // No morph targets
+  morphToMesh: {} as Record<string, string[]>,
+  visemeKeys: [] as string[],  // Fish don't speak!
+  auInfo: FISH_AU_INFO,
+  compositeRotations: FISH_COMPOSITE_ROTATIONS,
+  eyeMeshNodes: { LEFT: 'EYES_0', RIGHT: 'EYES_0' },
+};
+```
+
+### Using the fish preset
+
+```typescript
+import { LoomLargeThree } from 'loomlarge';
+import { FISH_AU_MAPPING_CONFIG, FishAction } from './presets/bettaFish';
+
+const fishController = new LoomLargeThree({
+  auMappings: FISH_AU_MAPPING_CONFIG
+});
+
+// Load the fish model
+loader.load('/characters/betta/scene.gltf', (gltf) => {
+  const meshes = collectMorphMeshes(gltf.scene);  // Will be empty for fish
+  fishController.onReady({ meshes, model: gltf.scene });
+
+  // Control the fish!
+  fishController.setAU(FishAction.TURN_LEFT, 0.5);      // Turn left
+  fishController.setAU(FishAction.TAIL_SWEEP_LEFT, 0.8); // Sweep tail
+  fishController.setAU(FishAction.PECTORAL_L_UP, 0.6);   // Raise left fin
+
+  // Smooth transitions
+  await fishController.transitionAU(FishAction.TURN_RIGHT, 1.0, 500).promise;
+});
+```
+
+### Creating swimming animations
+
+Use continuum controls for natural swimming motion:
+
+```typescript
+// Use setContinuum for paired actions
+fishController.setContinuum(
+  FishAction.TURN_LEFT,
+  FishAction.TURN_RIGHT,
+  0.3  // Slight turn right
+);
+
+// Animate swimming with oscillating tail
+async function swimCycle() {
+  while (true) {
+    await fishController.transitionContinuum(
+      FishAction.TAIL_SWEEP_LEFT,
+      FishAction.TAIL_SWEEP_RIGHT,
+      0.8,  // Sweep right
+      300
+    ).promise;
+
+    await fishController.transitionContinuum(
+      FishAction.TAIL_SWEEP_LEFT,
+      FishAction.TAIL_SWEEP_RIGHT,
+      -0.8, // Sweep left
+      300
+    ).promise;
+  }
+}
+```
+
+> **Screenshot placeholder:** Add a GIF showing the fish swimming animation
+
+---
+
+## 6. Action Unit Control
+
+> **Screenshot placeholder:** Add a screenshot showing a character with different AU values
 
 Action Units are the core of FACS. Each AU represents a specific muscular movement of the face.
 
@@ -455,7 +757,9 @@ loom.setAU(12, 0.8, 1);    // Right side only
 
 ---
 
-## 6. Mix Weight System
+## 7. Mix Weight System
+
+> **Screenshot placeholder:** Add a comparison showing morph-only vs bone-only vs mixed weights
 
 Some AUs can be driven by both morph targets (blend shapes) AND bone rotations. The mix weight controls the blend between them.
 
@@ -500,7 +804,9 @@ if (isMixedAU(26)) {
 
 ---
 
-## 7. Composite Rotation System
+## 8. Composite Rotation System
+
+> **Screenshot placeholder:** Add a diagram showing the pitch/yaw/roll axes on a head
 
 Bones like the head and eyes need multi-axis rotation (pitch, yaw, roll). The composite rotation system handles this automatically.
 
@@ -558,7 +864,9 @@ loom.setAU(64, 0.4);
 
 ---
 
-## 8. Continuum Pairs
+## 9. Continuum Pairs
+
+> **Screenshot placeholder:** Add a screenshot showing a continuum slider UI
 
 Continuum pairs are bidirectional AU pairs that represent opposite directions on the same axis. They're linked so that activating one should deactivate the other.
 
@@ -577,9 +885,61 @@ Continuum pairs are bidirectional AU pairs that represent opposite directions on
 | AU73 ↔ AU74 | Tongue narrow / wide |
 | AU76 ↔ AU77 | Tongue tip up / down |
 
-### Working with pairs
+### Negative value shorthand (recommended)
 
-When using continuum pairs, set one AU from the pair and leave the other at 0:
+The simplest way to work with continuum pairs is using **negative values**. When you pass a negative value to `setAU()` or `transitionAU()`, the engine automatically activates the paired AU instead:
+
+```typescript
+// Head looking left at 50% (AU51 is "head left")
+loom.setAU(51, 0.5);
+
+// Head looking right at 50% - just use a negative value!
+loom.setAU(51, -0.5);  // Automatically activates AU52 at 0.5
+
+// This is equivalent to manually setting the pair:
+loom.setAU(51, 0);
+loom.setAU(52, 0.5);
+```
+
+This works for transitions too:
+
+```typescript
+// Animate head from left to right over 500ms
+await loom.transitionAU(51, 0.5, 250).promise;   // Turn left
+await loom.transitionAU(51, -0.5, 500).promise;  // Turn right (activates AU52)
+```
+
+### The setContinuum method
+
+For explicit continuum control, use `setContinuum()` with a single value from -1 to +1:
+
+```typescript
+// setContinuum(negativeAU, positiveAU, value)
+// value: -1 = full negative, 0 = neutral, +1 = full positive
+
+// Head centered
+loom.setContinuum(51, 52, 0);
+
+// Head 50% left
+loom.setContinuum(51, 52, -0.5);
+
+// Head 70% right
+loom.setContinuum(51, 52, 0.7);
+```
+
+With smooth animation:
+
+```typescript
+// Animate head from current position to 80% right over 300ms
+await loom.transitionContinuum(51, 52, 0.8, 300).promise;
+
+// Animate eyes to look left over 200ms
+await loom.transitionContinuum(61, 62, -0.6, 200).promise;
+```
+
+### Manual pair management
+
+You can also manually manage pairs by setting each AU individually:
 
 ```typescript
 // Head looking left at 50%
@@ -604,7 +964,9 @@ const pair = CONTINUUM_PAIRS_MAP[51];
 
 ---
 
-## 9. Direct Morph Control
+## 10. Direct Morph Control
+
+> **Screenshot placeholder:** Add a screenshot of a morph target being controlled directly
 
 Sometimes you need to control morph targets directly by name, bypassing the AU system.
 
@@ -643,7 +1005,9 @@ LoomLarge caches morph target lookups for performance. The first time you access
 
 ---
 
-## 10. Viseme System
+## 11. Viseme System
+
+> **Screenshot placeholder:** Add a grid showing all 15 viseme mouth shapes
 
 Visemes are mouth shapes used for lip-sync. LoomLarge includes 15 visemes with automatic jaw coupling.
 
@@ -728,7 +1092,9 @@ speak([5, 0, 10, 4]);
 
 ---
 
-## 11. Transition System
+## 12. Transition System
+
+> **Screenshot placeholder:** Add a diagram showing transition timeline with easing
 
 All animated changes in LoomLarge go through the transition system, which provides smooth interpolation with easing.
 
@@ -808,7 +1174,9 @@ loom.clearTransitions();
 
 ---
 
-## 12. Playback & State Control
+## 13. Playback & State Control
+
+> **Screenshot placeholder:** Add a screenshot showing pause/resume controls in a UI
 
 ### Pausing and resuming
 
@@ -863,7 +1231,9 @@ loom.dispose();
 
 ---
 
-## 13. Hair Physics
+## 14. Hair Physics
+
+> **Screenshot placeholder:** Add a GIF showing hair physics responding to head movement
 
 LoomLarge includes an experimental hair physics system that simulates hair movement based on head motion.
 
@@ -942,6 +1312,8 @@ const hair = new HairPhysics({
 ---
 
 ## Resources
+
+> **Screenshot placeholder:** Add logos or screenshots from the resources below
 
 - [FACS on Wikipedia](https://en.wikipedia.org/wiki/Facial_Action_Coding_System)
 - [Paul Ekman Group - FACS](https://www.paulekman.com/facial-action-coding-system/)

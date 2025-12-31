@@ -14,6 +14,15 @@ import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
  * map to morph targets and bone transformations for a specific rig type.
  */
 export interface AUMappingConfig {
+  /** Human-readable name for this profile (e.g., 'Character Creator 4', 'Betta Fish') */
+  name?: string;
+
+  /** Type of animal/creature this profile is for (e.g., 'human', 'fish', 'dog') */
+  animalType?: string;
+
+  /** Emoji representing this animal type (e.g., '😊' for human, '🐟' for fish) */
+  emoji?: string;
+
   /** AU ID to morph target names (e.g., AU 12 → ['Mouth_Smile_L', 'Mouth_Smile_R']) */
   auToMorphs: Record<number, string[]>;
 
@@ -43,6 +52,21 @@ export interface AUMappingConfig {
 
   /** Optional: Composite rotation definitions for bones (defaults to CC4 composites) */
   compositeRotations?: CompositeRotation[];
+
+  /** Optional: Mesh info for material settings (depthWrite, blending, renderOrder, etc.) */
+  meshes?: Record<string, MeshInfo>;
+
+  /**
+   * Optional: Continuum pair mappings for bidirectional AU axes.
+   * Maps AU ID to its partner info (pairId, isNegative, axis, node).
+   * Enables negative value shorthand: setAU(51, -0.5) activates AU 52 at 0.5
+   */
+  continuumPairs?: Record<number, {
+    pairId: number;
+    isNegative: boolean;
+    axis: 'pitch' | 'yaw' | 'roll';
+    node: string;
+  }>;
 }
 
 /**

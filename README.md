@@ -24,6 +24,7 @@ LoomLarge provides pre-built mappings that connect [Facial Action Coding System 
 12. [Transition System](#12-transition-system)
 13. [Playback & State Control](#13-playback--state-control)
 14. [Hair Physics](#14-hair-physics)
+15. [Baked Animations](#15-baked-animations)
 
 ---
 
@@ -1308,6 +1309,188 @@ const hair = new HairPhysics({
   },
 });
 ```
+
+---
+
+## 15. Baked Animations
+
+LoomLarge can play baked skeletal animations from your GLB/GLTF files using Three.js AnimationMixer. This allows you to combine pre-made animations (idle, walk, gestures) with real-time facial control.
+
+### Loading animations
+
+After loading your model, pass the animations array to LoomLarge:
+
+```typescript
+const loader = new GLTFLoader();
+loader.load('/character.glb', (gltf) => {
+  scene.add(gltf.scene);
+
+  const meshes = collectMorphMeshes(gltf.scene);
+  loom.onReady({ meshes, model: gltf.scene });
+
+  // Load baked animations from the GLB file
+  loom.loadAnimationClips(gltf.animations);
+
+  // Start the internal update loop
+  loom.start();
+});
+```
+
+### Listing available animations
+
+```typescript
+const clips = loom.getAnimationClips();
+console.log(clips);
+// [
+//   { name: 'Idle', duration: 4.0, trackCount: 52 },
+//   { name: 'Walk', duration: 1.2, trackCount: 52 },
+//   { name: 'Wave', duration: 2.5, trackCount: 24 },
+// ]
+```
+
+### Playing animations
+
+```typescript
+// Play an animation with default settings (looping)
+loom.playAnimation('Idle');
+
+// Play with options
+const handle = loom.playAnimation('Wave', {
+  speed: 1.0,           // Playback speed (1.0 = normal)
+  intensity: 1.0,       // Weight/intensity (0-1)
+  loop: false,          // Don't loop
+  loopMode: 'once',     // 'repeat', 'pingpong', or 'once'
+  clampWhenFinished: true,  // Hold last frame when done
+  startTime: 0,         // Start from beginning
+});
+
+// Wait for non-looping animation to finish
+await handle.finished;
+```
+
+### Controlling playback
+
+The handle returned from `playAnimation()` provides full control:
+
+```typescript
+const handle = loom.playAnimation('Idle');
+
+// Pause and resume
+handle.pause();
+handle.resume();
+
+// Adjust speed in real-time
+handle.setSpeed(0.5);  // Half speed
+handle.setSpeed(2.0);  // Double speed
+
+// Adjust intensity/weight
+handle.setWeight(0.5);  // 50% influence
+
+// Seek to specific time
+handle.seekTo(1.5);  // Jump to 1.5 seconds
+
+// Get current state
+const state = handle.getState();
+console.log(state);
+// {
+//   name: 'Idle',
+//   isPlaying: true,
+//   isPaused: false,
+//   time: 1.5,
+//   duration: 4.0,
+//   speed: 1.0,
+//   weight: 1.0,
+//   isLooping: true
+// }
+
+// Stop the animation
+handle.stop();
+```
+
+### Crossfading between animations
+
+Smoothly transition from one animation to another:
+
+```typescript
+// Start with idle
+loom.playAnimation('Idle');
+
+// Later, crossfade to walk over 0.3 seconds
+loom.crossfadeTo('Walk', 0.3);
+
+// Or use the handle
+const idleHandle = loom.playAnimation('Idle');
+idleHandle.crossfadeTo('Walk', 0.5);
+```
+
+### Global animation control
+
+Control all animations at once:
+
+```typescript
+// Stop all animations
+loom.stopAllAnimations();
+
+// Pause all animations
+loom.pauseAllAnimations();
+
+// Resume all paused animations
+loom.resumeAllAnimations();
+
+// Set global time scale (affects all animations)
+loom.setAnimationTimeScale(0.5);  // Everything at half speed
+
+// Get all currently playing animations
+const playing = loom.getPlayingAnimations();
+```
+
+### Direct control by name
+
+You can also control animations directly without using handles:
+
+```typescript
+loom.playAnimation('Idle');
+
+// Later...
+loom.setAnimationSpeed('Idle', 1.5);
+loom.setAnimationIntensity('Idle', 0.8);
+loom.pauseAnimation('Idle');
+loom.resumeAnimation('Idle');
+loom.stopAnimation('Idle');
+
+// Get state of specific animation
+const state = loom.getAnimationState('Idle');
+```
+
+### Combining with facial animation
+
+Baked animations and facial AU control work together seamlessly. The AnimationMixer updates automatically when you call `loom.update()` or use `loom.start()`:
+
+```typescript
+loom.loadAnimationClips(gltf.animations);
+loom.start();  // Starts internal RAF loop
+
+// Play a body animation
+loom.playAnimation('Idle');
+
+// Control facial expressions on top
+loom.setAU(12, 0.8);  // Smile
+loom.transitionAU(45, 1.0, 100);  // Blink
+
+// Both update together - no separate render loop needed
+```
+
+### Animation types
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `speed` | number | 1.0 | Playback speed multiplier |
+| `intensity` | number | 1.0 | Animation weight (0-1) |
+| `loop` | boolean | true | Whether to loop |
+| `loopMode` | string | 'repeat' | 'repeat', 'pingpong', or 'once' |
+| `crossfadeDuration` | number | 0 | Fade in duration (seconds) |
+| `clampWhenFinished` | boolean | true | Hold last frame when done |
+| `startTime` | number | 0 | Initial playback position |
 
 ---
 

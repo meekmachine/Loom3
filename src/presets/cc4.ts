@@ -247,6 +247,25 @@ export const hasLeftRightMorphs = (auId: number): boolean => {
   return keys.some(k => /_L$|_R$| L$| R$|Left$|Right$/i.test(k));
 };
 
+/** Check if an AU has bilateral bone bindings (L and R nodes) in CC4 preset */
+export const hasLeftRightBones = (auId: number): boolean => {
+  const bindings = BONE_AU_TO_BINDINGS[auId];
+  return checkBindingsForLeftRight(bindings);
+};
+
+/** Helper to check if bone bindings have L and R nodes */
+export const checkBindingsForLeftRight = (bindings: BoneBinding[] | undefined): boolean => {
+  if (!bindings || bindings.length === 0) return false;
+
+  // Check if bindings include both L and R nodes
+  const nodes = bindings.map(b => b.node);
+  // Match patterns like _L, _R, _L_, _R_, GILL_L, GILL_R, etc.
+  const hasLeft = nodes.some(n => /_L$|_L_|GILL_L|_L\d/i.test(n));
+  const hasRight = nodes.some(n => /_R$|_R_|GILL_R|_R\d/i.test(n));
+
+  return hasLeft && hasRight;
+};
+
 // ============================================================================
 // COMPOSITE ROTATIONS - Unified rotation control for bones
 // ============================================================================
@@ -559,7 +578,7 @@ export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {
 export const CC4_PRESET: AUMappingConfig = {
   name: 'Character Creator 4',
   animalType: 'human',
-  emoji: '😊',
+  // No emoji for humans - uses FaTheaterMasks icon instead
   auToMorphs: AU_TO_MORPHS,
   auToBones: BONE_AU_TO_BINDINGS,
   boneNodes: CC4_BONE_NODES,
@@ -569,6 +588,7 @@ export const CC4_PRESET: AUMappingConfig = {
   auInfo: AU_INFO,
   eyeMeshNodes: CC4_EYE_MESH_NODES,
   continuumPairs: CONTINUUM_PAIRS_MAP,
+  continuumLabels: CONTINUUM_LABELS,
 };
 
 export default CC4_PRESET;

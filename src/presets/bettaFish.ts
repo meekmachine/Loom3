@@ -20,12 +20,13 @@
 
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
 import type { MeshInfo, MeshCategory } from '../mappings/types';
+import { checkBindingsForLeftRight } from './cc4';
 
 // ============================================================================
 // BONE NAMES - All 53 bones in the fish skeleton
 // ============================================================================
 
-export const FISH_BONES = [
+export const BONES = [
   "Armature_rootJoint",
   "Bone_Armature",
   "Bone001_Armature",
@@ -85,7 +86,7 @@ export const FISH_BONES = [
 // SEMANTIC BONE MAPPINGS - Human-readable names for key bones
 // ============================================================================
 
-export const FISH_BONE_NODES = {
+export const BONE_NODES = {
   // Root and body spine
   ROOT: 'Armature_rootJoint',
   BODY_ROOT: 'Bone_Armature',
@@ -179,202 +180,228 @@ export const FISH_BONE_NODES = {
 } as const;
 
 // ============================================================================
-// CUSTOM ACTION MAPPINGS - Fish-specific "Action Units"
-// These are analogous to FACS AUs but for fish body movements
+// AU ID CONSTANTS - Fish "Action Units" (analogous to FACS AUs for humans)
+// These use plain numbers like CC4 preset - no special fish-specific types
 // ============================================================================
 
-/** Fish Action Units - custom IDs for fish movements */
-export enum FishAction {
-  // Body orientation (like human head pose)
-  TURN_LEFT = 2,      // Turn head/body left
-  TURN_RIGHT = 3,     // Turn head/body right
-  PITCH_UP = 4,       // Nose up
-  PITCH_DOWN = 5,     // Nose down
-  ROLL_LEFT = 6,      // Roll body left
-  ROLL_RIGHT = 7,     // Roll body right
+// Body orientation (AU 2-7)
+// 2 = Turn Left, 3 = Turn Right
+// 4 = Pitch Up, 5 = Pitch Down
+// 6 = Roll Left, 7 = Roll Right
 
-  // Tail movements
-  TAIL_SWEEP_LEFT = 12,   // Tail sweep left (yaw)
-  TAIL_SWEEP_RIGHT = 13,  // Tail sweep right (yaw)
-  TAIL_FIN_SPREAD = 14,   // Tail fins spread out
-  TAIL_FIN_CLOSE = 15,    // Tail fins close together
+// Tail movements (AU 12-15)
+// 12 = Tail Sweep Left, 13 = Tail Sweep Right
+// 14 = Tail Fin Spread, 15 = Tail Fin Close
 
-  // Pectoral fins (side fins) - these are the main swimming fins
-  PECTORAL_L_UP = 20,
-  PECTORAL_L_DOWN = 21,
-  PECTORAL_R_UP = 22,
-  PECTORAL_R_DOWN = 23,
-  PECTORAL_L_FORWARD = 24,
-  PECTORAL_L_BACK = 25,
-  PECTORAL_R_FORWARD = 26,
-  PECTORAL_R_BACK = 27,
+// Pectoral fins (AU 20-27)
+// 20 = Pectoral L Up, 21 = Pectoral L Down
+// 22 = Pectoral R Up, 23 = Pectoral R Down
+// 24 = Pectoral L Forward, 25 = Pectoral L Back
+// 26 = Pectoral R Forward, 27 = Pectoral R Back
 
-  // Ventral fins (belly fins under body mid) - what you called "gullet"
-  VENTRAL_L_UP = 30,
-  VENTRAL_L_DOWN = 31,
-  VENTRAL_R_UP = 32,
-  VENTRAL_R_DOWN = 33,
+// Ventral fins (AU 30-33)
+// 30 = Ventral L Up, 31 = Ventral L Down
+// 32 = Ventral R Up, 33 = Ventral R Down
 
-  // Dorsal fin (top fin - erect/fold)
-  DORSAL_ERECT = 40,
-  DORSAL_FOLD = 41,
+// Head (AU 51-54, matching FACS standard)
+// 51 = Head Turn Left, 52 = Head Turn Right
+// 53 = Head Up, 54 = Head Down
+// (AU 55/56 Head Tilt removed - fish don't have this motion)
 
-  // Gills - separate L/R controls (single AU per side, not a continuum)
-  // Each side has one AU controlling flare intensity (0=closed, 1=flared)
-  GILLS_L = 50,
-  GILLS_R = 51,
+// Gills (AU 45-46) - separate L/R, single AU per side (0=closed, 1=flared)
+// 45 = Gill L, 46 = Gill R
 
-  // Eye rotation (like human AU 61-64)
-  EYE_LEFT = 61,
-  EYE_RIGHT = 62,
-  EYE_UP = 63,
-  EYE_DOWN = 64,
-}
+// Eye rotation (AU 61-64, like human FACS)
+// 61 = Eyes Left, 62 = Eyes Right
+// 63 = Eyes Up, 64 = Eyes Down
 
 // ============================================================================
-// BONE BINDINGS - Map FishActions to bone rotations
+// BONE BINDINGS - Map AU IDs to bone rotations
 // ============================================================================
 
-export const FISH_BONE_BINDINGS: Record<number, BoneBinding[]> = {
-  // ========== BODY ORIENTATION ==========
-  [FishAction.TURN_LEFT]: [
+export const BONE_BINDINGS: Record<number, BoneBinding[]> = {
+  // ========== BODY ORIENTATION (AU 2-7) ==========
+  // AU 2: Turn Left
+  2: [
     { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 },
     { node: 'BODY_FRONT', channel: 'ry', scale: 1, maxDegrees: 14 },
     { node: 'BODY_MID', channel: 'ry', scale: 1, maxDegrees: 5 },
   ],
-  [FishAction.TURN_RIGHT]: [
+  // AU 3: Turn Right
+  3: [
     { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 30 },
     { node: 'BODY_FRONT', channel: 'ry', scale: -1, maxDegrees: 14 },
     { node: 'BODY_MID', channel: 'ry', scale: -1, maxDegrees: 5 },
   ],
-  [FishAction.PITCH_UP]: [
+  // AU 4: Pitch Up
+  4: [
     { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 20 },
     { node: 'BODY_FRONT', channel: 'rx', scale: -1, maxDegrees: 5 },
   ],
-  [FishAction.PITCH_DOWN]: [
+  // AU 5: Pitch Down
+  5: [
     { node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 20 },
     { node: 'BODY_FRONT', channel: 'rx', scale: 1, maxDegrees: 5 },
   ],
-  [FishAction.ROLL_LEFT]: [
+  // AU 6: Roll Left
+  6: [
     { node: 'BODY_ROOT', channel: 'rz', scale: -1, maxDegrees: 25 },
   ],
-  [FishAction.ROLL_RIGHT]: [
+  // AU 7: Roll Right
+  7: [
     { node: 'BODY_ROOT', channel: 'rz', scale: 1, maxDegrees: 25 },
   ],
 
-  // ========== TAIL ==========
+  // ========== TAIL (AU 12-15) ==========
   // Tail sweep uses rz (roll axis) to sweep left/right in fish's local space
-  [FishAction.TAIL_SWEEP_LEFT]: [
+  // AU 12: Tail Sweep Left
+  12: [
     { node: 'BODY_BACK', channel: 'rz', scale: 1, maxDegrees: 15 },
     { node: 'TAIL_BASE', channel: 'rz', scale: 1, maxDegrees: 30 },
     { node: 'TAIL_TOP', channel: 'rz', scale: 1, maxDegrees: 20 },
     { node: 'TAIL_MID', channel: 'rz', scale: 1, maxDegrees: 20 },
   ],
-  [FishAction.TAIL_SWEEP_RIGHT]: [
+  // AU 13: Tail Sweep Right
+  13: [
     { node: 'BODY_BACK', channel: 'rz', scale: -1, maxDegrees: 15 },
     { node: 'TAIL_BASE', channel: 'rz', scale: -1, maxDegrees: 30 },
     { node: 'TAIL_TOP', channel: 'rz', scale: -1, maxDegrees: 20 },
     { node: 'TAIL_MID', channel: 'rz', scale: -1, maxDegrees: 20 },
   ],
   // Tail fin spread/close (fan motion)
-  [FishAction.TAIL_FIN_SPREAD]: [
+  // AU 14: Tail Fin Spread
+  14: [
     { node: 'TAIL_TOP', channel: 'rx', scale: -1, maxDegrees: 20 },
     { node: 'TAIL_SIDE_L', channel: 'rx', scale: 1, maxDegrees: 15 },
     { node: 'TAIL_SIDE_R', channel: 'rx', scale: -1, maxDegrees: 15 },
   ],
-  [FishAction.TAIL_FIN_CLOSE]: [
+  // AU 15: Tail Fin Close
+  15: [
     { node: 'TAIL_TOP', channel: 'rx', scale: 1, maxDegrees: 15 },
     { node: 'TAIL_SIDE_L', channel: 'rx', scale: -1, maxDegrees: 12 },
     { node: 'TAIL_SIDE_R', channel: 'rx', scale: 1, maxDegrees: 12 },
   ],
 
-  // ========== PECTORAL FINS (front/head fins) ==========
+  // ========== PECTORAL FINS (AU 20-27, front/head fins) ==========
   // These are the decorative fins attached to the head (bones 009-017)
-  [FishAction.PECTORAL_L_UP]: [
+  // AU 20: Pectoral L Up
+  20: [
     { node: 'PECTORAL_L_ROOT', channel: 'rz', scale: 1, maxDegrees: 40 },
     { node: 'PECTORAL_L_CHAIN1', channel: 'rz', scale: 1, maxDegrees: 20 },
     { node: 'PECTORAL_L_CHAIN2', channel: 'rz', scale: 1, maxDegrees: 20 },
   ],
-  [FishAction.PECTORAL_L_DOWN]: [
+  // AU 21: Pectoral L Down
+  21: [
     { node: 'PECTORAL_L_ROOT', channel: 'rz', scale: -1, maxDegrees: 40 },
     { node: 'PECTORAL_L_CHAIN1', channel: 'rz', scale: -1, maxDegrees: 20 },
     { node: 'PECTORAL_L_CHAIN2', channel: 'rz', scale: -1, maxDegrees: 20 },
   ],
-  [FishAction.PECTORAL_R_UP]: [
+  // AU 22: Pectoral R Up
+  22: [
     { node: 'PECTORAL_R_ROOT', channel: 'rz', scale: -1, maxDegrees: 40 },
     { node: 'PECTORAL_R_CHAIN1', channel: 'rz', scale: -1, maxDegrees: 20 },
     { node: 'PECTORAL_R_ROOT2', channel: 'rz', scale: -1, maxDegrees: 40 },
   ],
-  [FishAction.PECTORAL_R_DOWN]: [
+  // AU 23: Pectoral R Down
+  23: [
     { node: 'PECTORAL_R_ROOT', channel: 'rz', scale: 1, maxDegrees: 40 },
     { node: 'PECTORAL_R_CHAIN1', channel: 'rz', scale: 1, maxDegrees: 20 },
     { node: 'PECTORAL_R_ROOT2', channel: 'rz', scale: 1, maxDegrees: 40 },
   ],
-  [FishAction.PECTORAL_L_FORWARD]: [
+  // AU 24: Pectoral L Forward
+  24: [
     { node: 'PECTORAL_L_ROOT', channel: 'ry', scale: 1, maxDegrees: 30 },
   ],
-  [FishAction.PECTORAL_L_BACK]: [
+  // AU 25: Pectoral L Back
+  25: [
     { node: 'PECTORAL_L_ROOT', channel: 'ry', scale: -1, maxDegrees: 30 },
   ],
-  [FishAction.PECTORAL_R_FORWARD]: [
+  // AU 26: Pectoral R Forward
+  26: [
     { node: 'PECTORAL_R_ROOT', channel: 'ry', scale: -1, maxDegrees: 30 },
   ],
-  [FishAction.PECTORAL_R_BACK]: [
+  // AU 27: Pectoral R Back
+  27: [
     { node: 'PECTORAL_R_ROOT', channel: 'ry', scale: 1, maxDegrees: 30 },
   ],
 
-  // ========== VENTRAL FINS (belly fins - what moves the "gullet") ==========
-  [FishAction.VENTRAL_L_UP]: [
+  // ========== VENTRAL FINS (AU 30-33, belly fins) ==========
+  // AU 30: Ventral L Up
+  30: [
     { node: 'VENTRAL_L', channel: 'rz', scale: 1, maxDegrees: 30 },
     { node: 'VENTRAL_L_MID', channel: 'rz', scale: 1, maxDegrees: 15 },
   ],
-  [FishAction.VENTRAL_L_DOWN]: [
+  // AU 31: Ventral L Down
+  31: [
     { node: 'VENTRAL_L', channel: 'rz', scale: -1, maxDegrees: 30 },
     { node: 'VENTRAL_L_MID', channel: 'rz', scale: -1, maxDegrees: 15 },
   ],
-  [FishAction.VENTRAL_R_UP]: [
+  // AU 32: Ventral R Up
+  32: [
     { node: 'VENTRAL_R', channel: 'rz', scale: -1, maxDegrees: 30 },
     { node: 'VENTRAL_R_MID', channel: 'rz', scale: -1, maxDegrees: 15 },
   ],
-  [FishAction.VENTRAL_R_DOWN]: [
+  // AU 33: Ventral R Down
+  33: [
     { node: 'VENTRAL_R', channel: 'rz', scale: 1, maxDegrees: 30 },
     { node: 'VENTRAL_R_MID', channel: 'rz', scale: 1, maxDegrees: 15 },
   ],
 
-  // ========== DORSAL FIN (top fin - erect/fold) ==========
-  [FishAction.DORSAL_ERECT]: [
-    { node: 'DORSAL_ROOT', channel: 'rx', scale: -1, maxDegrees: 25 },
-    { node: 'DORSAL_L', channel: 'rx', scale: -1, maxDegrees: 15 },
-    { node: 'DORSAL_R', channel: 'rx', scale: -1, maxDegrees: 15 },
-  ],
-  [FishAction.DORSAL_FOLD]: [
-    { node: 'DORSAL_ROOT', channel: 'rx', scale: 1, maxDegrees: 25 },
-    { node: 'DORSAL_L', channel: 'rx', scale: 1, maxDegrees: 15 },
-    { node: 'DORSAL_R', channel: 'rx', scale: 1, maxDegrees: 15 },
-  ],
-
-  // ========== GILLS (separate L/R, single AU per side - 0=closed, 1=flared) ==========
-  [FishAction.GILLS_L]: [
+  // ========== GILLS (AU 45-46, separate L/R - 0=closed, 1=flared) ==========
+  // AU 45: Gill L
+  45: [
     { node: 'GILL_L', channel: 'rz', scale: 1, maxDegrees: 40 },
     { node: 'GILL_L_MID', channel: 'rz', scale: 1, maxDegrees: 20 },
   ],
-  [FishAction.GILLS_R]: [
+  // AU 46: Gill R
+  46: [
     { node: 'GILL_R', channel: 'rz', scale: -1, maxDegrees: 40 },
     { node: 'GILL_R_MID', channel: 'rz', scale: -1, maxDegrees: 20 },
   ],
 
-  // ========== EYES (rotate the EYES_0 mesh) ==========
+  // ========== HEAD (AU 51-56, matching FACS standard) ==========
+  // AU 51: Head Turn Left
+  51: [
+    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 },
+    { node: 'BODY_FRONT', channel: 'ry', scale: 1, maxDegrees: 14 },
+    { node: 'BODY_MID', channel: 'ry', scale: 1, maxDegrees: 5 },
+  ],
+  // AU 52: Head Turn Right
+  52: [
+    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 30 },
+    { node: 'BODY_FRONT', channel: 'ry', scale: -1, maxDegrees: 14 },
+    { node: 'BODY_MID', channel: 'ry', scale: -1, maxDegrees: 5 },
+  ],
+  // AU 53: Head Up
+  53: [
+    { node: 'DORSAL_ROOT', channel: 'rx', scale: -1, maxDegrees: 25 },
+    { node: 'DORSAL_L', channel: 'rx', scale: -1, maxDegrees: 15 },
+    { node: 'DORSAL_R', channel: 'rx', scale: -1, maxDegrees: 15 },
+  ],
+  // AU 54: Head Down
+  54: [
+    { node: 'DORSAL_ROOT', channel: 'rx', scale: 1, maxDegrees: 25 },
+    { node: 'DORSAL_L', channel: 'rx', scale: 1, maxDegrees: 15 },
+    { node: 'DORSAL_R', channel: 'rx', scale: 1, maxDegrees: 15 },
+  ],
+  // Note: AU 55/56 (Head Tilt) removed - fish don't have this motion
+
+  // ========== EYES (AU 61-64, rotate the EYES_0 mesh) ==========
   // Fish has a single combined eyes mesh - both eyes rotate together
-  [FishAction.EYE_LEFT]: [
+  // AU 61: Eyes Left
+  61: [
     { node: 'EYE_L', channel: 'ry', scale: 1, maxDegrees: 25 },  // Look left (yaw)
   ],
-  [FishAction.EYE_RIGHT]: [
+  // AU 62: Eyes Right
+  62: [
     { node: 'EYE_L', channel: 'ry', scale: -1, maxDegrees: 25 }, // Look right (yaw)
   ],
-  [FishAction.EYE_UP]: [
+  // AU 63: Eyes Up
+  63: [
     { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 20 }, // Look up (pitch)
   ],
-  [FishAction.EYE_DOWN]: [
+  // AU 64: Eyes Down
+  64: [
     { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 20 },  // Look down (pitch)
   ],
 };
@@ -384,7 +411,7 @@ export const FISH_BONE_BINDINGS: Record<number, BoneBinding[]> = {
 // facePart is used to group controls in the UI
 // ============================================================================
 
-export const FISH_AU_INFO: Record<string, AUInfo> = {
+export const AU_INFO: Record<string, AUInfo> = {
   // Body Orientation
   '2': { id: '2', name: 'Turn Left', facePart: 'Body Orientation', muscularBasis: 'Myomere muscles', links: ['https://en.wikipedia.org/wiki/Myomere'] },
   '3': { id: '3', name: 'Turn Right', facePart: 'Body Orientation', muscularBasis: 'Myomere muscles', links: ['https://en.wikipedia.org/wiki/Myomere'] },
@@ -415,13 +442,16 @@ export const FISH_AU_INFO: Record<string, AUInfo> = {
   '32': { id: '32', name: 'Ventral R Up', facePart: 'Pelvic Fins', muscularBasis: 'Pelvic fin muscles', links: ['https://en.wikipedia.org/wiki/Fish_fin#Pelvic_fins'] },
   '33': { id: '33', name: 'Ventral R Down', facePart: 'Pelvic Fins', muscularBasis: 'Pelvic fin muscles', links: ['https://en.wikipedia.org/wiki/Fish_fin#Pelvic_fins'] },
 
-  // Dorsal Fin (top fin)
-  '40': { id: '40', name: 'Dorsal Erect', facePart: 'Dorsal Fin', muscularBasis: 'Dorsal fin erector muscles', links: ['https://en.wikipedia.org/wiki/Fish_fin#Dorsal_fins'] },
-  '41': { id: '41', name: 'Dorsal Fold', facePart: 'Dorsal Fin', muscularBasis: 'Dorsal fin depressor muscles', links: ['https://en.wikipedia.org/wiki/Fish_fin#Dorsal_fins'] },
-
   // Gills (separate L/R - single AU per side, 0=closed, 1=flared)
-  '50': { id: '50', name: 'Gill L', facePart: 'Gills', muscularBasis: 'Opercular muscles', links: ['https://en.wikipedia.org/wiki/Operculum_(fish)'] },
-  '51': { id: '51', name: 'Gill R', facePart: 'Gills', muscularBasis: 'Opercular muscles', links: ['https://en.wikipedia.org/wiki/Operculum_(fish)'] },
+  '45': { id: '45', name: 'Gill L', facePart: 'Gills', muscularBasis: 'Opercular muscles', links: ['https://en.wikipedia.org/wiki/Operculum_(fish)'] },
+  '46': { id: '46', name: 'Gill R', facePart: 'Gills', muscularBasis: 'Opercular muscles', links: ['https://en.wikipedia.org/wiki/Operculum_(fish)'] },
+
+  // Head (AU 51-56, matching FACS standard)
+  '51': { id: '51', name: 'Head Turn Left', facePart: 'Head', muscularBasis: 'Cranial muscles', links: ['https://en.wikipedia.org/wiki/Fish_anatomy#Head'] },
+  '52': { id: '52', name: 'Head Turn Right', facePart: 'Head', muscularBasis: 'Cranial muscles', links: ['https://en.wikipedia.org/wiki/Fish_anatomy#Head'] },
+  '53': { id: '53', name: 'Head Up', facePart: 'Head', muscularBasis: 'Cranial muscles', links: ['https://en.wikipedia.org/wiki/Fish_anatomy#Head'] },
+  '54': { id: '54', name: 'Head Down', facePart: 'Head', muscularBasis: 'Cranial muscles', links: ['https://en.wikipedia.org/wiki/Fish_anatomy#Head'] },
+  // Note: AU 55/56 (Head Tilt) removed - fish don't have this motion
 
   // Eye movement (similar to human AU 61-64)
   '61': { id: '61', name: 'Eyes Left', facePart: 'Eyes', muscularBasis: 'Extraocular muscles', links: ['https://en.wikipedia.org/wiki/Extraocular_muscles'] },
@@ -435,297 +465,345 @@ export const FISH_AU_INFO: Record<string, AUInfo> = {
 // ============================================================================
 
 /**
- * Fish continuum pairs - maps AU ID to its partner for bidirectional sliders
- * Format matches loomlarge's CONTINUUM_PAIRS_MAP
+ * Continuum pairs - maps AU ID to its partner for bidirectional sliders
+ * Format matches loomlarge's CONTINUUM_PAIRS_MAP (animal-agnostic)
  */
-export const FISH_CONTINUUM_PAIRS_MAP: Record<number, {
+export const CONTINUUM_PAIRS_MAP: Record<number, {
   pairId: number;
   isNegative: boolean;
   axis: 'pitch' | 'yaw' | 'roll';
   node: string;
 }> = {
-  // Body Orientation
-  [FishAction.TURN_LEFT]: { pairId: FishAction.TURN_RIGHT, isNegative: true, axis: 'yaw', node: 'HEAD' },
-  [FishAction.TURN_RIGHT]: { pairId: FishAction.TURN_LEFT, isNegative: false, axis: 'yaw', node: 'HEAD' },
-  [FishAction.PITCH_DOWN]: { pairId: FishAction.PITCH_UP, isNegative: true, axis: 'pitch', node: 'HEAD' },
-  [FishAction.PITCH_UP]: { pairId: FishAction.PITCH_DOWN, isNegative: false, axis: 'pitch', node: 'HEAD' },
-  [FishAction.ROLL_LEFT]: { pairId: FishAction.ROLL_RIGHT, isNegative: true, axis: 'roll', node: 'BODY_ROOT' },
-  [FishAction.ROLL_RIGHT]: { pairId: FishAction.ROLL_LEFT, isNegative: false, axis: 'roll', node: 'BODY_ROOT' },
+  // Body Orientation (AU 2-7)
+  2: { pairId: 3, isNegative: true, axis: 'yaw', node: 'HEAD' },    // Turn Left ↔ Turn Right
+  3: { pairId: 2, isNegative: false, axis: 'yaw', node: 'HEAD' },
+  5: { pairId: 4, isNegative: true, axis: 'pitch', node: 'HEAD' },  // Pitch Down ↔ Pitch Up
+  4: { pairId: 5, isNegative: false, axis: 'pitch', node: 'HEAD' },
+  6: { pairId: 7, isNegative: true, axis: 'roll', node: 'BODY_ROOT' },  // Roll Left ↔ Roll Right
+  7: { pairId: 6, isNegative: false, axis: 'roll', node: 'BODY_ROOT' },
 
-  // Tail
-  [FishAction.TAIL_SWEEP_LEFT]: { pairId: FishAction.TAIL_SWEEP_RIGHT, isNegative: true, axis: 'roll', node: 'TAIL_BASE' },
-  [FishAction.TAIL_SWEEP_RIGHT]: { pairId: FishAction.TAIL_SWEEP_LEFT, isNegative: false, axis: 'roll', node: 'TAIL_BASE' },
-  [FishAction.TAIL_FIN_CLOSE]: { pairId: FishAction.TAIL_FIN_SPREAD, isNegative: true, axis: 'pitch', node: 'TAIL_TOP' },
-  [FishAction.TAIL_FIN_SPREAD]: { pairId: FishAction.TAIL_FIN_CLOSE, isNegative: false, axis: 'pitch', node: 'TAIL_TOP' },
+  // Tail (AU 12-15)
+  12: { pairId: 13, isNegative: true, axis: 'roll', node: 'TAIL_BASE' },  // Tail Sweep Left ↔ Right
+  13: { pairId: 12, isNegative: false, axis: 'roll', node: 'TAIL_BASE' },
+  15: { pairId: 14, isNegative: true, axis: 'pitch', node: 'TAIL_TOP' },  // Tail Fin Close ↔ Spread
+  14: { pairId: 15, isNegative: false, axis: 'pitch', node: 'TAIL_TOP' },
 
-  // Pectoral Fins (head-attached decorative fins)
-  [FishAction.PECTORAL_L_DOWN]: { pairId: FishAction.PECTORAL_L_UP, isNegative: true, axis: 'roll', node: 'PECTORAL_L_ROOT' },
-  [FishAction.PECTORAL_L_UP]: { pairId: FishAction.PECTORAL_L_DOWN, isNegative: false, axis: 'roll', node: 'PECTORAL_L_ROOT' },
-  [FishAction.PECTORAL_L_BACK]: { pairId: FishAction.PECTORAL_L_FORWARD, isNegative: true, axis: 'yaw', node: 'PECTORAL_L_ROOT' },
-  [FishAction.PECTORAL_L_FORWARD]: { pairId: FishAction.PECTORAL_L_BACK, isNegative: false, axis: 'yaw', node: 'PECTORAL_L_ROOT' },
-  [FishAction.PECTORAL_R_DOWN]: { pairId: FishAction.PECTORAL_R_UP, isNegative: true, axis: 'roll', node: 'PECTORAL_R_ROOT' },
-  [FishAction.PECTORAL_R_UP]: { pairId: FishAction.PECTORAL_R_DOWN, isNegative: false, axis: 'roll', node: 'PECTORAL_R_ROOT' },
-  [FishAction.PECTORAL_R_BACK]: { pairId: FishAction.PECTORAL_R_FORWARD, isNegative: true, axis: 'yaw', node: 'PECTORAL_R_ROOT' },
-  [FishAction.PECTORAL_R_FORWARD]: { pairId: FishAction.PECTORAL_R_BACK, isNegative: false, axis: 'yaw', node: 'PECTORAL_R_ROOT' },
+  // Pectoral Fins (AU 20-27)
+  21: { pairId: 20, isNegative: true, axis: 'roll', node: 'PECTORAL_L_ROOT' },  // Pectoral L Down ↔ Up
+  20: { pairId: 21, isNegative: false, axis: 'roll', node: 'PECTORAL_L_ROOT' },
+  25: { pairId: 24, isNegative: true, axis: 'yaw', node: 'PECTORAL_L_ROOT' },   // Pectoral L Back ↔ Forward
+  24: { pairId: 25, isNegative: false, axis: 'yaw', node: 'PECTORAL_L_ROOT' },
+  23: { pairId: 22, isNegative: true, axis: 'roll', node: 'PECTORAL_R_ROOT' },  // Pectoral R Down ↔ Up
+  22: { pairId: 23, isNegative: false, axis: 'roll', node: 'PECTORAL_R_ROOT' },
+  27: { pairId: 26, isNegative: true, axis: 'yaw', node: 'PECTORAL_R_ROOT' },   // Pectoral R Back ↔ Forward
+  26: { pairId: 27, isNegative: false, axis: 'yaw', node: 'PECTORAL_R_ROOT' },
 
-  // Ventral Fins
-  [FishAction.VENTRAL_L_DOWN]: { pairId: FishAction.VENTRAL_L_UP, isNegative: true, axis: 'roll', node: 'VENTRAL_L' },
-  [FishAction.VENTRAL_L_UP]: { pairId: FishAction.VENTRAL_L_DOWN, isNegative: false, axis: 'roll', node: 'VENTRAL_L' },
-  [FishAction.VENTRAL_R_DOWN]: { pairId: FishAction.VENTRAL_R_UP, isNegative: true, axis: 'roll', node: 'VENTRAL_R' },
-  [FishAction.VENTRAL_R_UP]: { pairId: FishAction.VENTRAL_R_DOWN, isNegative: false, axis: 'roll', node: 'VENTRAL_R' },
+  // Ventral Fins (AU 30-33)
+  31: { pairId: 30, isNegative: true, axis: 'roll', node: 'VENTRAL_L' },  // Ventral L Down ↔ Up
+  30: { pairId: 31, isNegative: false, axis: 'roll', node: 'VENTRAL_L' },
+  33: { pairId: 32, isNegative: true, axis: 'roll', node: 'VENTRAL_R' },  // Ventral R Down ↔ Up
+  32: { pairId: 33, isNegative: false, axis: 'roll', node: 'VENTRAL_R' },
 
-  // Dorsal Fin
-  [FishAction.DORSAL_FOLD]: { pairId: FishAction.DORSAL_ERECT, isNegative: true, axis: 'pitch', node: 'DORSAL_ROOT' },
-  [FishAction.DORSAL_ERECT]: { pairId: FishAction.DORSAL_FOLD, isNegative: false, axis: 'pitch', node: 'DORSAL_ROOT' },
+  // Head (AU 51-56, matching FACS standard)
+  51: { pairId: 52, isNegative: true, axis: 'yaw', node: 'HEAD' },   // Head Turn Left ↔ Right
+  52: { pairId: 51, isNegative: false, axis: 'yaw', node: 'HEAD' },
+  54: { pairId: 53, isNegative: true, axis: 'pitch', node: 'DORSAL_ROOT' },  // Head Down ↔ Up
+  53: { pairId: 54, isNegative: false, axis: 'pitch', node: 'DORSAL_ROOT' },
+  // Note: AU 55/56 (Head Tilt) removed - fish don't have this motion
 
-  // Gills are NOT in continuum - they're single AUs (0=closed, 1=flared)
-  // GILLS_L and GILLS_R are independent sliders, not paired opposites
+  // Gills (AU 45-46) are NOT in continuum - they're single AUs (0=closed, 1=flared)
+  // Each side is independent, not paired opposites
 
-  // Eye movement (like human AU 61-64)
-  [FishAction.EYE_LEFT]: { pairId: FishAction.EYE_RIGHT, isNegative: true, axis: 'yaw', node: 'HEAD' },
-  [FishAction.EYE_RIGHT]: { pairId: FishAction.EYE_LEFT, isNegative: false, axis: 'yaw', node: 'HEAD' },
-  [FishAction.EYE_DOWN]: { pairId: FishAction.EYE_UP, isNegative: true, axis: 'pitch', node: 'HEAD' },
-  [FishAction.EYE_UP]: { pairId: FishAction.EYE_DOWN, isNegative: false, axis: 'pitch', node: 'HEAD' },
+  // Eye movement (AU 61-64)
+  61: { pairId: 62, isNegative: true, axis: 'yaw', node: 'HEAD' },   // Eyes Left ↔ Right
+  62: { pairId: 61, isNegative: false, axis: 'yaw', node: 'HEAD' },
+  64: { pairId: 63, isNegative: true, axis: 'pitch', node: 'HEAD' }, // Eyes Down ↔ Up
+  63: { pairId: 64, isNegative: false, axis: 'pitch', node: 'HEAD' },
 };
 
 /**
- * Human-readable labels for fish continuum pairs
- * Key format: "negativeAU-positiveAU"
+ * Build continuum label from AU names.
+ * Finds common prefix between AU names and extracts the differing part.
+ * E.g. "Head Turn Left" + "Head Turn Right" → "Head Turn — Left ↔ Right"
  */
-export const FISH_CONTINUUM_LABELS: Record<string, string> = {
-  // Body Orientation
-  '2-3': 'Turn — Left ↔ Right',
-  '5-4': 'Pitch — Down ↔ Up',
-  '6-7': 'Roll — Left ↔ Right',
+function buildContinuumLabel(negativeAU: AUInfo, positiveAU: AUInfo): string {
+  const negName = negativeAU.name;
+  const posName = positiveAU.name;
 
-  // Tail
-  '12-13': 'Tail Sweep — Left ↔ Right',
-  '15-14': 'Tail Fins — Close ↔ Spread',
+  // Find common prefix (word-level)
+  const negWords = negName.split(' ');
+  const posWords = posName.split(' ');
 
-  // Pectoral Fins
-  '21-20': 'Pectoral L — Down ↔ Up',
-  '25-24': 'Pectoral L — Back ↔ Forward',
-  '23-22': 'Pectoral R — Down ↔ Up',
-  '27-26': 'Pectoral R — Back ↔ Forward',
+  let commonPrefixWords: string[] = [];
+  for (let i = 0; i < Math.min(negWords.length, posWords.length); i++) {
+    if (negWords[i] === posWords[i]) {
+      commonPrefixWords.push(negWords[i]);
+    } else {
+      break;
+    }
+  }
 
-  // Ventral Fins
-  '31-30': 'Ventral L — Down ↔ Up',
-  '33-32': 'Ventral R — Down ↔ Up',
+  const prefix = commonPrefixWords.join(' ');
+  const negSuffix = negWords.slice(commonPrefixWords.length).join(' ');
+  const posSuffix = posWords.slice(commonPrefixWords.length).join(' ');
 
-  // Dorsal Fin
-  '41-40': 'Dorsal Fin — Fold ↔ Erect',
+  if (prefix && negSuffix && posSuffix) {
+    return `${prefix} — ${negSuffix} ↔ ${posSuffix}`;
+  }
 
-  // Gills are NOT continuum pairs - they're independent single AUs
+  // Fallback: just combine the names
+  return `${negName} ↔ ${posName}`;
+}
 
-  // Eyes
-  '61-62': 'Eyes — Left ↔ Right',
-  '64-63': 'Eyes — Down ↔ Up',
-};
+/**
+ * Get continuum label for a pair, derived from AU_INFO.
+ * No need for a separate CONTINUUM_LABELS object.
+ */
+export function getContinuumLabelForPair(negativeId: number, positiveId: number): string {
+  const negAU = AU_INFO[String(negativeId)];
+  const posAU = AU_INFO[String(positiveId)];
+
+  if (!negAU || !posAU) {
+    return `AU ${negativeId} ↔ AU ${positiveId}`;
+  }
+
+  return buildContinuumLabel(negAU, posAU);
+}
+
+/**
+ * Build all continuum labels from AU_INFO and CONTINUUM_PAIRS_MAP.
+ * This replaces the need for a manually-maintained CONTINUUM_LABELS object.
+ */
+export function buildContinuumLabels(): Record<string, string> {
+  const labels: Record<string, string> = {};
+  const seen = new Set<string>();
+
+  for (const [auIdStr, info] of Object.entries(CONTINUUM_PAIRS_MAP)) {
+    if (info.isNegative) {
+      const negId = Number(auIdStr);
+      const posId = info.pairId;
+      const key = `${negId}-${posId}`;
+
+      if (!seen.has(key)) {
+        seen.add(key);
+        labels[key] = getContinuumLabelForPair(negId, posId);
+      }
+    }
+  }
+
+  return labels;
+}
+
+// Build labels dynamically from AU_INFO (no separate CONTINUUM_LABELS needed)
+export const CONTINUUM_LABELS = buildContinuumLabels();
 
 // ============================================================================
 // COMPOSITE ROTATIONS - Defines how AUs map to bone rotation axes
 // This is required for the engine to properly apply bone rotations
-// Uses FishAction enum values for AU IDs
+// Uses plain AU ID numbers (animal-agnostic, like CC4 preset)
 // ============================================================================
 
-export const FISH_COMPOSITE_ROTATIONS: CompositeRotation[] = [
-  // ========== BODY ORIENTATION ==========
+export const COMPOSITE_ROTATIONS: CompositeRotation[] = [
+  // ========== HEAD & BODY - Combined entry per node (like CC4) ==========
+  // AU 51/52 = Head Turn Left/Right (yaw)
+  // AU 53/54 = Head Up/Down (pitch) - note: pitch on HEAD is from body AUs 4/5
+  // No head tilt for fish - removed AU 55/56
   {
     node: 'HEAD',
-    pitch: { aus: [FishAction.PITCH_UP, FishAction.PITCH_DOWN], axis: 'rx', negative: FishAction.PITCH_DOWN, positive: FishAction.PITCH_UP },
-    yaw: { aus: [FishAction.TURN_LEFT, FishAction.TURN_RIGHT], axis: 'ry', negative: FishAction.TURN_LEFT, positive: FishAction.TURN_RIGHT },
+    pitch: { aus: [4, 5], axis: 'rx', negative: 5, positive: 4 },    // Body Pitch Up/Down
+    yaw: { aus: [51, 52], axis: 'ry', negative: 51, positive: 52 },  // Head Turn Left/Right
     roll: null,
   },
   {
     node: 'BODY_FRONT',
-    pitch: { aus: [FishAction.PITCH_UP, FishAction.PITCH_DOWN], axis: 'rx', negative: FishAction.PITCH_DOWN, positive: FishAction.PITCH_UP },
-    yaw: { aus: [FishAction.TURN_LEFT, FishAction.TURN_RIGHT], axis: 'ry', negative: FishAction.TURN_LEFT, positive: FishAction.TURN_RIGHT },
+    pitch: { aus: [4, 5], axis: 'rx', negative: 5, positive: 4 },    // Body Pitch Up/Down
+    yaw: { aus: [51, 52], axis: 'ry', negative: 51, positive: 52 },  // Head Turn Left/Right
     roll: null,
   },
   {
     node: 'BODY_MID',
     pitch: null,
-    yaw: { aus: [FishAction.TURN_LEFT, FishAction.TURN_RIGHT], axis: 'ry', negative: FishAction.TURN_LEFT, positive: FishAction.TURN_RIGHT },
+    yaw: { aus: [51, 52], axis: 'ry', negative: 51, positive: 52 },  // Head Turn Left/Right
     roll: null,
   },
   {
     node: 'BODY_ROOT',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.ROLL_LEFT, FishAction.ROLL_RIGHT], axis: 'rz', negative: FishAction.ROLL_LEFT, positive: FishAction.ROLL_RIGHT },
+    roll: { aus: [6, 7], axis: 'rz', negative: 6, positive: 7 },  // Body Roll Left/Right
   },
 
-  // ========== TAIL ==========
+  // ========== TAIL (AU 12-15) ==========
   // Tail sweep uses rz (roll axis) to sweep left/right in fish's local space
   {
     node: 'TAIL_BASE',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.TAIL_SWEEP_LEFT, FishAction.TAIL_SWEEP_RIGHT], axis: 'rz', negative: FishAction.TAIL_SWEEP_RIGHT, positive: FishAction.TAIL_SWEEP_LEFT },
+    roll: { aus: [12, 13], axis: 'rz', negative: 13, positive: 12 },  // Tail Sweep Left/Right
   },
   {
     node: 'BODY_BACK',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.TAIL_SWEEP_LEFT, FishAction.TAIL_SWEEP_RIGHT], axis: 'rz', negative: FishAction.TAIL_SWEEP_RIGHT, positive: FishAction.TAIL_SWEEP_LEFT },
+    roll: { aus: [12, 13], axis: 'rz', negative: 13, positive: 12 },
   },
   {
     node: 'TAIL_TOP',
-    pitch: { aus: [FishAction.TAIL_FIN_SPREAD, FishAction.TAIL_FIN_CLOSE], axis: 'rx', negative: FishAction.TAIL_FIN_CLOSE, positive: FishAction.TAIL_FIN_SPREAD },
+    pitch: { aus: [14, 15], axis: 'rx', negative: 15, positive: 14 },  // Tail Fin Spread/Close
     yaw: null,
-    roll: { aus: [FishAction.TAIL_SWEEP_LEFT, FishAction.TAIL_SWEEP_RIGHT], axis: 'rz', negative: FishAction.TAIL_SWEEP_RIGHT, positive: FishAction.TAIL_SWEEP_LEFT },
+    roll: { aus: [12, 13], axis: 'rz', negative: 13, positive: 12 },
   },
   {
     node: 'TAIL_MID',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.TAIL_SWEEP_LEFT, FishAction.TAIL_SWEEP_RIGHT], axis: 'rz', negative: FishAction.TAIL_SWEEP_RIGHT, positive: FishAction.TAIL_SWEEP_LEFT },
+    roll: { aus: [12, 13], axis: 'rz', negative: 13, positive: 12 },
   },
   // Side tail fins for spread/close
   {
     node: 'TAIL_SIDE_L',
-    pitch: { aus: [FishAction.TAIL_FIN_SPREAD, FishAction.TAIL_FIN_CLOSE], axis: 'rx', negative: FishAction.TAIL_FIN_CLOSE, positive: FishAction.TAIL_FIN_SPREAD },
+    pitch: { aus: [14, 15], axis: 'rx', negative: 15, positive: 14 },
     yaw: null,
     roll: null,
   },
   {
     node: 'TAIL_SIDE_R',
-    pitch: { aus: [FishAction.TAIL_FIN_SPREAD, FishAction.TAIL_FIN_CLOSE], axis: 'rx', negative: FishAction.TAIL_FIN_CLOSE, positive: FishAction.TAIL_FIN_SPREAD },
+    pitch: { aus: [14, 15], axis: 'rx', negative: 15, positive: 14 },
     yaw: null,
     roll: null,
   },
 
-  // ========== PECTORAL FINS (head-attached decorative fins) ==========
+  // ========== PECTORAL FINS (AU 20-27, head-attached decorative fins) ==========
   {
     node: 'PECTORAL_L_ROOT',
     pitch: null,
-    yaw: { aus: [FishAction.PECTORAL_L_FORWARD, FishAction.PECTORAL_L_BACK], axis: 'ry', negative: FishAction.PECTORAL_L_BACK, positive: FishAction.PECTORAL_L_FORWARD },
-    roll: { aus: [FishAction.PECTORAL_L_UP, FishAction.PECTORAL_L_DOWN], axis: 'rz', negative: FishAction.PECTORAL_L_DOWN, positive: FishAction.PECTORAL_L_UP },
+    yaw: { aus: [24, 25], axis: 'ry', negative: 25, positive: 24 },  // Pectoral L Forward/Back
+    roll: { aus: [20, 21], axis: 'rz', negative: 21, positive: 20 },  // Pectoral L Up/Down
   },
   {
     node: 'PECTORAL_L_CHAIN1',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.PECTORAL_L_UP, FishAction.PECTORAL_L_DOWN], axis: 'rz', negative: FishAction.PECTORAL_L_DOWN, positive: FishAction.PECTORAL_L_UP },
+    roll: { aus: [20, 21], axis: 'rz', negative: 21, positive: 20 },
   },
   {
     node: 'PECTORAL_L_CHAIN2',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.PECTORAL_L_UP, FishAction.PECTORAL_L_DOWN], axis: 'rz', negative: FishAction.PECTORAL_L_DOWN, positive: FishAction.PECTORAL_L_UP },
+    roll: { aus: [20, 21], axis: 'rz', negative: 21, positive: 20 },
   },
   {
     node: 'PECTORAL_R_ROOT',
     pitch: null,
-    yaw: { aus: [FishAction.PECTORAL_R_FORWARD, FishAction.PECTORAL_R_BACK], axis: 'ry', negative: FishAction.PECTORAL_R_BACK, positive: FishAction.PECTORAL_R_FORWARD },
-    roll: { aus: [FishAction.PECTORAL_R_UP, FishAction.PECTORAL_R_DOWN], axis: 'rz', negative: FishAction.PECTORAL_R_DOWN, positive: FishAction.PECTORAL_R_UP },
+    yaw: { aus: [26, 27], axis: 'ry', negative: 27, positive: 26 },  // Pectoral R Forward/Back
+    roll: { aus: [22, 23], axis: 'rz', negative: 23, positive: 22 },  // Pectoral R Up/Down
   },
   {
     node: 'PECTORAL_R_ROOT2',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.PECTORAL_R_UP, FishAction.PECTORAL_R_DOWN], axis: 'rz', negative: FishAction.PECTORAL_R_DOWN, positive: FishAction.PECTORAL_R_UP },
+    roll: { aus: [22, 23], axis: 'rz', negative: 23, positive: 22 },
   },
   {
     node: 'PECTORAL_R_CHAIN1',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.PECTORAL_R_UP, FishAction.PECTORAL_R_DOWN], axis: 'rz', negative: FishAction.PECTORAL_R_DOWN, positive: FishAction.PECTORAL_R_UP },
+    roll: { aus: [22, 23], axis: 'rz', negative: 23, positive: 22 },
   },
 
-  // ========== VENTRAL FINS (belly fins) ==========
+  // ========== VENTRAL FINS (AU 30-33, belly fins) ==========
   {
     node: 'VENTRAL_L',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.VENTRAL_L_UP, FishAction.VENTRAL_L_DOWN], axis: 'rz', negative: FishAction.VENTRAL_L_DOWN, positive: FishAction.VENTRAL_L_UP },
+    roll: { aus: [30, 31], axis: 'rz', negative: 31, positive: 30 },  // Ventral L Up/Down
   },
   {
     node: 'VENTRAL_L_MID',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.VENTRAL_L_UP, FishAction.VENTRAL_L_DOWN], axis: 'rz', negative: FishAction.VENTRAL_L_DOWN, positive: FishAction.VENTRAL_L_UP },
+    roll: { aus: [30, 31], axis: 'rz', negative: 31, positive: 30 },
   },
   {
     node: 'VENTRAL_R',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.VENTRAL_R_UP, FishAction.VENTRAL_R_DOWN], axis: 'rz', negative: FishAction.VENTRAL_R_DOWN, positive: FishAction.VENTRAL_R_UP },
+    roll: { aus: [32, 33], axis: 'rz', negative: 33, positive: 32 },  // Ventral R Up/Down
   },
   {
     node: 'VENTRAL_R_MID',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.VENTRAL_R_UP, FishAction.VENTRAL_R_DOWN], axis: 'rz', negative: FishAction.VENTRAL_R_DOWN, positive: FishAction.VENTRAL_R_UP },
+    roll: { aus: [32, 33], axis: 'rz', negative: 33, positive: 32 },
   },
 
-  // ========== DORSAL FIN (erect/fold) ==========
+  // ========== DORSAL FIN (AU 53/54 - Head Up/Down via dorsal bones) ==========
+  // In this fish model, the dorsal bones control the head's vertical movement
+  // No head tilt for fish - AU 55/56 removed
   {
     node: 'DORSAL_ROOT',
-    pitch: { aus: [FishAction.DORSAL_ERECT, FishAction.DORSAL_FOLD], axis: 'rx', negative: FishAction.DORSAL_FOLD, positive: FishAction.DORSAL_ERECT },
+    pitch: { aus: [53, 54], axis: 'rx', negative: 54, positive: 53 },  // Head Up/Down
     yaw: null,
     roll: null,
   },
   {
     node: 'DORSAL_L',
-    pitch: { aus: [FishAction.DORSAL_ERECT, FishAction.DORSAL_FOLD], axis: 'rx', negative: FishAction.DORSAL_FOLD, positive: FishAction.DORSAL_ERECT },
+    pitch: { aus: [53, 54], axis: 'rx', negative: 54, positive: 53 },
     yaw: null,
     roll: null,
   },
   {
     node: 'DORSAL_R',
-    pitch: { aus: [FishAction.DORSAL_ERECT, FishAction.DORSAL_FOLD], axis: 'rx', negative: FishAction.DORSAL_FOLD, positive: FishAction.DORSAL_ERECT },
+    pitch: { aus: [53, 54], axis: 'rx', negative: 54, positive: 53 },
     yaw: null,
     roll: null,
   },
 
-  // ========== GILLS (separate L/R - single AU per side, not continuum) ==========
-  // GILLS_L controls left side only, GILLS_R controls right side only
+  // ========== GILLS (AU 45-46, separate L/R - single AU per side, not continuum) ==========
+  // AU 45 controls left side only, AU 46 controls right side only
   // These are intensity-only AUs (0=closed, 1=flared) - no negative partner
   {
     node: 'GILL_L',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.GILLS_L], axis: 'rz', negative: undefined, positive: FishAction.GILLS_L },
+    roll: { aus: [45], axis: 'rz', negative: undefined, positive: 45 },  // Gill L
   },
   {
     node: 'GILL_L_MID',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.GILLS_L], axis: 'rz', negative: undefined, positive: FishAction.GILLS_L },
+    roll: { aus: [45], axis: 'rz', negative: undefined, positive: 45 },
   },
   {
     node: 'GILL_R',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.GILLS_R], axis: 'rz', negative: undefined, positive: FishAction.GILLS_R },
+    roll: { aus: [46], axis: 'rz', negative: undefined, positive: 46 },  // Gill R
   },
   {
     node: 'GILL_R_MID',
     pitch: null,
     yaw: null,
-    roll: { aus: [FishAction.GILLS_R], axis: 'rz', negative: undefined, positive: FishAction.GILLS_R },
+    roll: { aus: [46], axis: 'rz', negative: undefined, positive: 46 },
   },
 
-  // ========== EYES ==========
+  // ========== EYES (AU 61-64) ==========
   // Single EYES_0 mesh rotates both fish eyes together
   {
     node: 'EYE_L',
-    pitch: { aus: [FishAction.EYE_UP, FishAction.EYE_DOWN], axis: 'rx', negative: FishAction.EYE_DOWN, positive: FishAction.EYE_UP },
-    yaw: { aus: [FishAction.EYE_LEFT, FishAction.EYE_RIGHT], axis: 'ry', negative: FishAction.EYE_RIGHT, positive: FishAction.EYE_LEFT },
+    pitch: { aus: [63, 64], axis: 'rx', negative: 64, positive: 63 },  // Eyes Up/Down
+    yaw: { aus: [61, 62], axis: 'ry', negative: 62, positive: 61 },    // Eyes Left/Right
     roll: null,
   },
 ];
 
-// Legacy format for backwards compatibility
-export const FISH_ACTION_INFO = FISH_AU_INFO;
 
 // ============================================================================
 // EYE MESH NODES - Fallback for eye rotation when no bone exists
 // Fish has a single combined EYES_0 mesh for both eyes
 // ============================================================================
 
-export const FISH_EYE_MESH_NODES = {
+export const EYE_MESH_NODES = {
   LEFT: 'EYES_0',
   RIGHT: 'EYES_0',  // Same mesh, both eyes rotate together
 } as const;
@@ -734,7 +812,7 @@ export const FISH_EYE_MESH_NODES = {
 // MESH SETTINGS - Material settings for fish meshes (depthWrite, blending, etc.)
 // ============================================================================
 
-export const FISH_MESHES: Record<string, MeshInfo> = {
+export const MESHES: Record<string, MeshInfo> = {
   // Body mesh - main fish body with proper depth and blending
   'BODY_0': {
     category: 'body' as MeshCategory,
@@ -766,11 +844,11 @@ export const BETTA_FISH_PRESET = {
   name: 'Betta Fish',
   animalType: 'fish',
   emoji: '🐟',
-  bones: FISH_BONES,
-  boneNodes: FISH_BONE_NODES,
-  boneBindings: FISH_BONE_BINDINGS,
-  actionInfo: FISH_ACTION_INFO,
-  eyeMeshNodes: FISH_EYE_MESH_NODES,
+  bones: BONES,
+  boneNodes: BONE_NODES,
+  boneBindings: BONE_BINDINGS,
+  actionInfo: AU_INFO,
+  eyeMeshNodes: EYE_MESH_NODES,
   // No morph targets in this model
   auToMorphs: {} as Record<number, string[]>,
   morphToMesh: {} as Record<string, string[]>,
@@ -778,37 +856,49 @@ export const BETTA_FISH_PRESET = {
 };
 
 // Engine-compatible config format for LoomLargeThree
-export const FISH_AU_MAPPING_CONFIG = {
+export const AU_MAPPING_CONFIG = {
   name: 'Betta Fish',
   animalType: 'fish',
   emoji: '🐟',
-  auToBones: FISH_BONE_BINDINGS,
-  boneNodes: FISH_BONE_NODES,
+  auToBones: BONE_BINDINGS,
+  boneNodes: BONE_NODES,
   auToMorphs: {} as Record<number, string[]>,
   morphToMesh: {} as Record<string, string[]>,
   visemeKeys: [] as string[],
-  auInfo: FISH_AU_INFO,
-  compositeRotations: FISH_COMPOSITE_ROTATIONS,
-  eyeMeshNodes: FISH_EYE_MESH_NODES,
-  meshes: FISH_MESHES,
-  auMixDefaults: {} as Record<number, number>,  // Fish has no mixed AUs (morph+bone)
-  continuumPairs: FISH_CONTINUUM_PAIRS_MAP,
+  auInfo: AU_INFO,
+  compositeRotations: COMPOSITE_ROTATIONS,
+  eyeMeshNodes: EYE_MESH_NODES,
+  meshes: MESHES,
+  auMixDefaults: {} as Record<number, number>,  // No mixed AUs (morph+bone) in this model
+  continuumPairs: CONTINUUM_PAIRS_MAP,
+  continuumLabels: CONTINUUM_LABELS,
 };
 
 /**
- * Check if a fish AU has bilateral bone bindings (L and R nodes)
+ * Check if an AU has bilateral bone bindings (L and R nodes)
  * Used to determine if a balance slider should be shown
  */
-export const fishHasLeftRightBones = (auId: number): boolean => {
-  const bindings = FISH_BONE_BINDINGS[auId];
-  if (!bindings || bindings.length === 0) return false;
-
-  // Check if bindings include both L and R nodes
-  const nodes = bindings.map(b => b.node);
-  const hasLeft = nodes.some(n => /_L$|_L_/.test(n) || /^GILL_L$/.test(n));
-  const hasRight = nodes.some(n => /_R$|_R_/.test(n) || /^GILL_R$/.test(n));
-
-  return hasLeft && hasRight;
+export const hasLeftRightBones = (auId: number): boolean => {
+  const bindings = BONE_BINDINGS[auId];
+  return checkBindingsForLeftRight(bindings);
 };
 
 export default BETTA_FISH_PRESET;
+
+// ============================================================================
+// LEGACY ALIASES - For backwards compatibility with existing code
+// ============================================================================
+
+export const ACTION_INFO = AU_INFO;
+export const FISH_BONES = BONES;
+export const FISH_BONE_NODES = BONE_NODES;
+export const FISH_BONE_BINDINGS = BONE_BINDINGS;
+export const FISH_AU_INFO = AU_INFO;
+export const FISH_ACTION_INFO = ACTION_INFO;
+export const FISH_CONTINUUM_PAIRS_MAP = CONTINUUM_PAIRS_MAP;
+export const FISH_CONTINUUM_LABELS = CONTINUUM_LABELS;
+export const FISH_COMPOSITE_ROTATIONS = COMPOSITE_ROTATIONS;
+export const FISH_EYE_MESH_NODES = EYE_MESH_NODES;
+export const FISH_MESHES = MESHES;
+export const FISH_AU_MAPPING_CONFIG = AU_MAPPING_CONFIG;
+export const fishHasLeftRightBones = hasLeftRightBones;

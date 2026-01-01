@@ -67,6 +67,13 @@ export interface AUMappingConfig {
     axis: 'pitch' | 'yaw' | 'roll';
     node: string;
   }>;
+
+  /**
+   * Optional: Human-readable labels for continuum pairs.
+   * Key format: "negativeAU-positiveAU" (e.g., "51-52")
+   * Value: Display label (e.g., "Head Turn — Left ↔ Right")
+   */
+  continuumLabels?: Record<string, string>;
 }
 
 /**

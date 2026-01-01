@@ -164,3 +164,81 @@ export interface AnimationActionHandle {
   /** Promise that resolves when animation completes (only for non-looping) */
   finished: Promise<void>;
 }
+
+// ============================================================================
+// SNIPPET-TO-CLIP TYPES (Dynamic clip construction from AU curves)
+// ============================================================================
+
+/**
+ * A single keyframe point in an animation curve.
+ */
+export interface CurvePoint {
+  /** Time in seconds */
+  time: number;
+  /** Intensity value (0-1) */
+  intensity: number;
+  /** When true, inherit current AU value at playback start */
+  inherit?: boolean;
+}
+
+/**
+ * Map of curve IDs (AU numbers or morph names) to keyframe arrays.
+ */
+export type CurvesMap = Record<string, CurvePoint[]>;
+
+/**
+ * Options for building and playing a clip from curves.
+ */
+export interface ClipOptions {
+  /** Whether the clip should loop (default: false) */
+  loop?: boolean;
+  /** Playback rate multiplier (default: 1.0) */
+  playbackRate?: number;
+  /** Left/right balance for bilateral AUs (-1 to 1, default: 0) */
+  balance?: number;
+  /** Jaw scale for viseme playback (default: 1.0) */
+  jawScale?: number;
+  /** Intensity scale multiplier (default: 1.0) */
+  intensityScale?: number;
+}
+
+/**
+ * Handle returned when playing a dynamically-built clip.
+ */
+export interface ClipHandle {
+  /** Name of the clip */
+  clipName: string;
+  /** Start or restart playback */
+  play: () => void;
+  /** Stop playback and reset */
+  stop: () => void;
+  /** Pause playback at current position */
+  pause: () => void;
+  /** Resume paused playback */
+  resume: () => void;
+  /** Get current playback time in seconds */
+  getTime: () => number;
+  /** Get total clip duration in seconds */
+  getDuration: () => number;
+  /** Promise that resolves when clip finishes (non-looping only) */
+  finished: Promise<void>;
+}
+
+/**
+ * Snippet definition for animation playback.
+ * Can be loaded from JSON and converted to a mixer clip.
+ */
+export interface Snippet {
+  /** Unique name for this snippet */
+  name: string;
+  /** Optional description */
+  description?: string;
+  /** Map of AU/morph IDs to keyframe curves */
+  curves: CurvesMap;
+  /** Category for grouping (e.g., 'eyeHeadTracking', 'visemeSnippet') */
+  snippetCategory?: string;
+  /** Priority for scheduling conflicts */
+  snippetPriority?: number;
+  /** Whether to loop playback */
+  loop?: boolean;
+}

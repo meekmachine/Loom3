@@ -34,6 +34,10 @@ import type {
   AnimationClipInfo,
   AnimationState,
   AnimationActionHandle,
+  CurvesMap,
+  ClipOptions,
+  ClipHandle,
+  Snippet,
 } from '../../core/types';
 import type { AUMappingConfig } from '../../mappings/types';
 import { AnimationThree } from './AnimationThree';
@@ -490,6 +494,10 @@ export class LoomLargeThree implements LoomLarge {
 
   getAU(id: number): number {
     return this.auValues[id] ?? 0;
+  }
+
+  getCompositeRotations(): CompositeRotation[] {
+    return this.compositeRotations;
   }
 
   // ============================================================================
@@ -1913,6 +1921,114 @@ export class LoomLargeThree implements LoomLarge {
       crossfadeTo: (targetClip: string, dur?: number) => this.crossfadeTo(targetClip, dur),
       finished: finishedPromise,
     };
+  }
+
+  // ============================================================================
+  // SNIPPET-TO-CLIP API (Dynamic clip construction from AU curves)
+  // TODO: Integrate with AnimationMixer for smooth clip-based playback
+  // ============================================================================
+
+  /**
+   * Convert a snippet's curves to a Three.js AnimationClip.
+   *
+   * This builds keyframe tracks for each AU/morph in the curves,
+   * creating a clip that can be played via the AnimationMixer.
+   *
+   * @param clipName - Unique name for the clip
+   * @param curves - Map of AU IDs or morph names to keyframe arrays
+   * @param options - Playback options (loop, playbackRate, etc.)
+   * @returns The constructed AnimationClip, or null if curves are empty
+   *
+   * TODO: Currently returns null - implement actual clip construction
+   */
+  snippetToClip(
+    clipName: string,
+    curves: CurvesMap,
+    options?: ClipOptions
+  ): AnimationClip | null {
+    // TODO: Implement clip construction from curves
+    // This should:
+    // 1. For each curve, determine if it's an AU or morph
+    // 2. For AUs, resolve to morph targets and bone rotations
+    // 3. Build NumberKeyframeTrack for each morph target
+    // 4. Build QuaternionKeyframeTrack for bone rotations
+    // 5. Return new AnimationClip(clipName, duration, tracks)
+
+    console.warn(`[LoomLarge] snippetToClip not yet implemented for "${clipName}"`);
+    return null;
+  }
+
+  /**
+   * Play a pre-built AnimationClip via the mixer.
+   *
+   * @param clip - The AnimationClip to play
+   * @param options - Playback options
+   * @returns ClipHandle for controlling playback, or null if mixer not ready
+   *
+   * TODO: Currently returns null - implement actual clip playback
+   */
+  playClip(clip: AnimationClip, options?: ClipOptions): ClipHandle | null {
+    if (!this.animationMixer) {
+      console.warn('[LoomLarge] AnimationMixer not initialized');
+      return null;
+    }
+
+    // TODO: Implement clip playback
+    // This should:
+    // 1. Create an AnimationAction from the clip
+    // 2. Configure loop mode, playback rate, etc.
+    // 3. Start playing
+    // 4. Return a ClipHandle with control methods
+
+    console.warn(`[LoomLarge] playClip not yet implemented for "${clip.name}"`);
+    return null;
+  }
+
+  /**
+   * Play a snippet directly by converting it to a clip and playing.
+   *
+   * This is a convenience method that combines snippetToClip + playClip.
+   *
+   * @param snippet - The snippet to play (or just name + curves)
+   * @param options - Playback options
+   * @returns ClipHandle for controlling playback, or null if failed
+   *
+   * TODO: Currently returns null - implement when snippetToClip is ready
+   */
+  playSnippet(
+    snippet: Snippet | { name: string; curves: CurvesMap },
+    options?: ClipOptions
+  ): ClipHandle | null {
+    const clip = this.snippetToClip(snippet.name, snippet.curves, options);
+    if (!clip) {
+      return null;
+    }
+    return this.playClip(clip, options);
+  }
+
+  /**
+   * Build a clip from curves and return a handle (for scheduler compatibility).
+   *
+   * This is the method that the animation scheduler looks for.
+   * When available, the scheduler uses this instead of per-keyframe transitions.
+   *
+   * @param clipName - Unique name for the clip
+   * @param curves - Map of curve IDs to keyframe arrays
+   * @param options - Playback options
+   * @returns ClipHandle or null if not supported
+   *
+   * TODO: Currently returns null - scheduler will fall back to legacy path
+   */
+  buildClip(
+    clipName: string,
+    curves: CurvesMap,
+    options?: ClipOptions
+  ): ClipHandle | null {
+    const clip = this.snippetToClip(clipName, curves, options);
+    if (!clip) {
+      return null;
+    }
+    return this.playClip(clip, options);
   }
 }
 

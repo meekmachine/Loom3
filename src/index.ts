@@ -82,6 +82,12 @@ export type {
   AnimationClipInfo,
   AnimationState,
   AnimationActionHandle,
+  // Snippet-to-clip types
+  CurvePoint,
+  CurvesMap,
+  ClipOptions,
+  ClipHandle,
+  Snippet,
 } from './core/types';
 
 // ============================================================================
@@ -135,7 +141,7 @@ export {
   FISH_COMPOSITE_ROTATIONS,
   FISH_EYE_MESH_NODES,
   FISH_MESHES,
-  FishAction,
+  FISH_ACTION_INFO,
   fishHasLeftRightBones,
 } from './presets/bettaFish';
 

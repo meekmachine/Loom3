@@ -12,7 +12,7 @@ import type {
   AnimationState,
   AnimationActionHandle,
 } from '../core/types';
-import type { AUMappingConfig } from '../mappings/types';
+import type { AUMappingConfig, MeshInfo } from '../mappings/types';
 
 /**
  * Mesh interface - minimal requirements for meshes with morph targets
@@ -83,15 +83,8 @@ export interface LoomLargeConfig {
   auMappings?: AUMappingConfig;
 }
 
-/**
- * Mesh info returned from getMeshList()
- */
-export interface MeshInfo {
-  name: string;
-  visible: boolean;
-  morphCount: number;
-  category?: string;
-}
+// MeshInfo is imported from mappings/types.ts
+export type { MeshInfo } from '../mappings/types';
 
 /**
  * LoomLarge Engine Interface

@@ -50,7 +50,6 @@ export type {
   LoomObject3D,
   ReadyPayload,
   LoomLargeConfig,
-  MeshInfo,
 } from './interfaces/LoomLarge';
 
 export type { Animation } from './interfaces/Animation';
@@ -100,7 +99,7 @@ export type {
   MeshCategory,
   BlendingMode,
   MeshMaterialSettings,
-  MeshInfo as MeshMaterialInfo,
+  MeshInfo,
 } from './mappings/types';
 
 export { BLENDING_MODES } from './mappings/types';
@@ -117,6 +116,8 @@ export {
   BONE_AU_TO_BINDINGS,
   AU_MIX_DEFAULTS,
   CC4_BONE_NODES,
+  CC4_BONE_PREFIX,
+  CC4_SUFFIX_PATTERN,
   CC4_EYE_MESH_NODES,
   CC4_MESHES,
   VISEME_KEYS,
@@ -129,21 +130,7 @@ export {
   hasLeftRightMorphs,
 } from './presets/cc4';
 
-// Fish preset (Betta Fish model)
-export { BETTA_FISH_PRESET, FISH_AU_MAPPING_CONFIG } from './presets/bettaFish';
-export {
-  FISH_BONES,
-  FISH_BONE_NODES,
-  FISH_BONE_BINDINGS,
-  FISH_AU_INFO,
-  FISH_CONTINUUM_PAIRS_MAP,
-  FISH_CONTINUUM_LABELS,
-  FISH_COMPOSITE_ROTATIONS,
-  FISH_EYE_MESH_NODES,
-  FISH_MESHES,
-  FISH_ACTION_INFO,
-  fishHasLeftRightBones,
-} from './presets/bettaFish';
+// Fish preset removed - now lives in livekit-monorepo/frontend/src/presets/bettaFish.ts
 
 // ============================================================================
 // PHYSICS
@@ -155,3 +142,15 @@ export {
 } from './physics/HairPhysics';
 
 export type { HairPhysicsState, HairMorphOutput as HairPhysicsMorphOutput } from './physics/HairPhysics';
+
+// ============================================================================
+// VALIDATION
+// ============================================================================
+
+export {
+  validateMappings,
+  isPresetCompatible,
+  suggestBestPreset,
+} from './validation/validateMappings';
+
+export type { ValidationResult } from './validation/validateMappings';

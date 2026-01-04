@@ -375,15 +375,30 @@ export const CONTINUUM_LABELS: Record<string, string> = {
 // BONE NODE NAMES - CC4-specific skeleton hierarchy
 // ============================================================================
 
-// Canonical CC4 bone + mesh names. Since we only target CC4 rigs now, the mapping is explicit.
+/**
+ * Bone name prefix for CC4 rigs.
+ * Base bone names are stored without this prefix in CC4_BONE_NODES.
+ * The engine will prepend this when resolving bones.
+ */
+export const CC4_BONE_PREFIX = 'CC_Base_';
+
+/**
+ * Suffix pattern regex for fuzzy bone matching.
+ * Matches numbered suffixes like _01, _038 (common in Sketchfab exports)
+ * and .001, .002 (common in Blender exports).
+ */
+export const CC4_SUFFIX_PATTERN = '_\\d+$|\\.\\d+$';
+
+// Canonical CC4 bone names WITHOUT prefix (engine will prepend CC4_BONE_PREFIX).
+// This allows fuzzy matching for models with suffixed bone names.
 export const CC4_BONE_NODES = {
-  EYE_L: 'CC_Base_L_Eye',
-  EYE_R: 'CC_Base_R_Eye',
-  HEAD: 'CC_Base_Head',
-  NECK: 'CC_Base_NeckTwist01',
-  NECK_TWIST: 'CC_Base_NeckTwist02',
-  JAW: 'CC_Base_JawRoot',
-  TONGUE: 'CC_Base_Tongue01'
+  EYE_L: 'L_Eye',
+  EYE_R: 'R_Eye',
+  HEAD: 'Head',
+  NECK: 'NeckTwist01',
+  NECK_TWIST: 'NeckTwist02',
+  JAW: 'JawRoot',
+  TONGUE: 'Tongue01'
 } as const;
 
 export const CC4_EYE_MESH_NODES = {
@@ -582,6 +597,8 @@ export const CC4_PRESET: AUMappingConfig = {
   auToMorphs: AU_TO_MORPHS,
   auToBones: BONE_AU_TO_BINDINGS,
   boneNodes: CC4_BONE_NODES,
+  bonePrefix: CC4_BONE_PREFIX,
+  suffixPattern: CC4_SUFFIX_PATTERN,
   morphToMesh: MORPH_TO_MESH,
   visemeKeys: VISEME_KEYS,
   auMixDefaults: AU_MIX_DEFAULTS,

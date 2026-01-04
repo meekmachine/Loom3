@@ -29,8 +29,40 @@ export interface AUMappingConfig {
   /** AU ID to bone bindings (e.g., AU 51 → [{ node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 }]) */
   auToBones: Record<number, BoneBinding[]>;
 
-  /** Bone key to actual node name in the model (e.g., 'HEAD' → 'CC_Base_Head') */
+  /** Bone key to actual node name in the model (e.g., 'HEAD' → 'Head' or 'CC_Base_Head') */
   boneNodes: Record<string, string>;
+
+  /**
+   * Optional: Prefix to prepend to bone names when resolving nodes.
+   * If set, boneNodes should contain base names without prefix (e.g., 'Head' instead of 'CC_Base_Head').
+   * The engine will try: prefix + baseName + suffix, then fuzzy match with suffixPattern.
+   */
+  bonePrefix?: string;
+
+  /**
+   * Optional: Suffix to append to bone names when resolving nodes.
+   * Combined with bonePrefix: prefix + baseName + suffix (e.g., 'Bone.' + '001' + '_Armature' = 'Bone.001_Armature')
+   */
+  boneSuffix?: string;
+
+  /**
+   * Optional: Prefix to prepend to morph target names when resolving.
+   * Similar to bonePrefix but for morph targets.
+   */
+  morphPrefix?: string;
+
+  /**
+   * Optional: Suffix to append to morph target names when resolving.
+   * Similar to boneSuffix but for morph targets.
+   */
+  morphSuffix?: string;
+
+  /**
+   * Optional: Regex pattern string for fuzzy matching bone/morph names with suffixes.
+   * Common patterns: "_\\d+$" for numbered suffixes (_01, _038), "\\.\\d+$" for Blender (.001)
+   * When set, the engine will try exact match first, then fuzzy match using this pattern.
+   */
+  suffixPattern?: string;
 
   /** Morph category to mesh names (e.g., 'face' → ['CC_Base_Body_1']) */
   morphToMesh: Record<string, string[]>;
@@ -116,9 +148,12 @@ export interface MeshMaterialSettings {
 }
 
 /**
- * Mesh info including category, morph count, and optional material settings
+ * Mesh info including category, morph count, and optional material settings.
+ * Used in presets, profiles, and runtime.
  */
 export interface MeshInfo {
+  name?: string;
+  visible?: boolean;
   category: MeshCategory;
   morphCount: number;
   material?: MeshMaterialSettings;

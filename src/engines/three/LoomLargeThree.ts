@@ -13,6 +13,8 @@ import {
   AnimationMixer,
   AnimationAction,
   AnimationClip,
+  NumberKeyframeTrack,
+  QuaternionKeyframeTrack,
   LoopRepeat,
   LoopPingPong,
   LoopOnce,
@@ -23,8 +25,8 @@ import type {
   LoomObject3D,
   ReadyPayload,
   LoomLargeConfig,
-  MeshInfo,
 } from '../../interfaces/LoomLarge';
+import type { MeshInfo } from '../../mappings/types';
 import type { Animation } from '../../interfaces/Animation';
 import type {
   TransitionHandle,
@@ -1495,9 +1497,47 @@ export class LoomLargeThree implements LoomLarge {
       baseEuler: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z, order: obj.rotation.order },
     });
 
-    const findNode = (name?: string | null): LoomObject3D | undefined => {
-      if (!name) return undefined;
-      return root.getObjectByName(name);
+    // Build suffix regex from config pattern
+    const prefix = this.config.bonePrefix || '';
+    const suffix = this.config.boneSuffix || '';
+    const suffixRegex = this.config.suffixPattern
+      ? new RegExp(this.config.suffixPattern)
+      : null;
+
+    // Find node with exact match first, then fuzzy match with suffix pattern
+    const findNode = (baseName?: string | null): LoomObject3D | undefined => {
+      if (!baseName) return undefined;
+
+      // Build full name with prefix and suffix
+      const fullName = prefix + baseName + suffix;
+
+      // Try exact match first
+      const exactMatch = root.getObjectByName(fullName);
+      if (exactMatch) return exactMatch;
+
+      // Try fuzzy match with suffix pattern if configured
+      if (suffixRegex) {
+        let found: LoomObject3D | undefined;
+        root.traverse((obj: any) => {
+          if (found) return; // Already found
+          if (obj.name && obj.name.startsWith(fullName)) {
+            const suffix = obj.name.slice(fullName.length);
+            // Match if suffix is empty or matches the pattern
+            if (suffix === '' || suffixRegex.test(suffix)) {
+              found = obj;
+            }
+          }
+        });
+        if (found) return found;
+      }
+
+      // Fallback: try without prefix (for configs that don't use prefix)
+      if (prefix) {
+        const noPrefix = root.getObjectByName(baseName);
+        if (noPrefix) return noPrefix;
+      }
+
+      return undefined;
     };
 
     for (const [key, nodeName] of Object.entries(this.config.boneNodes)) {
@@ -1934,28 +1974,298 @@ export class LoomLargeThree implements LoomLarge {
    * This builds keyframe tracks for each AU/morph in the curves,
    * creating a clip that can be played via the AnimationMixer.
    *
+   * Strategy:
+   * - Morph targets are animated via NumberKeyframeTrack
+   * - Composite bone rotations are animated via QuaternionKeyframeTrack
+   * - Bone translations use NumberKeyframeTrack on position axes
+   *
    * @param clipName - Unique name for the clip
    * @param curves - Map of AU IDs or morph names to keyframe arrays
    * @param options - Playback options (loop, playbackRate, etc.)
    * @returns The constructed AnimationClip, or null if curves are empty
-   *
-   * TODO: Currently returns null - implement actual clip construction
    */
   snippetToClip(
     clipName: string,
     curves: CurvesMap,
     options?: ClipOptions
   ): AnimationClip | null {
-    // TODO: Implement clip construction from curves
-    // This should:
-    // 1. For each curve, determine if it's an AU or morph
-    // 2. For AUs, resolve to morph targets and bone rotations
-    // 3. Build NumberKeyframeTrack for each morph target
-    // 4. Build QuaternionKeyframeTrack for bone rotations
-    // 5. Return new AnimationClip(clipName, duration, tracks)
+    if (!this.model || Object.keys(curves).length === 0) {
+      return null;
+    }
 
-    console.warn(`[LoomLarge] snippetToClip not yet implemented for "${clipName}"`);
-    return null;
+    const tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack> = [];
+    const intensityScale = options?.intensityScale ?? 1.0;
+    const balance = options?.balance ?? 0;
+    let maxTime = 0;
+
+    // Helper to check if a curve ID is a numeric AU
+    const isNumericAU = (id: string) => /^\d+$/.test(id);
+
+    // Helper to check if a curve ID is a viseme index (0-14)
+    const isVisemeIndex = (id: string) => {
+      const num = Number(id);
+      return !Number.isNaN(num) && num >= 0 && num < this.config.visemeKeys.length;
+    };
+
+    const sampleAt = (arr: Array<{ time: number; intensity: number }>, t: number) => {
+      if (!arr.length) return 0;
+      if (t <= arr[0].time) return arr[0].intensity;
+      if (t >= arr[arr.length - 1].time) return arr[arr.length - 1].intensity;
+      for (let i = 0; i < arr.length - 1; i++) {
+        const a = arr[i];
+        const b = arr[i + 1];
+        if (t >= a.time && t <= b.time) {
+          const dt = Math.max(1e-6, b.time - a.time);
+          const p = (t - a.time) / dt;
+          return a.intensity + (b.intensity - a.intensity) * p;
+        }
+      }
+      return 0;
+    };
+
+    const sampleCurve = (curveId: string, t: number) => {
+      const arr = curves[curveId];
+      if (!arr) return 0;
+      return clamp01(sampleAt(arr, t) * intensityScale);
+    };
+
+    const keyframeTimes = (() => {
+      const times = new Set<number>();
+      Object.values(curves).forEach((arr) => {
+        arr.forEach((kf) => times.add(kf.time));
+      });
+      return Array.from(times).sort((a, b) => a - b);
+    })();
+
+    // Process each curve
+    for (const [curveId, keyframes] of Object.entries(curves)) {
+      if (!keyframes || keyframes.length === 0) continue;
+
+      // Track max time for clip duration
+      const curveMaxTime = keyframes[keyframes.length - 1].time;
+      if (curveMaxTime > maxTime) maxTime = curveMaxTime;
+
+      // Determine what type of curve this is
+      if (isNumericAU(curveId)) {
+        const auId = Number(curveId);
+
+        // Check if this is a viseme index (0-14) - these map to viseme morphs
+        if (isVisemeIndex(curveId)) {
+          const visemeKey = this.config.visemeKeys[auId];
+          if (visemeKey) {
+            this.addMorphTracks(tracks, visemeKey, keyframes, intensityScale);
+          }
+        } else {
+          // Regular AU - resolve to morph targets
+          const morphKeys = this.config.auToMorphs[auId] || [];
+          const mixWeight = this.isMixedAU(auId) ? this.getAUMixWeight(auId) : 1.0;
+
+          for (const morphKey of morphKeys) {
+            // Apply balance for L/R morphs
+            let effectiveScale = intensityScale * mixWeight;
+            if (balance !== 0) {
+              const isLeft = /(_L$| L$|Left$)/i.test(morphKey);
+              const isRight = /(_R$| R$|Right$)/i.test(morphKey);
+              if (isLeft && balance > 0) effectiveScale *= (1 - balance);
+              if (isRight && balance < 0) effectiveScale *= (1 + balance);
+            }
+
+            this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale);
+          }
+
+        }
+      } else {
+        // Direct morph name (e.g., 'Brow_Drop_L', 'viseme_aa', etc.)
+        this.addMorphTracks(tracks, curveId, keyframes, intensityScale);
+      }
+    }
+
+    // Build composite bone rotation tracks (QuaternionKeyframeTrack)
+    if (keyframeTimes.length > 0) {
+      const hasCurveAU = new Set<number>(
+        Object.keys(curves)
+          .filter(isNumericAU)
+          .map((id) => Number(id))
+      );
+
+      const getAxisBinding = (
+        nodeKey: BoneKey,
+        axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
+        axisValue: number,
+        t: number
+      ) => {
+        if (!axisConfig) return null;
+
+        if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
+          const auId = axisValue < 0 ? axisConfig.negative : axisConfig.positive;
+          return this.config.auToBones[auId]?.find((b) => b.node === nodeKey) ?? null;
+        }
+
+        if (axisConfig.aus.length > 1) {
+          let maxAU = axisConfig.aus[0];
+          let maxVal = sampleCurve(String(maxAU), t);
+          for (const auId of axisConfig.aus) {
+            const val = sampleCurve(String(auId), t);
+            if (val > maxVal) {
+              maxVal = val;
+              maxAU = auId;
+            }
+          }
+          return this.config.auToBones[maxAU]?.find((b) => b.node === nodeKey) ?? null;
+        }
+
+        const auId = axisConfig.aus[0];
+        return this.config.auToBones[auId]?.find((b) => b.node === nodeKey) ?? null;
+      };
+
+      const getAxisValue = (
+        axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
+        t: number
+      ) => {
+        if (!axisConfig) return 0;
+
+        if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
+          const posValue = sampleCurve(String(axisConfig.positive), t);
+          const negValue = sampleCurve(String(axisConfig.negative), t);
+          return posValue - negValue;
+        }
+
+        if (axisConfig.aus.length > 1) {
+          let maxVal = 0;
+          for (const auId of axisConfig.aus) {
+            const val = sampleCurve(String(auId), t);
+            if (val > maxVal) maxVal = val;
+          }
+          return maxVal;
+        }
+
+        return sampleCurve(String(axisConfig.aus[0]), t);
+      };
+
+      const isLeftNode = (nodeKey: string) => /_L$|_L_|^GILL_L/.test(nodeKey);
+      const isRightNode = (nodeKey: string) => /_R$|_R_|^GILL_R/.test(nodeKey);
+
+      for (const composite of this.compositeRotations) {
+        const nodeKey = composite.node as BoneKey;
+        const entry = this.bones[nodeKey];
+        if (!entry) continue;
+
+        const hasRelevantAU = [composite.pitch, composite.yaw, composite.roll]
+          .filter(Boolean)
+          .some((axisConfig) => axisConfig!.aus.some((auId) => hasCurveAU.has(auId)));
+
+        if (!hasRelevantAU) continue;
+
+        const values: number[] = [];
+
+        for (const t of keyframeTimes) {
+          const compositeQ = new Quaternion().copy(entry.baseQuat);
+
+          const applyAxis = (
+            axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll']
+          ) => {
+            if (!axisConfig) return;
+            let axisValue = getAxisValue(axisConfig, t);
+            if (Math.abs(axisValue) <= 1e-6) return;
+
+            const sign = axisValue < 0 ? -1 : 1;
+            const { left, right } = this.computeSideValues(Math.abs(axisValue), balance);
+            if (isLeftNode(nodeKey)) axisValue = sign * left;
+            if (isRightNode(nodeKey)) axisValue = sign * right;
+
+            const binding = getAxisBinding(nodeKey, axisConfig, axisValue, t);
+            if (!binding?.maxDegrees || !binding.channel) return;
+
+            const radians = deg2rad(binding.maxDegrees) * Math.abs(axisValue) * binding.scale;
+            const axis = binding.channel === 'rx' ? X_AXIS : binding.channel === 'ry' ? Y_AXIS : Z_AXIS;
+            const deltaQ = new Quaternion().setFromAxisAngle(axis, radians);
+            compositeQ.multiply(deltaQ);
+          };
+
+          applyAxis(composite.yaw);
+          applyAxis(composite.pitch);
+          applyAxis(composite.roll);
+
+          values.push(compositeQ.x, compositeQ.y, compositeQ.z, compositeQ.w);
+        }
+
+        const trackName = `${entry.obj.name}.quaternion`;
+        tracks.push(new QuaternionKeyframeTrack(trackName, keyframeTimes, values));
+      }
+
+      // Translation-only bone bindings (tx/ty/tz)
+      for (const curveId of Object.keys(curves)) {
+        if (!isNumericAU(curveId)) continue;
+        const auId = Number(curveId);
+        const bindings = this.config.auToBones[auId] || [];
+        const curve = curves[curveId];
+        if (!curve || curve.length === 0) continue;
+
+        for (const binding of bindings) {
+          if (binding.channel !== 'tx' && binding.channel !== 'ty' && binding.channel !== 'tz') continue;
+          const entry = this.bones[binding.node as BoneKey];
+          if (!entry || binding.maxUnits === undefined) continue;
+
+          const axisIndex: 'x' | 'y' | 'z' = binding.channel === 'tx' ? 'x' : binding.channel === 'ty' ? 'y' : 'z';
+          const basePos = entry.basePos[axisIndex];
+          const values: number[] = [];
+
+          for (const t of keyframeTimes) {
+            const v = sampleCurve(curveId, t);
+            const delta = v * binding.maxUnits * binding.scale;
+            values.push(basePos + delta);
+          }
+
+          const trackName = `${entry.obj.name}.position[${axisIndex}]`;
+          tracks.push(new NumberKeyframeTrack(trackName, keyframeTimes, values));
+        }
+      }
+    }
+
+    if (tracks.length === 0) {
+      console.warn(`[LoomLarge] snippetToClip: No tracks created for "${clipName}"`);
+      return null;
+    }
+
+    // Create the clip with calculated duration
+    const clip = new AnimationClip(clipName, maxTime, tracks);
+    console.log(`[LoomLarge] snippetToClip: Created clip "${clipName}" with ${tracks.length} tracks, duration ${maxTime.toFixed(2)}s`);
+
+    return clip;
+  }
+
+  /**
+   * Add NumberKeyframeTrack(s) for a morph target across all meshes that have it.
+   */
+  private addMorphTracks(
+    tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack>,
+    morphKey: string,
+    keyframes: Array<{ time: number; intensity: number }>,
+    intensityScale: number
+  ): void {
+    // Find all meshes that have this morph target
+    for (const mesh of this.meshes) {
+      const dict = mesh.morphTargetDictionary;
+      if (!dict || dict[morphKey] === undefined) continue;
+
+      const morphIndex = dict[morphKey];
+
+      // Build times and values arrays
+      const times: number[] = [];
+      const values: number[] = [];
+
+      for (const kf of keyframes) {
+        times.push(kf.time);
+        values.push(clamp01(kf.intensity * intensityScale));
+      }
+
+      // Create the track with the proper path format for morph targets
+      // Format: "meshName.morphTargetInfluences[index]"
+      const trackName = `${mesh.name}.morphTargetInfluences[${morphIndex}]`;
+      const track = new NumberKeyframeTrack(trackName, times, values);
+
+      tracks.push(track);
+    }
   }
 
   /**
@@ -1964,24 +2274,88 @@ export class LoomLargeThree implements LoomLarge {
    * @param clip - The AnimationClip to play
    * @param options - Playback options
    * @returns ClipHandle for controlling playback, or null if mixer not ready
-   *
-   * TODO: Currently returns null - implement actual clip playback
    */
   playClip(clip: AnimationClip, options?: ClipOptions): ClipHandle | null {
+    // Ensure mixer exists (create if needed)
+    if (!this.animationMixer && this.model) {
+      this.animationMixer = new AnimationMixer(this.model as any);
+    }
+
     if (!this.animationMixer) {
-      console.warn('[LoomLarge] AnimationMixer not initialized');
+      console.warn('[LoomLarge] playClip: No model loaded, cannot create mixer');
       return null;
     }
 
-    // TODO: Implement clip playback
-    // This should:
-    // 1. Create an AnimationAction from the clip
-    // 2. Configure loop mode, playback rate, etc.
-    // 3. Start playing
-    // 4. Return a ClipHandle with control methods
+    const {
+      loop = false,
+      playbackRate = 1.0,
+    } = options || {};
 
-    console.warn(`[LoomLarge] playClip not yet implemented for "${clip.name}"`);
-    return null;
+    // Create action from clip
+    const action = this.animationMixer.clipAction(clip);
+
+    // Configure action
+    action.setEffectiveTimeScale(playbackRate);
+    action.setEffectiveWeight(1.0);
+    action.clampWhenFinished = !loop;
+
+    // Set loop mode
+    if (loop) {
+      action.setLoop(LoopRepeat, Infinity);
+    } else {
+      action.setLoop(LoopOnce, 1);
+    }
+
+    // Track for finished callback
+    let resolveFinished: () => void;
+    let rejectFinished: (reason?: any) => void;
+    const finishedPromise = new Promise<void>((resolve, reject) => {
+      resolveFinished = resolve;
+      rejectFinished = reject;
+    });
+
+    // Store callback for non-looping clips
+    if (!loop) {
+      this.animationFinishedCallbacks.set(clip.name, () => resolveFinished());
+    }
+
+    // Reset and play
+    action.reset();
+    action.play();
+
+    console.log(`[LoomLarge] playClip: Playing "${clip.name}" (rate: ${playbackRate}, loop: ${loop})`);
+
+    // Build ClipHandle
+    const handle: ClipHandle = {
+      clipName: clip.name,
+
+      play: () => {
+        action.reset();
+        action.play();
+      },
+
+      stop: () => {
+        action.stop();
+        this.animationFinishedCallbacks.delete(clip.name);
+        rejectFinished(new Error('Clip stopped'));
+      },
+
+      pause: () => {
+        action.paused = true;
+      },
+
+      resume: () => {
+        action.paused = false;
+      },
+
+      getTime: () => action.time,
+
+      getDuration: () => clip.duration,
+
+      finished: finishedPromise,
+    };
+
+    return handle;
   }
 
   /**
@@ -2012,12 +2386,14 @@ export class LoomLargeThree implements LoomLarge {
    * This is the method that the animation scheduler looks for.
    * When available, the scheduler uses this instead of per-keyframe transitions.
    *
+   * Note: This handles MORPH TARGET animations via the Three.js mixer.
+   * Bone rotations are still handled by the RAF-based transition system
+   * since converting AU curves to quaternion keyframes is complex.
+   *
    * @param clipName - Unique name for the clip
    * @param curves - Map of curve IDs to keyframe arrays
    * @param options - Playback options
-   * @returns ClipHandle or null if not supported
-   *
-   * TODO: Currently returns null - scheduler will fall back to legacy path
+   * @returns ClipHandle or null if no morph tracks could be created
    */
   buildClip(
     clipName: string,

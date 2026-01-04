@@ -14,8 +14,9 @@ export type {
   LoomObject3D,
   ReadyPayload,
   LoomLargeConfig,
-  MeshInfo,
 } from './LoomLarge';
+
+export type { MeshInfo } from '../mappings/types';
 
 export type { Animation } from './Animation';
 

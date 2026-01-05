@@ -200,6 +200,8 @@ export interface ClipOptions {
   jawScale?: number;
   /** Intensity scale multiplier (default: 1.0) */
   intensityScale?: number;
+  /** Snippet category - when 'visemeSnippet', numeric curve IDs (0-14) are viseme indices; otherwise they're AU IDs */
+  snippetCategory?: 'auSnippet' | 'visemeSnippet';
 }
 
 /**

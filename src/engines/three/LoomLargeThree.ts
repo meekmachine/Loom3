@@ -7,7 +7,6 @@
  */
 
 import {
-  Clock,
   Quaternion,
   Vector3,
   AnimationMixer,
@@ -130,10 +129,6 @@ export class LoomLargeThree implements LoomLarge {
   // Viseme state
   private visemeValues: number[] = new Array(15).fill(0);
 
-  // Internal RAF loop
-  private clock = new Clock();
-  private rafId: number | null = null;
-  private running = false;
 
   // Viseme jaw amounts
   private static readonly VISEME_JAW_AMOUNTS: number[] = [
@@ -243,31 +238,11 @@ export class LoomLargeThree implements LoomLarge {
     this.updateHairWindIdle(dtSeconds);
   }
 
-  /** Start the internal RAF loop */
-  start(): void {
-    if (this.running) return;
-    this.running = true;
-    this.clock.start();
+  /** No-op for backwards compatibility - engine is driven externally via update() */
+  start(): void {}
 
-    const tick = () => {
-      if (!this.running) return;
-      const dt = this.clock.getDelta();
-      this.update(dt);
-      this.rafId = requestAnimationFrame(tick);
-    };
-
-    this.rafId = requestAnimationFrame(tick);
-  }
-
-  /** Stop the internal RAF loop */
-  stop(): void {
-    this.running = false;
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
-    }
-    this.clock.stop();
-  }
+  /** No-op for backwards compatibility - use dispose() to clean up */
+  stop(): void {}
 
   dispose(): void {
     this.stop();
@@ -381,12 +356,27 @@ export class LoomLargeThree implements LoomLarge {
 
         // Apply balance for bilateral bone nodes (L/R pattern in node name)
         // This allows balance slider control for bone-only bilateral AUs like fish gills
+        // BUT skip for AUs where both L and R nodes are controlled by the same AU (like eyes)
+        // Eyes: AU 61 controls both EYE_L and EYE_R together
+        // Fish gills: AU 45 controls only GILL_L, AU 46 controls only GILL_R
+        const auBoneBindings = this.config.auToBones[id] || [];
+
+        // Only apply balance if this AU exclusively controls one side
+        const hasOnlyLeftBindings = auBoneBindings.length > 0 && auBoneBindings.every(b => /_L$|_L_|^GILL_L/.test(b.node));
+        const hasOnlyRightBindings = auBoneBindings.length > 0 && auBoneBindings.every(b => /_R$|_R_|^GILL_R/.test(b.node));
+        const isTrueBilateralAU = !hasOnlyLeftBindings && !hasOnlyRightBindings;
+
         const isLeftNode = /_L$|_L_|^GILL_L/.test(nodeKey);
         const isRightNode = /_R$|_R_|^GILL_R/.test(nodeKey);
-        if (isLeftNode) {
-          axisValue = axisValue * (leftVal / clamp01(v || 1));
-        } else if (isRightNode) {
-          axisValue = axisValue * (rightVal / clamp01(v || 1));
+
+        // Only apply balance scaling for unilateral AUs (like fish gills)
+        // For bilateral AUs where one AU controls both sides (like eyes), skip balance
+        if (!isTrueBilateralAU) {
+          if (isLeftNode) {
+            axisValue = axisValue * (leftVal / clamp01(v || 1));
+          } else if (isRightNode) {
+            axisValue = axisValue * (rightVal / clamp01(v || 1));
+          }
         }
 
         this.updateBoneRotation(nodeKey, compositeInfo.axis, axisValue);
@@ -1989,9 +1979,16 @@ export class LoomLargeThree implements LoomLarge {
     curves: CurvesMap,
     options?: ClipOptions
   ): AnimationClip | null {
-    if (!this.model || Object.keys(curves).length === 0) {
+    if (!this.model) {
+      console.warn(`[LoomLarge] snippetToClip: No model loaded for "${clipName}"`);
       return null;
     }
+    if (Object.keys(curves).length === 0) {
+      console.warn(`[LoomLarge] snippetToClip: Empty curves for "${clipName}"`);
+      return null;
+    }
+    console.log(`[LoomLarge] snippetToClip: Building "${clipName}" with ${Object.keys(curves).length} curves, category=${options?.snippetCategory}`);
+    console.log(`[LoomLarge] snippetToClip: Curve IDs:`, Object.keys(curves));
 
     const tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack> = [];
     const intensityScale = options?.intensityScale ?? 1.0;
@@ -2002,7 +1999,9 @@ export class LoomLargeThree implements LoomLarge {
     const isNumericAU = (id: string) => /^\d+$/.test(id);
 
     // Helper to check if a curve ID is a viseme index (0-14)
+    // ONLY returns true when snippetCategory is 'visemeSnippet' - otherwise numeric IDs are AU IDs
     const isVisemeIndex = (id: string) => {
+      if (options?.snippetCategory !== 'visemeSnippet') return false;
       const num = Number(id);
       return !Number.isNaN(num) && num >= 0 && num < this.config.visemeKeys.length;
     };
@@ -2189,7 +2188,9 @@ export class LoomLargeThree implements LoomLarge {
           values.push(compositeQ.x, compositeQ.y, compositeQ.z, compositeQ.w);
         }
 
-        const trackName = `${entry.obj.name}.quaternion`;
+        // Use UUID to avoid issues with dots in bone names (e.g., "Bone.001_Armature")
+        // Three.js PropertyBinding uses dots as path separators, so names with dots fail
+        const trackName = `${(entry.obj as any).uuid}.quaternion`;
         tracks.push(new QuaternionKeyframeTrack(trackName, keyframeTimes, values));
       }
 
@@ -2216,7 +2217,8 @@ export class LoomLargeThree implements LoomLarge {
             values.push(basePos + delta);
           }
 
-          const trackName = `${entry.obj.name}.position[${axisIndex}]`;
+          // Use UUID to avoid issues with dots in bone names
+          const trackName = `${(entry.obj as any).uuid}.position[${axisIndex}]`;
           tracks.push(new NumberKeyframeTrack(trackName, keyframeTimes, values));
         }
       }
@@ -2260,8 +2262,8 @@ export class LoomLargeThree implements LoomLarge {
       }
 
       // Create the track with the proper path format for morph targets
-      // Format: "meshName.morphTargetInfluences[index]"
-      const trackName = `${mesh.name}.morphTargetInfluences[${morphIndex}]`;
+      // Use UUID to avoid issues with dots in mesh names (PropertyBinding uses dots as path separators)
+      const trackName = `${(mesh as any).uuid}.morphTargetInfluences[${morphIndex}]`;
       const track = new NumberKeyframeTrack(trackName, times, values);
 
       tracks.push(track);

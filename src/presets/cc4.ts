@@ -167,12 +167,12 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
     { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 32 },
   ],
   63: [
-    { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 32 },  // Eyes Up
-    { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 32 },
+    { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 25 },  // Eyes Up
+    { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 25 },
   ],
   64: [
-    { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 32 },   // Eyes Down
-    { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 32 },
+    { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 25 },   // Eyes Down
+    { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 25 },
   ],
   // Single-eye (Left) — horizontal (rz for CC4) and vertical (rx)
   65: [ { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 15 } ],

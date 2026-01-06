@@ -140,22 +140,22 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
   // Head turn and tilt (M51-M56) - use HEAD bone only (NECK should not rotate with head)
   // Axis is derived from COMPOSITE_ROTATIONS, not stored here
   51: [
-    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 45 },   // Head turn left
+    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 65 },   // Head turn left
   ],
   52: [
-    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 45 },  // Head turn right
+    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 65 },  // Head turn right
   ],
   53: [
-    { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 30 },  // Head up
+    { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 40 },  // Head up
   ],
   54: [
-    { node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 30 },   // Head down
+    { node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 40 },   // Head down
   ],
   55: [
-    { node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 25 },  // Head tilt left
+    { node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 35 },  // Head tilt left
   ],
   56: [
-    { node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 25 },   // Head tilt right
+    { node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 35 },   // Head tilt right
   ],
   // Eyes - CC4 rigs use rz for horizontal, rx for vertical
   61: [

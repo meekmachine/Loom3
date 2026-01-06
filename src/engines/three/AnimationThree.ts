@@ -22,6 +22,12 @@ type Transition = {
 
 const easeInOutQuad = (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
 
+// Smoother cubic easing - better for viseme transitions
+const easeInOutCubic = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+// Export easing functions for external use
+export { easeInOutQuad, easeInOutCubic };
+
 export class AnimationThree implements Animation {
   private transitions = new Map<string, Transition>();
 

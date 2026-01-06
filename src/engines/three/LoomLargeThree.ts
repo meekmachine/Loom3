@@ -9,6 +9,7 @@
 import {
   Quaternion,
   Vector3,
+  Box3,
   AnimationMixer,
   AnimationAction,
   AnimationClip,
@@ -117,6 +118,7 @@ export class LoomLargeThree implements LoomLarge {
 
   // Mesh references
   private faceMesh: LoomMesh | null = null;
+  private resolvedFaceMeshes: string[] = [];
   private meshes: LoomMesh[] = [];
   private model: LoomObject3D | null = null;
   private meshByName = new Map<string, LoomMesh>();
@@ -184,7 +186,19 @@ export class LoomLargeThree implements LoomLarge {
   onReady(payload: ReadyPayload): void {
     const { meshes, model } = payload;
 
-    this.meshes = meshes;
+    const collectedMeshes = collectMorphMeshes(model);
+    const meshByKey = new Map<string, LoomMesh>();
+    const addMesh = (mesh: LoomMesh) => {
+      const key = mesh.name || (mesh as any).uuid;
+      if (!meshByKey.has(key)) {
+        meshByKey.set(key, mesh);
+      }
+    };
+
+    meshes.forEach(addMesh);
+    collectedMeshes.forEach(addMesh);
+
+    this.meshes = Array.from(meshByKey.values());
     this.model = model;
     this.meshByName.clear();
     this.morphCache.clear();
@@ -193,24 +207,12 @@ export class LoomLargeThree implements LoomLarge {
     model.traverse((obj: any) => {
       if (obj.isMesh && obj.name) {
         const infl = obj.morphTargetInfluences;
-        if (Array.isArray(infl) && infl.length > 0) {
+        const dict = obj.morphTargetDictionary;
+        if ((Array.isArray(infl) && infl.length > 0) || (dict && Object.keys(dict).length > 0)) {
           this.meshByName.set(obj.name, obj);
         }
       }
     });
-
-    // Find primary face mesh
-    const faceMeshNames = this.config.morphToMesh?.face || [];
-    const defaultFace = meshes.find((m) => faceMeshNames.includes(m.name));
-    if (defaultFace) {
-      this.faceMesh = defaultFace;
-    } else {
-      const candidate = meshes.find((m) => {
-        const dict = m.morphTargetDictionary;
-        return dict && typeof dict === 'object' && 'Brow_Drop_L' in dict;
-      });
-      this.faceMesh = candidate || null;
-    }
 
     // Resolve bones
     this.bones = this.resolveBones(model);
@@ -218,8 +220,97 @@ export class LoomLargeThree implements LoomLarge {
     this.missingBoneWarnings.clear();
     this.initBoneRotations();
 
+    // Find primary face mesh (use head bone proximity when available)
+    this.resolvedFaceMeshes = this.resolveFaceMeshes(this.meshes);
+    this.faceMesh = this.resolvedFaceMeshes.length > 0
+      ? this.meshByName.get(this.resolvedFaceMeshes[0]) || null
+      : null;
+
+    if (this.resolvedFaceMeshes.length > 0) {
+      this.config.morphToMesh = {
+        ...this.config.morphToMesh,
+        face: this.resolvedFaceMeshes,
+      };
+    }
+
+    if (this.resolvedFaceMeshes.length > 0) {
+      for (const faceName of this.resolvedFaceMeshes) {
+        const faceMesh = this.meshByName.get(faceName);
+        const morphKeys = faceMesh?.morphTargetDictionary
+          ? Object.keys(faceMesh.morphTargetDictionary)
+          : [];
+        console.log('[LoomLargeThree] Face mesh resolved:', faceName);
+        console.log('[LoomLargeThree] Face mesh morphs:', morphKeys);
+      }
+    } else {
+      console.log('[LoomLargeThree] No face mesh resolved from morph targets.');
+    }
+
     // Apply render order and material settings from CC4_MESHES
     this.applyMeshMaterialSettings(model);
+  }
+
+  private resolveFaceMeshes(meshes: LoomMesh[]): string[] {
+    const faceMeshNames = this.config.morphToMesh?.face || [];
+    const availableMorphMeshes = meshes.filter((m) => {
+      const dict = m.morphTargetDictionary;
+      const infl = m.morphTargetInfluences;
+      return (dict && Object.keys(dict).length > 0) || (Array.isArray(infl) && infl.length > 0);
+    });
+    const defaultFace = meshes.find((m) => faceMeshNames.includes(m.name));
+    if (defaultFace) {
+      return [defaultFace.name];
+    }
+
+    const candidateByMorph = meshes.find((m) => {
+      const dict = m.morphTargetDictionary;
+      return dict && typeof dict === 'object' && 'Brow_Drop_L' in dict;
+    });
+    if (candidateByMorph) {
+      return [candidateByMorph.name];
+    }
+
+    const head = this.bones['HEAD']?.obj;
+    if (head && availableMorphMeshes.length > 0) {
+      const headPos = new Vector3();
+      head.getWorldPosition(headPos);
+      const headCandidates = availableMorphMeshes.map((mesh) => {
+        const box = new Box3().setFromObject(mesh as any);
+        const center = new Vector3();
+        box.getCenter(center);
+        const distance = box.containsPoint(headPos) ? 0 : center.distanceTo(headPos);
+        const morphCount = mesh.morphTargetDictionary
+          ? Object.keys(mesh.morphTargetDictionary).length
+          : 0;
+        const name = mesh.name.toLowerCase();
+        const penalty = /eye|occlusion|tear|teeth|tongue|hair|lash/.test(name) ? 10 : 0;
+        return { name: mesh.name, distance, morphCount, penalty };
+      });
+
+      headCandidates.sort((a, b) => {
+        if (a.distance !== b.distance) return a.distance - b.distance;
+        if (a.penalty !== b.penalty) return a.penalty - b.penalty;
+        return b.morphCount - a.morphCount;
+      });
+
+      const best = headCandidates[0];
+      const extras = headCandidates
+        .filter((entry) => /brow|eyebrow/.test(entry.name.toLowerCase()))
+        .map((entry) => entry.name);
+
+      return [best.name, ...extras].filter((value, index, arr) => arr.indexOf(value) === index);
+    }
+
+    if (availableMorphMeshes.length > 0) {
+      const best = availableMorphMeshes.reduce((prev, current) => {
+        const prevCount = prev.morphTargetDictionary ? Object.keys(prev.morphTargetDictionary).length : 0;
+        const currCount = current.morphTargetDictionary ? Object.keys(current.morphTargetDictionary).length : 0;
+        return currCount > prevCount ? current : prev;
+      });
+      return [best.name];
+    }
+
+    return [];
   }
 
   update(deltaSeconds: number): void {
@@ -2466,7 +2557,9 @@ export function collectMorphMeshes(root: LoomObject3D): LoomMesh[] {
   const meshes: LoomMesh[] = [];
   root.traverse((obj: any) => {
     if (obj.isMesh) {
-      if (Array.isArray(obj.morphTargetInfluences) && obj.morphTargetInfluences.length > 0) {
+      const dict = obj.morphTargetDictionary;
+      const infl = obj.morphTargetInfluences;
+      if ((dict && Object.keys(dict).length > 0) || (Array.isArray(infl) && infl.length > 0)) {
         meshes.push(obj);
       }
     }

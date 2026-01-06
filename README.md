@@ -2,9 +2,9 @@
 
 The missing character control pluging for ThreeJS, allowing you to bring all your humaniod, and even animal,characters to life. Loom3 is based on the Facial Action Coding System (facs) as the basis of its mappings, thus suppoting morph and bone mapping library for controlling high-definition 3D characters in Three.js.
 
-LoomLarge provides pre-built mappings that connect [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units to the morph targets and bone transforms found in Character Creator 4 (CC4) characters. Instead of manually figuring out which blend shapes correspond to which facial movements, you can simply say `setAU(12, 0.8)` and the library handles the rest.
+Loom3 provides pre-built mappings that connect [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units to the morph targets and bone transforms found in Character Creator 4 (CC4) characters. Instead of manually figuring out which blend shapes correspond to which facial movements, you can simply say `setAU(12, 0.8)` and the library handles the rest.
 
-> **Screenshot placeholder:** Add a hero image showing a character with facial expressions controlled by LoomLarge
+> **Screenshot placeholder:** Add a hero image showing a character with facial expressions controlled by Loom3
 
 ---
 
@@ -30,17 +30,17 @@ LoomLarge provides pre-built mappings that connect [Facial Action Coding System 
 
 ## 1. Installation & Setup
 
-> **Screenshot placeholder:** Add a screenshot of a project structure with LoomLarge installed
+> **Screenshot placeholder:** Add a screenshot of a project structure with Loom3 installed
 
 ### Install the package
 
 ```bash
-npm install loomlarge
+npm install loom3
 ```
 
 ### Peer dependency
 
-LoomLarge requires Three.js as a peer dependency:
+Loom3 requires Three.js as a peer dependency:
 
 ```bash
 npm install three
@@ -51,10 +51,10 @@ npm install three
 ```typescript
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { LoomLargeThree, collectMorphMeshes, CC4_PRESET } from 'loomlarge';
+import { Loom3Three, collectMorphMeshes, CC4_PRESET } from 'loom3';
 
-// 1. Create the LoomLarge controller with a preset
-const loom = new LoomLargeThree({ auMappings: CC4_PRESET });
+// 1. Create the Loom3 controller with a preset
+const loom = new Loom3Three({ auMappings: CC4_PRESET });
 
 // 2. Set up your Three.js scene
 const scene = new THREE.Scene();
@@ -71,7 +71,7 @@ loader.load('/character.glb', (gltf) => {
   // 4. Collect all meshes that have morph targets
   const meshes = collectMorphMeshes(gltf.scene);
 
-  // 5. Initialize LoomLarge with the meshes and model
+  // 5. Initialize Loom3 with the meshes and model
   loom.onReady({ meshes, model: gltf.scene });
 });
 
@@ -116,10 +116,10 @@ await loom.transitionAU(12, 0, 300).promise;
 
 ### The `collectMorphMeshes` helper
 
-This utility function traverses a Three.js scene and returns all meshes that have `morphTargetInfluences` (i.e., blend shapes). It's the recommended way to gather meshes for LoomLarge:
+This utility function traverses a Three.js scene and returns all meshes that have `morphTargetInfluences` (i.e., blend shapes). It's the recommended way to gather meshes for Loom3:
 
 ```typescript
-import { collectMorphMeshes } from 'loomlarge';
+import { collectMorphMeshes } from 'loom3';
 
 const meshes = collectMorphMeshes(gltf.scene);
 // Returns: Array of THREE.Mesh objects with morph targets
@@ -133,12 +133,12 @@ const meshes = collectMorphMeshes(gltf.scene);
 
 > **Screenshot placeholder:** Add a diagram showing how presets connect AUs to morphs and bones
 
-Presets define how FACS Action Units map to your character's morph targets and bones. LoomLarge ships with `CC4_PRESET` for Character Creator 4 characters.
+Presets define how FACS Action Units map to your character's morph targets and bones. Loom3 ships with `CC4_PRESET` for Character Creator 4 characters.
 
 ### What's in a preset?
 
 ```typescript
-import { CC4_PRESET } from 'loomlarge';
+import { CC4_PRESET } from 'loom3';
 
 // CC4_PRESET contains:
 {
@@ -199,12 +199,12 @@ import { CC4_PRESET } from 'loomlarge';
 }
 ```
 
-### Passing a preset to LoomLarge
+### Passing a preset to Loom3
 
 ```typescript
-import { LoomLargeThree, CC4_PRESET } from 'loomlarge';
+import { Loom3Three, CC4_PRESET } from 'loom3';
 
-const loom = new LoomLargeThree({ auMappings: CC4_PRESET });
+const loom = new Loom3Three({ auMappings: CC4_PRESET });
 ```
 
 > **Screenshot placeholder:** Add a screenshot showing the preset being applied to a character
@@ -215,7 +215,7 @@ const loom = new LoomLargeThree({ auMappings: CC4_PRESET });
 
 > **Screenshot placeholder:** Add a screenshot of the console output showing mesh and morph target information
 
-Before customizing presets or extending mappings, it's helpful to understand what's actually in your character model. LoomLarge provides several methods to inspect meshes, morph targets, and bones.
+Before customizing presets or extending mappings, it's helpful to understand what's actually in your character model. Loom3 provides several methods to inspect meshes, morph targets, and bones.
 
 ### Listing meshes
 
@@ -329,7 +329,7 @@ This is especially useful for:
 Use spread syntax to override specific mappings while keeping the rest:
 
 ```typescript
-import { CC4_PRESET } from 'loomlarge';
+import { CC4_PRESET } from 'loom3';
 
 const MY_PRESET = {
   ...CC4_PRESET,
@@ -353,13 +353,13 @@ const MY_PRESET = {
   },
 };
 
-const loom = new LoomLargeThree({ auMappings: MY_PRESET });
+const loom = new Loom3Three({ auMappings: MY_PRESET });
 ```
 
 ### Creating a preset from scratch
 
 ```typescript
-import { AUMappingConfig } from 'loomlarge';
+import { AUMappingConfig } from 'loom3';
 
 const CUSTOM_PRESET: AUMappingConfig = {
   auToMorphs: {
@@ -405,7 +405,7 @@ const current = loom.getAUMappings();
 
 > **Screenshot placeholder:** Add a screenshot showing the fish model with labeled bones
 
-LoomLarge isn't limited to humanoid characters with morph targets. You can create presets for any 3D model that uses skeletal animation, such as fish, animals, or fantasy creatures. This section explains how to create a preset for a betta fish model that has no morph targets—only bone-driven animation.
+Loom3 isn't limited to humanoid characters with morph targets. You can create presets for any 3D model that uses skeletal animation, such as fish, animals, or fantasy creatures. This section explains how to create a preset for a betta fish model that has no morph targets—only bone-driven animation.
 
 ### Understanding skeletal-only models
 
@@ -419,7 +419,7 @@ Some models (like fish) rely entirely on bone rotations for animation:
 Here's a complete example of a preset for a betta fish:
 
 ```typescript
-import type { BoneBinding, AUInfo, CompositeRotation } from 'loomlarge';
+import type { BoneBinding, AUInfo, CompositeRotation } from 'loom3';
 
 // Define semantic bone mappings
 export const FISH_BONE_NODES = {
@@ -624,10 +624,10 @@ export const FISH_AU_MAPPING_CONFIG = {
 ### Using the fish preset
 
 ```typescript
-import { LoomLargeThree } from 'loomlarge';
+import { Loom3Three } from 'loom3';
 import { FISH_AU_MAPPING_CONFIG, FishAction } from './presets/bettaFish';
 
-const fishController = new LoomLargeThree({
+const fishController = new Loom3Three({
   auMappings: FISH_AU_MAPPING_CONFIG
 });
 
@@ -796,7 +796,7 @@ Only AUs that have both `auToMorphs` AND `auToBones` entries support mixing. Com
 - AU61-64 (Eye movements)
 
 ```typescript
-import { isMixedAU } from 'loomlarge';
+import { isMixedAU } from 'loom3';
 
 if (isMixedAU(26)) {
   console.log('AU26 supports morph/bone mixing');
@@ -813,7 +813,7 @@ Bones like the head and eyes need multi-axis rotation (pitch, yaw, roll). The co
 
 ### How it works
 
-When you set an AU that affects a bone rotation, LoomLarge:
+When you set an AU that affects a bone rotation, Loom3:
 1. Queues the rotation update in `pendingCompositeNodes`
 2. At the end of `update()`, calls `flushPendingComposites()`
 3. Applies all three axes (pitch, yaw, roll) together to prevent gimbal issues
@@ -957,7 +957,7 @@ loom.setAU(52, 0.7);
 You can access pair information programmatically:
 
 ```typescript
-import { CONTINUUM_PAIRS_MAP } from 'loomlarge';
+import { CONTINUUM_PAIRS_MAP } from 'loom3';
 
 const pair = CONTINUUM_PAIRS_MAP[51];
 // { pairId: 52, isNegative: true, axis: 'yaw', node: 'HEAD' }
@@ -1002,7 +1002,7 @@ const value = loom.getMorphValue('Mouth_Smile_L');
 
 ### Morph caching
 
-LoomLarge caches morph target lookups for performance. The first time you access a morph, it searches all meshes and caches the index. Subsequent accesses are O(1).
+Loom3 caches morph target lookups for performance. The first time you access a morph, it searches all meshes and caches the index. Subsequent accesses are O(1).
 
 ---
 
@@ -1010,7 +1010,7 @@ LoomLarge caches morph target lookups for performance. The first time you access
 
 > **Screenshot placeholder:** Add a grid showing all 15 viseme mouth shapes
 
-Visemes are mouth shapes used for lip-sync. LoomLarge includes 15 visemes with automatic jaw coupling.
+Visemes are mouth shapes used for lip-sync. Loom3 includes 15 visemes with automatic jaw coupling.
 
 ### The 15 visemes
 
@@ -1097,7 +1097,7 @@ speak([5, 0, 10, 4]);
 
 > **Screenshot placeholder:** Add a diagram showing transition timeline with easing
 
-All animated changes in LoomLarge go through the transition system, which provides smooth interpolation with easing.
+All animated changes in Loom3 go through the transition system, which provides smooth interpolation with easing.
 
 ### TransitionHandle
 
@@ -1236,12 +1236,12 @@ loom.dispose();
 
 > **Screenshot placeholder:** Add a GIF showing hair physics responding to head movement
 
-LoomLarge includes an experimental hair physics system that simulates hair movement based on head motion.
+Loom3 includes an experimental hair physics system that simulates hair movement based on head motion.
 
 ### Basic setup
 
 ```typescript
-import { HairPhysics } from 'loomlarge';
+import { HairPhysics } from 'loom3';
 
 const hair = new HairPhysics();
 ```
@@ -1314,11 +1314,11 @@ const hair = new HairPhysics({
 
 ## 15. Baked Animations
 
-LoomLarge can play baked skeletal animations from your GLB/GLTF files using Three.js AnimationMixer. This allows you to combine pre-made animations (idle, walk, gestures) with real-time facial control.
+Loom3 can play baked skeletal animations from your GLB/GLTF files using Three.js AnimationMixer. This allows you to combine pre-made animations (idle, walk, gestures) with real-time facial control.
 
 ### Loading animations
 
-After loading your model, pass the animations array to LoomLarge:
+After loading your model, pass the animations array to Loom3:
 
 ```typescript
 const loader = new GLTFLoader();
@@ -1366,6 +1366,27 @@ const handle = loom.playAnimation('Wave', {
 
 // Wait for non-looping animation to finish
 await handle.finished;
+```
+
+### Mixer clip playback for curves
+
+Loom3 can convert AU/morph curves into AnimationMixer clips for smooth, mixer-only playback. This is the preferred path for high-frequency animation agencies (eye/head tracking, visemes, prosody) because it avoids per-keyframe transitions.
+
+Key APIs:
+- `snippetToClip(name, curves, options)` builds an AnimationClip from curves.
+- `playClip(clip, options)` returns a ClipHandle you can pause/resume/stop.
+- `clipHandle.stop()` now resolves cleanly (no rejected promise).
+
+```typescript
+const clip = loom.snippetToClip('gaze', {
+  '61': [{ time: 0, intensity: 0 }, { time: 0.4, intensity: 0.6 }],
+  '62': [{ time: 0, intensity: 0 }, { time: 0.4, intensity: 0 }],
+}, { loop: false });
+
+if (clip) {
+  const handle = loom.playClip(clip, { loop: false, speed: 1 });
+  await handle.finished;
+}
 ```
 
 ### Controlling playback

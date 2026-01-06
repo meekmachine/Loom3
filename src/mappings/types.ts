@@ -106,6 +106,51 @@ export interface AUMappingConfig {
    * Value: Display label (e.g., "Head Turn — Left ↔ Right")
    */
   continuumLabels?: Record<string, string>;
+
+  /**
+   * Optional: Annotation regions for camera/marker overlays.
+   */
+  annotationRegions?: AnnotationRegion[];
+}
+
+/**
+ * Annotation region definition for camera markers.
+ */
+export interface AnnotationRegion {
+  name: string;
+  bones?: string[];
+  meshes?: string[];
+  objects?: string[];
+  paddingFactor?: number;
+  cameraAngle?: number;
+  cameraOffset?: {
+    x?: number;
+    y?: number;
+    z?: number;
+  };
+  parent?: string;
+  children?: string[];
+  expandAnimation?: 'outward' | 'staggered';
+  showChildConnections?: boolean;
+  style?: {
+    markerColor?: number;
+    markerRadius?: number;
+    lineColor?: number;
+    labelColor?: string;
+    labelBackground?: string;
+    labelFontSize?: number;
+    opacity?: number;
+    lineDirection?: 'radial' | 'camera' | 'up' | 'down' | 'left' | 'right' | 'forward' | 'backward' | { x: number; y: number; z: number };
+    line?: {
+      style?: 'solid' | 'dashed' | 'dotted';
+      curve?: 'straight' | 'bezier' | 'arc';
+      arrowHead?: boolean;
+      thickness?: number;
+      length?: number;
+    };
+  };
+  groupId?: string;
+  isFallback?: boolean;
 }
 
 /**

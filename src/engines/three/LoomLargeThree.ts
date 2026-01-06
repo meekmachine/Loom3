@@ -7,9 +7,9 @@
  */
 
 import {
-  Clock,
   Quaternion,
   Vector3,
+  Box3,
   AnimationMixer,
   AnimationAction,
   AnimationClip,
@@ -42,7 +42,7 @@ import type {
   Snippet,
 } from '../../core/types';
 import type { AUMappingConfig } from '../../mappings/types';
-import { AnimationThree } from './AnimationThree';
+import { AnimationThree, easeInOutCubic } from './AnimationThree';
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import type { CompositeRotation, BoneBinding } from '../../core/types';
 
@@ -118,6 +118,7 @@ export class LoomLargeThree implements LoomLarge {
 
   // Mesh references
   private faceMesh: LoomMesh | null = null;
+  private resolvedFaceMeshes: string[] = [];
   private meshes: LoomMesh[] = [];
   private model: LoomObject3D | null = null;
   private meshByName = new Map<string, LoomMesh>();
@@ -130,10 +131,6 @@ export class LoomLargeThree implements LoomLarge {
   // Viseme state
   private visemeValues: number[] = new Array(15).fill(0);
 
-  // Internal RAF loop
-  private clock = new Clock();
-  private rafId: number | null = null;
-  private running = false;
 
   // Viseme jaw amounts
   private static readonly VISEME_JAW_AMOUNTS: number[] = [
@@ -189,7 +186,19 @@ export class LoomLargeThree implements LoomLarge {
   onReady(payload: ReadyPayload): void {
     const { meshes, model } = payload;
 
-    this.meshes = meshes;
+    const collectedMeshes = collectMorphMeshes(model);
+    const meshByKey = new Map<string, LoomMesh>();
+    const addMesh = (mesh: LoomMesh) => {
+      const key = mesh.name || (mesh as any).uuid;
+      if (!meshByKey.has(key)) {
+        meshByKey.set(key, mesh);
+      }
+    };
+
+    meshes.forEach(addMesh);
+    collectedMeshes.forEach(addMesh);
+
+    this.meshes = Array.from(meshByKey.values());
     this.model = model;
     this.meshByName.clear();
     this.morphCache.clear();
@@ -198,24 +207,12 @@ export class LoomLargeThree implements LoomLarge {
     model.traverse((obj: any) => {
       if (obj.isMesh && obj.name) {
         const infl = obj.morphTargetInfluences;
-        if (Array.isArray(infl) && infl.length > 0) {
+        const dict = obj.morphTargetDictionary;
+        if ((Array.isArray(infl) && infl.length > 0) || (dict && Object.keys(dict).length > 0)) {
           this.meshByName.set(obj.name, obj);
         }
       }
     });
-
-    // Find primary face mesh
-    const faceMeshNames = this.config.morphToMesh?.face || [];
-    const defaultFace = meshes.find((m) => faceMeshNames.includes(m.name));
-    if (defaultFace) {
-      this.faceMesh = defaultFace;
-    } else {
-      const candidate = meshes.find((m) => {
-        const dict = m.morphTargetDictionary;
-        return dict && typeof dict === 'object' && 'Brow_Drop_L' in dict;
-      });
-      this.faceMesh = candidate || null;
-    }
 
     // Resolve bones
     this.bones = this.resolveBones(model);
@@ -223,8 +220,97 @@ export class LoomLargeThree implements LoomLarge {
     this.missingBoneWarnings.clear();
     this.initBoneRotations();
 
+    // Find primary face mesh (use head bone proximity when available)
+    this.resolvedFaceMeshes = this.resolveFaceMeshes(this.meshes);
+    this.faceMesh = this.resolvedFaceMeshes.length > 0
+      ? this.meshByName.get(this.resolvedFaceMeshes[0]) || null
+      : null;
+
+    if (this.resolvedFaceMeshes.length > 0) {
+      this.config.morphToMesh = {
+        ...this.config.morphToMesh,
+        face: this.resolvedFaceMeshes,
+      };
+    }
+
+    if (this.resolvedFaceMeshes.length > 0) {
+      for (const faceName of this.resolvedFaceMeshes) {
+        const faceMesh = this.meshByName.get(faceName);
+        const morphKeys = faceMesh?.morphTargetDictionary
+          ? Object.keys(faceMesh.morphTargetDictionary)
+          : [];
+        console.log('[LoomLargeThree] Face mesh resolved:', faceName);
+        console.log('[LoomLargeThree] Face mesh morphs:', morphKeys);
+      }
+    } else {
+      console.log('[LoomLargeThree] No face mesh resolved from morph targets.');
+    }
+
     // Apply render order and material settings from CC4_MESHES
     this.applyMeshMaterialSettings(model);
+  }
+
+  private resolveFaceMeshes(meshes: LoomMesh[]): string[] {
+    const faceMeshNames = this.config.morphToMesh?.face || [];
+    const availableMorphMeshes = meshes.filter((m) => {
+      const dict = m.morphTargetDictionary;
+      const infl = m.morphTargetInfluences;
+      return (dict && Object.keys(dict).length > 0) || (Array.isArray(infl) && infl.length > 0);
+    });
+    const defaultFace = meshes.find((m) => faceMeshNames.includes(m.name));
+    if (defaultFace) {
+      return [defaultFace.name];
+    }
+
+    const candidateByMorph = meshes.find((m) => {
+      const dict = m.morphTargetDictionary;
+      return dict && typeof dict === 'object' && 'Brow_Drop_L' in dict;
+    });
+    if (candidateByMorph) {
+      return [candidateByMorph.name];
+    }
+
+    const head = this.bones['HEAD']?.obj;
+    if (head && availableMorphMeshes.length > 0) {
+      const headPos = new Vector3();
+      head.getWorldPosition(headPos);
+      const headCandidates = availableMorphMeshes.map((mesh) => {
+        const box = new Box3().setFromObject(mesh as any);
+        const center = new Vector3();
+        box.getCenter(center);
+        const distance = box.containsPoint(headPos) ? 0 : center.distanceTo(headPos);
+        const morphCount = mesh.morphTargetDictionary
+          ? Object.keys(mesh.morphTargetDictionary).length
+          : 0;
+        const name = mesh.name.toLowerCase();
+        const penalty = /eye|occlusion|tear|teeth|tongue|hair|lash/.test(name) ? 10 : 0;
+        return { name: mesh.name, distance, morphCount, penalty };
+      });
+
+      headCandidates.sort((a, b) => {
+        if (a.distance !== b.distance) return a.distance - b.distance;
+        if (a.penalty !== b.penalty) return a.penalty - b.penalty;
+        return b.morphCount - a.morphCount;
+      });
+
+      const best = headCandidates[0];
+      const extras = headCandidates
+        .filter((entry) => /brow|eyebrow/.test(entry.name.toLowerCase()))
+        .map((entry) => entry.name);
+
+      return [best.name, ...extras].filter((value, index, arr) => arr.indexOf(value) === index);
+    }
+
+    if (availableMorphMeshes.length > 0) {
+      const best = availableMorphMeshes.reduce((prev, current) => {
+        const prevCount = prev.morphTargetDictionary ? Object.keys(prev.morphTargetDictionary).length : 0;
+        const currCount = current.morphTargetDictionary ? Object.keys(current.morphTargetDictionary).length : 0;
+        return currCount > prevCount ? current : prev;
+      });
+      return [best.name];
+    }
+
+    return [];
   }
 
   update(deltaSeconds: number): void {
@@ -243,31 +329,11 @@ export class LoomLargeThree implements LoomLarge {
     this.updateHairWindIdle(dtSeconds);
   }
 
-  /** Start the internal RAF loop */
-  start(): void {
-    if (this.running) return;
-    this.running = true;
-    this.clock.start();
+  /** No-op for backwards compatibility - engine is driven externally via update() */
+  start(): void {}
 
-    const tick = () => {
-      if (!this.running) return;
-      const dt = this.clock.getDelta();
-      this.update(dt);
-      this.rafId = requestAnimationFrame(tick);
-    };
-
-    this.rafId = requestAnimationFrame(tick);
-  }
-
-  /** Stop the internal RAF loop */
-  stop(): void {
-    this.running = false;
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
-    }
-    this.clock.stop();
-  }
+  /** No-op for backwards compatibility - use dispose() to clean up */
+  stop(): void {}
 
   dispose(): void {
     this.stop();
@@ -381,12 +447,27 @@ export class LoomLargeThree implements LoomLarge {
 
         // Apply balance for bilateral bone nodes (L/R pattern in node name)
         // This allows balance slider control for bone-only bilateral AUs like fish gills
+        // BUT skip for AUs where both L and R nodes are controlled by the same AU (like eyes)
+        // Eyes: AU 61 controls both EYE_L and EYE_R together
+        // Fish gills: AU 45 controls only GILL_L, AU 46 controls only GILL_R
+        const auBoneBindings = this.config.auToBones[id] || [];
+
+        // Only apply balance if this AU exclusively controls one side
+        const hasOnlyLeftBindings = auBoneBindings.length > 0 && auBoneBindings.every(b => /_L$|_L_|^GILL_L/.test(b.node));
+        const hasOnlyRightBindings = auBoneBindings.length > 0 && auBoneBindings.every(b => /_R$|_R_|^GILL_R/.test(b.node));
+        const isTrueBilateralAU = !hasOnlyLeftBindings && !hasOnlyRightBindings;
+
         const isLeftNode = /_L$|_L_|^GILL_L/.test(nodeKey);
         const isRightNode = /_R$|_R_|^GILL_R/.test(nodeKey);
-        if (isLeftNode) {
-          axisValue = axisValue * (leftVal / clamp01(v || 1));
-        } else if (isRightNode) {
-          axisValue = axisValue * (rightVal / clamp01(v || 1));
+
+        // Only apply balance scaling for unilateral AUs (like fish gills)
+        // For bilateral AUs where one AU controls both sides (like eyes), skip balance
+        if (!isTrueBilateralAU) {
+          if (isLeftNode) {
+            axisValue = axisValue * (leftVal / clamp01(v || 1));
+          } else if (isRightNode) {
+            axisValue = axisValue * (rightVal / clamp01(v || 1));
+          }
         }
 
         this.updateBoneRotation(nodeKey, compositeInfo.axis, axisValue);
@@ -706,7 +787,7 @@ export class LoomLargeThree implements LoomLarge {
     }
   }
 
-  transitionViseme(visemeIndex: number, to: number, durationMs = 80, jawScale = 1.0): TransitionHandle {
+  transitionViseme(visemeIndex: number, to: number, durationMs = 120, jawScale = 1.0): TransitionHandle {
     if (visemeIndex < 0 || visemeIndex >= this.config.visemeKeys.length) {
       return { promise: Promise.resolve(), pause: () => {}, resume: () => {}, cancel: () => {} };
     }
@@ -715,14 +796,28 @@ export class LoomLargeThree implements LoomLarge {
     const target = clamp01(to);
     this.visemeValues[visemeIndex] = target;
 
-    const morphHandle = this.transitionMorph(morphKey, target, durationMs);
+    // Use smoother cubic easing for viseme morph transitions
+    const transitionKey = `morph_${morphKey}`;
+    const targets = this.resolveMorphTargets(morphKey);
+    const from = targets.length > 0 ? (targets[0].infl[targets[0].idx] ?? 0) : this.getMorphValue(morphKey);
+    const morphHandle = this.animation.addTransition(transitionKey, from, target, durationMs, (value) => {
+      const val = clamp01(value);
+      for (const t of targets) {
+        t.infl[t.idx] = val;
+      }
+    }, easeInOutCubic);
 
     const jawAmount = LoomLargeThree.VISEME_JAW_AMOUNTS[visemeIndex] * target * jawScale;
     if (Math.abs(jawScale) <= 1e-6 || Math.abs(jawAmount) <= 1e-6) {
       return morphHandle;
     }
 
-    const jawHandle = this.transitionBoneRotation('JAW', 'pitch', jawAmount, durationMs);
+    // Use smoother cubic easing for jaw bone transitions
+    const jawKey = `bone_JAW_pitch`;
+    const jawFrom = this.rotations['JAW']?.['pitch'] ?? 0;
+    const jawTarget = Math.max(-1, Math.min(1, jawAmount));
+    const jawHandle = this.animation.addTransition(jawKey, jawFrom, jawTarget, durationMs, (value) => this.updateBoneRotation('JAW', 'pitch', value), easeInOutCubic);
+
     return this.combineHandles([morphHandle, jawHandle]);
   }
 
@@ -1989,9 +2084,15 @@ export class LoomLargeThree implements LoomLarge {
     curves: CurvesMap,
     options?: ClipOptions
   ): AnimationClip | null {
-    if (!this.model || Object.keys(curves).length === 0) {
+    if (!this.model) {
+      console.warn(`[LoomLarge] snippetToClip: No model loaded for "${clipName}"`);
       return null;
     }
+    if (Object.keys(curves).length === 0) {
+      console.warn(`[LoomLarge] snippetToClip: Empty curves for "${clipName}"`);
+      return null;
+    }
+    // Intentionally quiet to avoid per-frame logging in continuous tracking.
 
     const tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack> = [];
     const intensityScale = options?.intensityScale ?? 1.0;
@@ -2002,7 +2103,9 @@ export class LoomLargeThree implements LoomLarge {
     const isNumericAU = (id: string) => /^\d+$/.test(id);
 
     // Helper to check if a curve ID is a viseme index (0-14)
+    // ONLY returns true when snippetCategory is 'visemeSnippet' - otherwise numeric IDs are AU IDs
     const isVisemeIndex = (id: string) => {
+      if (options?.snippetCategory !== 'visemeSnippet') return false;
       const num = Number(id);
       return !Number.isNaN(num) && num >= 0 && num < this.config.visemeKeys.length;
     };
@@ -2148,13 +2251,18 @@ export class LoomLargeThree implements LoomLarge {
       for (const composite of this.compositeRotations) {
         const nodeKey = composite.node as BoneKey;
         const entry = this.bones[nodeKey];
-        if (!entry) continue;
+        if (!entry) {
+          console.log(`[snippetToClip] Skipping composite for "${nodeKey}" - bone not resolved`);
+          continue;
+        }
 
         const hasRelevantAU = [composite.pitch, composite.yaw, composite.roll]
           .filter(Boolean)
           .some((axisConfig) => axisConfig!.aus.some((auId) => hasCurveAU.has(auId)));
 
-        if (!hasRelevantAU) continue;
+        if (!hasRelevantAU) {
+          continue;
+        }
 
         const values: number[] = [];
 
@@ -2189,7 +2297,9 @@ export class LoomLargeThree implements LoomLarge {
           values.push(compositeQ.x, compositeQ.y, compositeQ.z, compositeQ.w);
         }
 
-        const trackName = `${entry.obj.name}.quaternion`;
+        // Use UUID to avoid issues with dots in bone names (e.g., "Bone.001_Armature")
+        // Three.js PropertyBinding uses dots as path separators, so names with dots fail
+        const trackName = `${(entry.obj as any).uuid}.quaternion`;
         tracks.push(new QuaternionKeyframeTrack(trackName, keyframeTimes, values));
       }
 
@@ -2216,7 +2326,8 @@ export class LoomLargeThree implements LoomLarge {
             values.push(basePos + delta);
           }
 
-          const trackName = `${entry.obj.name}.position[${axisIndex}]`;
+          // Use UUID to avoid issues with dots in bone names
+          const trackName = `${(entry.obj as any).uuid}.position[${axisIndex}]`;
           tracks.push(new NumberKeyframeTrack(trackName, keyframeTimes, values));
         }
       }
@@ -2243,10 +2354,15 @@ export class LoomLargeThree implements LoomLarge {
     keyframes: Array<{ time: number; intensity: number }>,
     intensityScale: number
   ): void {
-    // Find all meshes that have this morph target
-    for (const mesh of this.meshes) {
+    const targetMeshNames = this.config.morphToMesh?.face || [];
+    const targetMeshes = targetMeshNames.length
+      ? targetMeshNames.map((name) => this.meshByName.get(name)).filter(Boolean) as LoomMesh[]
+      : this.meshes;
+    let added = false;
+
+    const addTrackForMesh = (mesh: LoomMesh) => {
       const dict = mesh.morphTargetDictionary;
-      if (!dict || dict[morphKey] === undefined) continue;
+      if (!dict || dict[morphKey] === undefined) return;
 
       const morphIndex = dict[morphKey];
 
@@ -2260,11 +2376,23 @@ export class LoomLargeThree implements LoomLarge {
       }
 
       // Create the track with the proper path format for morph targets
-      // Format: "meshName.morphTargetInfluences[index]"
-      const trackName = `${mesh.name}.morphTargetInfluences[${morphIndex}]`;
+      // Use UUID to avoid issues with dots in mesh names (PropertyBinding uses dots as path separators)
+      const trackName = `${(mesh as any).uuid}.morphTargetInfluences[${morphIndex}]`;
       const track = new NumberKeyframeTrack(trackName, times, values);
 
       tracks.push(track);
+      added = true;
+    };
+
+    for (const mesh of targetMeshes) {
+      addTrackForMesh(mesh);
+    }
+
+    // Fallback: if target mesh list didn't contain this morph, try all meshes.
+    if (!added && targetMeshes !== this.meshes) {
+      for (const mesh of this.meshes) {
+        addTrackForMesh(mesh);
+      }
     }
   }
 
@@ -2319,6 +2447,19 @@ export class LoomLargeThree implements LoomLarge {
       this.animationFinishedCallbacks.set(clip.name, () => resolveFinished());
     }
 
+    const cleanup = () => {
+      if (clip.name.startsWith('eyeHeadTracking/')) {
+        return;
+      }
+      if (!this.animationMixer || !this.model) return;
+      try { this.animationMixer.uncacheAction(clip, this.model as any); } catch {}
+      try { this.animationMixer.uncacheClip(clip); } catch {}
+    };
+
+    if (!loop) {
+      finishedPromise.then(cleanup).catch(cleanup);
+    }
+
     // Reset and play
     action.reset();
     action.play();
@@ -2337,7 +2478,8 @@ export class LoomLargeThree implements LoomLarge {
       stop: () => {
         action.stop();
         this.animationFinishedCallbacks.delete(clip.name);
-        rejectFinished(new Error('Clip stopped'));
+        resolveFinished();
+        cleanup();
       },
 
       pause: () => {
@@ -2415,7 +2557,9 @@ export function collectMorphMeshes(root: LoomObject3D): LoomMesh[] {
   const meshes: LoomMesh[] = [];
   root.traverse((obj: any) => {
     if (obj.isMesh) {
-      if (Array.isArray(obj.morphTargetInfluences) && obj.morphTargetInfluences.length > 0) {
+      const dict = obj.morphTargetDictionary;
+      const infl = obj.morphTargetInfluences;
+      if ((dict && Object.keys(dict).length > 0) || (Array.isArray(infl) && infl.length > 0)) {
         meshes.push(obj);
       }
     }

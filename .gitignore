@@ -5,3 +5,7 @@ dist
 .vscode
 *.log
 .npmrc
+*.env
+.env
+.env.*
+!.env.example

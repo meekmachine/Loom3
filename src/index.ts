@@ -1,15 +1,15 @@
 /**
- * LoomLarge - 3D Character Animation Engine
+ * Loom3 - 3D Character Animation Engine
  *
  * A lightweight, framework-agnostic library for animating 3D character models
  * using Action Units (AUs), visemes, and bone transformations.
  *
  * @example
  * ```typescript
- * import { LoomLargeThree, collectMorphMeshes, CC4_PRESET } from 'loomlarge';
+ * import { Loom3Three, collectMorphMeshes, CC4_PRESET } from 'loom3';
  * import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
  *
- * const loom = new LoomLargeThree({ auMappings: CC4_PRESET });
+ * const loom = new Loom3Three({ auMappings: CC4_PRESET });
  *
  * const loader = new GLTFLoader();
  * loader.load('/character.glb', (gltf) => {
@@ -32,6 +32,7 @@
 // ============================================================================
 
 export { LoomLargeThree, collectMorphMeshes } from './engines/three/LoomLargeThree';
+export { LoomLargeThree as Loom3Three } from './engines/three/LoomLargeThree';
 export { AnimationThree } from './engines/three/AnimationThree';
 
 // Default export for convenience
@@ -52,6 +53,10 @@ export type {
   LoomLargeConfig,
 } from './interfaces/LoomLarge';
 
+export type {
+  LoomLarge as Loom3,
+  LoomLargeConfig as Loom3Config,
+} from './interfaces/LoomLarge';
 export type { Animation } from './interfaces/Animation';
 
 export type {
@@ -149,8 +154,24 @@ export type { HairPhysicsState, HairMorphOutput as HairPhysicsMorphOutput } from
 
 export {
   validateMappings,
+  validateMappingConfig,
   isPresetCompatible,
   suggestBestPreset,
 } from './validation/validateMappings';
 
-export type { ValidationResult } from './validation/validateMappings';
+export type {
+  ValidationResult,
+  MappingConsistencyResult,
+  MappingIssue,
+  ValidateMappingOptions,
+} from './validation/validateMappings';
+
+export {
+  generateMappingCorrections,
+} from './validation/generateMappingCorrections';
+
+export type {
+  MappingCorrection,
+  MappingCorrectionOptions,
+  MappingCorrectionResult,
+} from './validation/generateMappingCorrections';

@@ -140,22 +140,22 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
   // Head turn and tilt (M51-M56) - use HEAD bone only (NECK should not rotate with head)
   // Axis is derived from COMPOSITE_ROTATIONS, not stored here
   51: [
-    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 },   // Head turn left
+    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 45 },   // Head turn left
   ],
   52: [
-    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 30 },  // Head turn right
+    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 45 },  // Head turn right
   ],
   53: [
-    { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 20 },  // Head up
+    { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 30 },  // Head up
   ],
   54: [
-    { node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 20 },   // Head down
+    { node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 30 },   // Head down
   ],
   55: [
-    { node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 15 },  // Head tilt left
+    { node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 25 },  // Head tilt left
   ],
   56: [
-    { node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 15 },   // Head tilt right
+    { node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 25 },   // Head tilt right
   ],
   // Eyes - CC4 rigs use rz for horizontal, rx for vertical
   61: [
@@ -606,6 +606,85 @@ export const CC4_PRESET: AUMappingConfig = {
   eyeMeshNodes: CC4_EYE_MESH_NODES,
   continuumPairs: CONTINUUM_PAIRS_MAP,
   continuumLabels: CONTINUUM_LABELS,
+  annotationRegions: [
+    {
+      name: 'full_body',
+      objects: ['*'],
+      paddingFactor: 2.0,
+    },
+    {
+      name: 'head',
+      bones: ['CC_Base_Head', 'CC_Base_JawRoot'],
+      paddingFactor: 1.5,
+      children: ['face', 'left_eye', 'right_eye', 'mouth'],
+      expandAnimation: 'staggered',
+      showChildConnections: true,
+    },
+    {
+      name: 'face',
+      bones: ['CC_Base_Head', 'CC_Base_L_Eye', 'CC_Base_R_Eye', 'CC_Base_JawRoot'],
+      paddingFactor: 1.3,
+      parent: 'head',
+    },
+    {
+      name: 'left_eye',
+      bones: ['CC_Base_L_Eye'],
+      paddingFactor: 1.2,
+      parent: 'head',
+    },
+    {
+      name: 'right_eye',
+      bones: ['CC_Base_R_Eye'],
+      paddingFactor: 1.2,
+      parent: 'head',
+    },
+    {
+      name: 'mouth',
+      bones: ['CC_Base_JawRoot'],
+      paddingFactor: 1.5,
+      parent: 'head',
+    },
+    {
+      name: 'upper_body',
+      bones: [
+        'CC_Base_Spine02',
+        'CC_Base_Head',
+        'CC_Base_L_Clavicle',
+        'CC_Base_R_Clavicle',
+      ],
+      paddingFactor: 1.6,
+    },
+    {
+      name: 'back',
+      bones: ['CC_Base_Spine01', 'CC_Base_Spine02'],
+      paddingFactor: 1.8,
+      cameraAngle: 180,
+    },
+    {
+      name: 'left_hand',
+      bones: ['CC_Base_L_Hand'],
+      paddingFactor: 1.3,
+      cameraAngle: 270,
+    },
+    {
+      name: 'right_hand',
+      bones: ['CC_Base_R_Hand'],
+      paddingFactor: 1.3,
+      cameraAngle: 90,
+    },
+    {
+      name: 'left_foot',
+      bones: ['CC_Base_L_Foot', 'CC_Base_L_ToeBase'],
+      paddingFactor: 2.5,
+      cameraAngle: 270,
+    },
+    {
+      name: 'right_foot',
+      bones: ['CC_Base_R_Foot', 'CC_Base_R_ToeBase'],
+      paddingFactor: 2.5,
+      cameraAngle: 90,
+    },
+  ],
 };
 
 export default CC4_PRESET;

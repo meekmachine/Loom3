@@ -2147,13 +2147,18 @@ export class LoomLargeThree implements LoomLarge {
       for (const composite of this.compositeRotations) {
         const nodeKey = composite.node as BoneKey;
         const entry = this.bones[nodeKey];
-        if (!entry) continue;
+        if (!entry) {
+          console.log(`[snippetToClip] Skipping composite for "${nodeKey}" - bone not resolved`);
+          continue;
+        }
 
         const hasRelevantAU = [composite.pitch, composite.yaw, composite.roll]
           .filter(Boolean)
           .some((axisConfig) => axisConfig!.aus.some((auId) => hasCurveAU.has(auId)));
 
-        if (!hasRelevantAU) continue;
+        if (!hasRelevantAU) {
+          continue;
+        }
 
         const values: number[] = [];
 

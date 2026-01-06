@@ -1987,8 +1987,7 @@ export class LoomLargeThree implements LoomLarge {
       console.warn(`[LoomLarge] snippetToClip: Empty curves for "${clipName}"`);
       return null;
     }
-    console.log(`[LoomLarge] snippetToClip: Building "${clipName}" with ${Object.keys(curves).length} curves, category=${options?.snippetCategory}`);
-    console.log(`[LoomLarge] snippetToClip: Curve IDs:`, Object.keys(curves));
+    // Intentionally quiet to avoid per-frame logging in continuous tracking.
 
     const tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack> = [];
     const intensityScale = options?.intensityScale ?? 1.0;
@@ -2250,10 +2249,15 @@ export class LoomLargeThree implements LoomLarge {
     keyframes: Array<{ time: number; intensity: number }>,
     intensityScale: number
   ): void {
-    // Find all meshes that have this morph target
-    for (const mesh of this.meshes) {
+    const targetMeshNames = this.config.morphToMesh?.face || [];
+    const targetMeshes = targetMeshNames.length
+      ? targetMeshNames.map((name) => this.meshByName.get(name)).filter(Boolean) as LoomMesh[]
+      : this.meshes;
+    let added = false;
+
+    const addTrackForMesh = (mesh: LoomMesh) => {
       const dict = mesh.morphTargetDictionary;
-      if (!dict || dict[morphKey] === undefined) continue;
+      if (!dict || dict[morphKey] === undefined) return;
 
       const morphIndex = dict[morphKey];
 
@@ -2272,6 +2276,18 @@ export class LoomLargeThree implements LoomLarge {
       const track = new NumberKeyframeTrack(trackName, times, values);
 
       tracks.push(track);
+      added = true;
+    };
+
+    for (const mesh of targetMeshes) {
+      addTrackForMesh(mesh);
+    }
+
+    // Fallback: if target mesh list didn't contain this morph, try all meshes.
+    if (!added && targetMeshes !== this.meshes) {
+      for (const mesh of this.meshes) {
+        addTrackForMesh(mesh);
+      }
     }
   }
 
@@ -2326,6 +2342,16 @@ export class LoomLargeThree implements LoomLarge {
       this.animationFinishedCallbacks.set(clip.name, () => resolveFinished());
     }
 
+    const cleanup = () => {
+      if (!this.animationMixer || !this.model) return;
+      try { this.animationMixer.uncacheAction(clip, this.model as any); } catch {}
+      try { this.animationMixer.uncacheClip(clip); } catch {}
+    };
+
+    if (!loop) {
+      finishedPromise.then(cleanup).catch(cleanup);
+    }
+
     // Reset and play
     action.reset();
     action.play();
@@ -2345,6 +2371,7 @@ export class LoomLargeThree implements LoomLarge {
         action.stop();
         this.animationFinishedCallbacks.delete(clip.name);
         rejectFinished(new Error('Clip stopped'));
+        cleanup();
       },
 
       pause: () => {

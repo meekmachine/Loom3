@@ -64,6 +64,7 @@ export interface LoomObject3D {
   rotation: LoomEuler & { set(x: number, y: number, z: number, order: string): void };
   traverse(callback: (obj: any) => void): void;
   getObjectByName(name: string): LoomObject3D | undefined;
+  getWorldPosition(target: LoomVector3): LoomVector3;
   updateMatrixWorld(force: boolean): void;
 }
 

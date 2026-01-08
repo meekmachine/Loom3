@@ -169,6 +169,7 @@ export class LoomLargeThree implements LoomLarge {
 
   // Baked animation state (Three.js AnimationMixer)
   private animationMixer: AnimationMixer | null = null;
+  private mixerFinishedListenerAttached = false;
   private animationClips: AnimationClip[] = [];
   private animationActions = new Map<string, AnimationAction>();
   private animationFinishedCallbacks = new Map<string, () => void>();
@@ -187,6 +188,32 @@ export class LoomLargeThree implements LoomLarge {
     // Use config's composite rotations or default to CC4
     this.compositeRotations = this.config.compositeRotations || CC4_COMPOSITE_ROTATIONS;
     this.auToCompositeMap = buildAUToCompositeMap(this.compositeRotations);
+  }
+
+  /**
+   * Ensure the mixer exists and has the finished listener attached.
+   */
+  private ensureMixer(): AnimationMixer | null {
+    if (!this.model) return null;
+
+    if (!this.animationMixer) {
+      this.animationMixer = new AnimationMixer(this.model as any);
+    }
+
+    if (this.animationMixer && !this.mixerFinishedListenerAttached) {
+      this.animationMixer.addEventListener('finished', (event: any) => {
+        const action = event.action as AnimationAction;
+        const clip = action.getClip();
+        const callback = this.animationFinishedCallbacks.get(clip.name);
+        if (callback) {
+          callback();
+          this.animationFinishedCallbacks.delete(clip.name);
+        }
+      });
+      this.mixerFinishedListenerAttached = true;
+    }
+
+    return this.animationMixer;
   }
 
   // ============================================================================
@@ -1815,27 +1842,14 @@ export class LoomLargeThree implements LoomLarge {
     }
 
     // Create mixer if not exists
-    if (!this.animationMixer) {
-      this.animationMixer = new AnimationMixer(this.model as any);
-
-      // Listen for animation finished events
-      this.animationMixer.addEventListener('finished', (event: any) => {
-        const action = event.action as AnimationAction;
-        const clip = action.getClip();
-        const callback = this.animationFinishedCallbacks.get(clip.name);
-        if (callback) {
-          callback();
-          this.animationFinishedCallbacks.delete(clip.name);
-        }
-      });
-    }
+    this.ensureMixer();
 
     // Store clips
     this.animationClips = clips as AnimationClip[];
 
     // Pre-create actions for all clips
     for (const clip of this.animationClips) {
-      if (!this.animationActions.has(clip.name)) {
+      if (!this.animationActions.has(clip.name) && this.animationMixer) {
         const action = this.animationMixer.clipAction(clip);
         this.animationActions.set(clip.name, action);
       }
@@ -2447,9 +2461,7 @@ export class LoomLargeThree implements LoomLarge {
    */
   playClip(clip: AnimationClip, options?: ClipOptions): ClipHandle | null {
     // Ensure mixer exists (create if needed)
-    if (!this.animationMixer && this.model) {
-      this.animationMixer = new AnimationMixer(this.model as any);
-    }
+    this.ensureMixer();
 
     if (!this.animationMixer) {
       console.warn('[LoomLarge] playClip: No model loaded, cannot create mixer');

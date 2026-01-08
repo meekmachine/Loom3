@@ -2526,20 +2526,18 @@ export class LoomLargeThree implements LoomLarge {
       rejectFinished = reject;
     });
 
-    // Store callback for non-looping clips
-    if (!loop) {
-      this.animationFinishedCallbacks.set(clip.name, () => resolveFinished());
-    }
-
     const cleanup = () => {
       // Keep actions/handles; just pause so params can still target it.
       try { this.animationFinishedCallbacks.delete(clip.name); } catch {}
       try { action.paused = true; } catch {}
     };
 
-    if (!loop) {
-      finishedPromise.then(cleanup).catch(cleanup);
-    }
+    // Always register a finished callback; for looping clips it will only fire if loop mode is later changed to 'once'.
+    this.animationFinishedCallbacks.set(clip.name, () => {
+      resolveFinished();
+      cleanup();
+    });
+    finishedPromise.catch(() => cleanup());
 
     // Reset and play
     action.reset();

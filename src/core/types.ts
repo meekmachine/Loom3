@@ -192,8 +192,14 @@ export type CurvesMap = Record<string, CurvePoint[]>;
 export interface ClipOptions {
   /** Whether the clip should loop (default: false) */
   loop?: boolean;
+  /** Loop mode: repeat (default), pingpong (forward/back), or once */
+  loopMode?: 'repeat' | 'pingpong' | 'once';
   /** Playback rate multiplier (default: 1.0) */
   playbackRate?: number;
+  /** Play clip backwards when true (implemented via negative time scale) */
+  reverse?: boolean;
+  /** Mixer weight/intensity (default: 1.0) */
+  mixerWeight?: number;
   /** Left/right balance for bilateral AUs (-1 to 1, default: 0) */
   balance?: number;
   /** Jaw scale for viseme playback (default: 1.0) */
@@ -210,6 +216,8 @@ export interface ClipOptions {
 export interface ClipHandle {
   /** Name of the clip */
   clipName: string;
+  /** Optional unique id for the underlying mixer action */
+  actionId?: string;
   /** Start or restart playback */
   play: () => void;
   /** Stop playback and reset */
@@ -218,6 +226,12 @@ export interface ClipHandle {
   pause: () => void;
   /** Resume paused playback */
   resume: () => void;
+  /** Optional weight setter for live mixer updates */
+  setWeight?: (w: number) => void;
+  /** Optional playback-rate setter for live mixer updates */
+  setPlaybackRate?: (r: number) => void;
+  /** Optional loop setter for live mixer updates */
+  setLoop?: (mode: 'once' | 'repeat' | 'pingpong') => void;
   /** Get current playback time in seconds */
   getTime: () => number;
   /** Get total clip duration in seconds */

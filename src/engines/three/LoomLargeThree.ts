@@ -42,7 +42,7 @@ import type {
   Snippet,
 } from '../../core/types';
 import type { AUMappingConfig } from '../../mappings/types';
-import { AnimationThree, easeInOutCubic } from './AnimationThree';
+import { AnimationThree } from './AnimationThree';
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import type { CompositeRotation, BoneBinding } from '../../core/types';
 
@@ -841,7 +841,7 @@ export class LoomLargeThree implements LoomLarge {
     }
   }
 
-  transitionViseme(visemeIndex: number, to: number, durationMs = 120, jawScale = 1.0): TransitionHandle {
+  transitionViseme(visemeIndex: number, to: number, durationMs = 80, jawScale = 1.0): TransitionHandle {
     if (visemeIndex < 0 || visemeIndex >= this.config.visemeKeys.length) {
       return { promise: Promise.resolve(), pause: () => {}, resume: () => {}, cancel: () => {} };
     }
@@ -850,28 +850,14 @@ export class LoomLargeThree implements LoomLarge {
     const target = clamp01(to);
     this.visemeValues[visemeIndex] = target;
 
-    // Use smoother cubic easing for viseme morph transitions
-    const transitionKey = `morph_${morphKey}`;
-    const targets = this.resolveMorphTargets(morphKey);
-    const from = targets.length > 0 ? (targets[0].infl[targets[0].idx] ?? 0) : this.getMorphValue(morphKey);
-    const morphHandle = this.animation.addTransition(transitionKey, from, target, durationMs, (value) => {
-      const val = clamp01(value);
-      for (const t of targets) {
-        t.infl[t.idx] = val;
-      }
-    }, easeInOutCubic);
+    const morphHandle = this.transitionMorph(morphKey, target, durationMs);
 
     const jawAmount = LoomLargeThree.VISEME_JAW_AMOUNTS[visemeIndex] * target * jawScale;
     if (Math.abs(jawScale) <= 1e-6 || Math.abs(jawAmount) <= 1e-6) {
       return morphHandle;
     }
 
-    // Use smoother cubic easing for jaw bone transitions
-    const jawKey = `bone_JAW_pitch`;
-    const jawFrom = this.rotations['JAW']?.['pitch'] ?? 0;
-    const jawTarget = Math.max(-1, Math.min(1, jawAmount));
-    const jawHandle = this.animation.addTransition(jawKey, jawFrom, jawTarget, durationMs, (value) => this.updateBoneRotation('JAW', 'pitch', value), easeInOutCubic);
-
+    const jawHandle = this.transitionBoneRotation('JAW', 'pitch', jawAmount, durationMs);
     return this.combineHandles([morphHandle, jawHandle]);
   }
 

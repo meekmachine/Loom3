@@ -1044,11 +1044,13 @@ loom.setViseme(3, 1.0, 0.5);  // Half jaw opening
 
 ### Transitioning visemes
 
-```typescript
-// Animate to viseme over 80ms (typical for speech)
-const handle = loom.transitionViseme(3, 1.0, 80);
+Viseme transitions default to 80ms and use the standard `easeInOutQuad` easing when no duration is provided.
 
-// Disable jaw coupling
+```typescript
+// Animate to a viseme using the default 80ms duration
+const handle = loom.transitionViseme(3, 1.0);
+
+// Disable jaw coupling (duration can be omitted to use the 80ms default)
 loom.transitionViseme(3, 1.0, 80, 0);
 ```
 

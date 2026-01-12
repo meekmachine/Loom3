@@ -42,7 +42,7 @@ import type {
   Snippet,
 } from '../../core/types';
 import type { AUMappingConfig } from '../../mappings/types';
-import { AnimationThree, easeInOutCubic } from './AnimationThree';
+import { AnimationThree } from './AnimationThree';
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import type { CompositeRotation, BoneBinding } from '../../core/types';
 
@@ -81,6 +81,9 @@ function clamp01(x: number) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
+// Lightweight unique id for mixer actions/handles
+const makeActionId = () => `act_${Math.random().toString(36).slice(2, 8)}_${Date.now().toString(36)}`;
+
 /**
  * NodeBase - internal bone snapshot
  */
@@ -109,6 +112,7 @@ export class LoomLargeThree implements LoomLarge {
   private auBalances: Record<number, number> = {};  // Balance values per AU (-1 to 1)
   private rigReady = false;
   private missingBoneWarnings = new Set<string>();
+  private clipActions = new Map<string, AnimationAction>();
 
   // Rotation state
   private rotations: RotationsState = {};
@@ -165,9 +169,16 @@ export class LoomLargeThree implements LoomLarge {
 
   // Baked animation state (Three.js AnimationMixer)
   private animationMixer: AnimationMixer | null = null;
+  private mixerFinishedListenerAttached = false;
   private animationClips: AnimationClip[] = [];
   private animationActions = new Map<string, AnimationAction>();
   private animationFinishedCallbacks = new Map<string, () => void>();
+  // Track live clip handles by name so scheduler param updates can always reach mixer-backed snippets
+  private clipHandles = new Map<string, ClipHandle>();
+  // Track action IDs for debugging/matching
+  private actionIds = new WeakMap<AnimationAction, string>();
+  // Map actionId to clip name for quick reverse lookup
+  private actionIdToClip = new Map<string, string>();
 
   constructor(config: LoomLargeConfig = {}, animation?: Animation) {
     this.config = config.auMappings || CC4_PRESET;
@@ -177,6 +188,32 @@ export class LoomLargeThree implements LoomLarge {
     // Use config's composite rotations or default to CC4
     this.compositeRotations = this.config.compositeRotations || CC4_COMPOSITE_ROTATIONS;
     this.auToCompositeMap = buildAUToCompositeMap(this.compositeRotations);
+  }
+
+  /**
+   * Ensure the mixer exists and has the finished listener attached.
+   */
+  private ensureMixer(): AnimationMixer | null {
+    if (!this.model) return null;
+
+    if (!this.animationMixer) {
+      this.animationMixer = new AnimationMixer(this.model as any);
+    }
+
+    if (this.animationMixer && !this.mixerFinishedListenerAttached) {
+      this.animationMixer.addEventListener('finished', (event: any) => {
+        const action = event.action as AnimationAction;
+        const clip = action.getClip();
+        const callback = this.animationFinishedCallbacks.get(clip.name);
+        if (callback) {
+          callback();
+          this.animationFinishedCallbacks.delete(clip.name);
+        }
+      });
+      this.mixerFinishedListenerAttached = true;
+    }
+
+    return this.animationMixer;
   }
 
   // ============================================================================
@@ -226,10 +263,20 @@ export class LoomLargeThree implements LoomLarge {
       ? this.meshByName.get(this.resolvedFaceMeshes[0]) || null
       : null;
 
-    if (this.resolvedFaceMeshes.length > 0) {
+    // Make sure all morph-capable meshes are considered face targets (includes brows/hair pieces with morphs)
+    const morphMeshNames = this.meshes
+      .filter((m) => {
+        const infl = m.morphTargetInfluences;
+        const dict = m.morphTargetDictionary;
+        return (Array.isArray(infl) && infl.length > 0) || (dict && Object.keys(dict).length > 0);
+      })
+      .map((m) => m.name)
+      .filter(Boolean);
+
+    if (morphMeshNames.length > 0) {
       this.config.morphToMesh = {
         ...this.config.morphToMesh,
-        face: this.resolvedFaceMeshes,
+        face: Array.from(new Set(morphMeshNames)),
       };
     }
 
@@ -273,7 +320,7 @@ export class LoomLargeThree implements LoomLarge {
     const head = this.bones['HEAD']?.obj;
     if (head && availableMorphMeshes.length > 0) {
       const headPos = new Vector3();
-      head.getWorldPosition(headPos);
+      (head as any).getWorldPosition?.(headPos);
       const headCandidates = availableMorphMeshes.map((mesh) => {
         const box = new Box3().setFromObject(mesh as any);
         const center = new Vector3();
@@ -307,7 +354,14 @@ export class LoomLargeThree implements LoomLarge {
         const currCount = current.morphTargetDictionary ? Object.keys(current.morphTargetDictionary).length : 0;
         return currCount > prevCount ? current : prev;
       });
-      return [best.name];
+      const browExtras = availableMorphMeshes
+        .filter((m) => {
+          const dict = m.morphTargetDictionary || {};
+          const morphKeys = Object.keys(dict);
+          return /brow|eyebrow/i.test(m.name) || morphKeys.some((k) => /brow/i.test(k));
+        })
+        .map((m) => m.name);
+      return [best.name, ...browExtras].filter((value, index, arr) => arr.indexOf(value) === index);
     }
 
     return [];
@@ -787,7 +841,7 @@ export class LoomLargeThree implements LoomLarge {
     }
   }
 
-  transitionViseme(visemeIndex: number, to: number, durationMs = 120, jawScale = 1.0): TransitionHandle {
+  transitionViseme(visemeIndex: number, to: number, durationMs = 80, jawScale = 1.0): TransitionHandle {
     if (visemeIndex < 0 || visemeIndex >= this.config.visemeKeys.length) {
       return { promise: Promise.resolve(), pause: () => {}, resume: () => {}, cancel: () => {} };
     }
@@ -796,28 +850,14 @@ export class LoomLargeThree implements LoomLarge {
     const target = clamp01(to);
     this.visemeValues[visemeIndex] = target;
 
-    // Use smoother cubic easing for viseme morph transitions
-    const transitionKey = `morph_${morphKey}`;
-    const targets = this.resolveMorphTargets(morphKey);
-    const from = targets.length > 0 ? (targets[0].infl[targets[0].idx] ?? 0) : this.getMorphValue(morphKey);
-    const morphHandle = this.animation.addTransition(transitionKey, from, target, durationMs, (value) => {
-      const val = clamp01(value);
-      for (const t of targets) {
-        t.infl[t.idx] = val;
-      }
-    }, easeInOutCubic);
+    const morphHandle = this.transitionMorph(morphKey, target, durationMs);
 
     const jawAmount = LoomLargeThree.VISEME_JAW_AMOUNTS[visemeIndex] * target * jawScale;
     if (Math.abs(jawScale) <= 1e-6 || Math.abs(jawAmount) <= 1e-6) {
       return morphHandle;
     }
 
-    // Use smoother cubic easing for jaw bone transitions
-    const jawKey = `bone_JAW_pitch`;
-    const jawFrom = this.rotations['JAW']?.['pitch'] ?? 0;
-    const jawTarget = Math.max(-1, Math.min(1, jawAmount));
-    const jawHandle = this.animation.addTransition(jawKey, jawFrom, jawTarget, durationMs, (value) => this.updateBoneRotation('JAW', 'pitch', value), easeInOutCubic);
-
+    const jawHandle = this.transitionBoneRotation('JAW', 'pitch', jawAmount, durationMs);
     return this.combineHandles([morphHandle, jawHandle]);
   }
 
@@ -1788,27 +1828,14 @@ export class LoomLargeThree implements LoomLarge {
     }
 
     // Create mixer if not exists
-    if (!this.animationMixer) {
-      this.animationMixer = new AnimationMixer(this.model as any);
-
-      // Listen for animation finished events
-      this.animationMixer.addEventListener('finished', (event: any) => {
-        const action = event.action as AnimationAction;
-        const clip = action.getClip();
-        const callback = this.animationFinishedCallbacks.get(clip.name);
-        if (callback) {
-          callback();
-          this.animationFinishedCallbacks.delete(clip.name);
-        }
-      });
-    }
+    this.ensureMixer();
 
     // Store clips
     this.animationClips = clips as AnimationClip[];
 
     // Pre-create actions for all clips
     for (const clip of this.animationClips) {
-      if (!this.animationActions.has(clip.name)) {
+      if (!this.animationActions.has(clip.name) && this.animationMixer) {
         const action = this.animationMixer.clipAction(clip);
         this.animationActions.set(clip.name, action);
       }
@@ -1876,6 +1903,10 @@ export class LoomLargeThree implements LoomLarge {
     // Play the action
     action.play();
 
+    // Track in both maps so updateClipParams can always find it
+    this.animationActions.set(clipName, action);
+    this.clipActions.set(clipName, action);
+
     // Create finished promise
     let resolveFinished: () => void;
     const finishedPromise = new Promise<void>((resolve) => {
@@ -1887,7 +1918,7 @@ export class LoomLargeThree implements LoomLarge {
       this.animationFinishedCallbacks.set(clipName, () => resolveFinished());
     }
 
-    // Return handle
+    // Return handle (uses same action registration as snippets)
     return this.createAnimationHandle(clipName, action, finishedPromise);
   }
 
@@ -1900,6 +1931,11 @@ export class LoomLargeThree implements LoomLarge {
       action.stop();
       this.animationFinishedCallbacks.delete(clipName);
     }
+    const clipAction = this.clipActions.get(clipName);
+    if (clipAction && clipAction !== action) {
+      try { clipAction.stop(); } catch {}
+    }
+    // Keep entries so params can still target this action/handle; cleanup happens on explicit snippet removal.
   }
 
   /**
@@ -1907,8 +1943,13 @@ export class LoomLargeThree implements LoomLarge {
    */
   stopAllAnimations(): void {
     for (const [name, action] of this.animationActions) {
-      action.stop();
-      this.animationFinishedCallbacks.delete(name);
+      try { action.paused = true; } catch {}
+      try { this.animationFinishedCallbacks.delete(name); } catch {}
+    }
+    for (const [name, action] of this.clipActions) {
+      if (!this.animationActions.has(name)) {
+        try { action.paused = true; } catch {}
+      }
     }
   }
 
@@ -2126,10 +2167,11 @@ export class LoomLargeThree implements LoomLarge {
       return 0;
     };
 
+    const clampIntensity = (v: number) => Math.max(0, Math.min(2, v));
     const sampleCurve = (curveId: string, t: number) => {
       const arr = curves[curveId];
       if (!arr) return 0;
-      return clamp01(sampleAt(arr, t) * intensityScale);
+      return clampIntensity(sampleAt(arr, t) * intensityScale);
     };
 
     const keyframeTimes = (() => {
@@ -2372,7 +2414,7 @@ export class LoomLargeThree implements LoomLarge {
 
       for (const kf of keyframes) {
         times.push(kf.time);
-        values.push(clamp01(kf.intensity * intensityScale));
+        values.push(Math.max(0, Math.min(2, kf.intensity * intensityScale)));
       }
 
       // Create the track with the proper path format for morph targets
@@ -2405,9 +2447,7 @@ export class LoomLargeThree implements LoomLarge {
    */
   playClip(clip: AnimationClip, options?: ClipOptions): ClipHandle | null {
     // Ensure mixer exists (create if needed)
-    if (!this.animationMixer && this.model) {
-      this.animationMixer = new AnimationMixer(this.model as any);
-    }
+    this.ensureMixer();
 
     if (!this.animationMixer) {
       console.warn('[LoomLarge] playClip: No model loaded, cannot create mixer');
@@ -2416,22 +2456,52 @@ export class LoomLargeThree implements LoomLarge {
 
     const {
       loop = false,
+      loopMode,
+      reverse = false,
       playbackRate = 1.0,
+      mixerWeight,
     } = options || {};
 
-    // Create action from clip
-    const action = this.animationMixer.clipAction(clip);
+    // Reuse existing action if present; otherwise create a new one.
+    let action = this.clipActions.get(clip.name);
+    let actionId = action ? (this.actionIds.get(action) || (action as any).__actionId) : undefined;
+    // Ensure every tracked action has a stable id (even if it was created before we added ids)
+    if (action && !actionId) {
+      actionId = makeActionId();
+      this.actionIds.set(action, actionId);
+      this.actionIdToClip.set(actionId, clip.name);
+      (action as any).__actionId = actionId;
+    }
+    if (!action) {
+      action = this.animationMixer.clipAction(clip);
+      actionId = makeActionId();
+      this.actionIds.set(action, actionId);
+      this.actionIdToClip.set(actionId, clip.name);
+      (action as any).__actionId = actionId;
+    }
+
+    // Track this clip in the baked list so playAnimation can reuse it
+    const existingClip = this.animationClips.find(c => c.name === clip.name);
+    if (!existingClip) {
+      this.animationClips.push(clip);
+    }
 
     // Configure action
-    action.setEffectiveTimeScale(playbackRate);
-    action.setEffectiveWeight(1.0);
-    action.clampWhenFinished = !loop;
+    const timeScale = reverse ? -playbackRate : playbackRate;
+    action.setEffectiveTimeScale(timeScale);
+    // Mixer weight controls overall contribution; default to 1.0 when unspecified
+    const weight = typeof mixerWeight === 'number' ? mixerWeight : 1.0;
+    action.setEffectiveWeight(weight);
+    const mode = loopMode || (loop ? 'repeat' : 'once');
+    action.clampWhenFinished = mode === 'once';
 
     // Set loop mode
-    if (loop) {
-      action.setLoop(LoopRepeat, Infinity);
-    } else {
+    if (mode === 'pingpong') {
+      action.setLoop(LoopPingPong, Infinity);
+    } else if (mode === 'once') {
       action.setLoop(LoopOnce, 1);
+    } else {
+      action.setLoop(LoopRepeat, Infinity);
     }
 
     // Track for finished callback
@@ -2442,33 +2512,32 @@ export class LoomLargeThree implements LoomLarge {
       rejectFinished = reject;
     });
 
-    // Store callback for non-looping clips
-    if (!loop) {
-      this.animationFinishedCallbacks.set(clip.name, () => resolveFinished());
-    }
-
     const cleanup = () => {
-      if (clip.name.startsWith('eyeHeadTracking/')) {
-        return;
-      }
-      if (!this.animationMixer || !this.model) return;
-      try { this.animationMixer.uncacheAction(clip, this.model as any); } catch {}
-      try { this.animationMixer.uncacheClip(clip); } catch {}
+      // Keep actions/handles; just pause so params can still target it.
+      try { this.animationFinishedCallbacks.delete(clip.name); } catch {}
+      try { action.paused = true; } catch {}
     };
 
-    if (!loop) {
-      finishedPromise.then(cleanup).catch(cleanup);
-    }
+    // Always register a finished callback; for looping clips it will only fire if loop mode is later changed to 'once'.
+    this.animationFinishedCallbacks.set(clip.name, () => {
+      resolveFinished();
+      cleanup();
+    });
+    finishedPromise.catch(() => cleanup());
 
     // Reset and play
     action.reset();
     action.play();
 
-    console.log(`[LoomLarge] playClip: Playing "${clip.name}" (rate: ${playbackRate}, loop: ${loop})`);
+    this.clipActions.set(clip.name, action);
+    // Also mirror into animationActions so all clips (baked or built) share one update surface
+    this.animationActions.set(clip.name, action);
+    console.log(`[LoomLarge] playClip: Playing "${clip.name}" (rate: ${playbackRate}, loop: ${loop}, actionId: ${actionId})`);
 
     // Build ClipHandle
     const handle: ClipHandle = {
       clipName: clip.name,
+      actionId,
 
       play: () => {
         action.reset();
@@ -2490,12 +2559,33 @@ export class LoomLargeThree implements LoomLarge {
         action.paused = false;
       },
 
+      setWeight: (w: number) => {
+        action.setEffectiveWeight(typeof w === 'number' && Number.isFinite(w) ? w : 1.0);
+      },
+
+      setPlaybackRate: (r: number) => {
+        const rate = Number.isFinite(r) ? r : 1.0;
+        action.setEffectiveTimeScale(rate);
+      },
+
+      setLoop: (mode: 'once' | 'repeat' | 'pingpong') => {
+        if (mode === 'pingpong') {
+          action.setLoop(LoopPingPong, Infinity);
+        } else if (mode === 'once') {
+          action.setLoop(LoopOnce, 1);
+        } else {
+          action.setLoop(LoopRepeat, Infinity);
+        }
+      },
+
       getTime: () => action.time,
 
       getDuration: () => clip.duration,
 
       finished: finishedPromise,
     };
+    // Track handle by clip name for scheduler-driven param updates
+    this.clipHandles.set(clip.name, handle);
 
     return handle;
   }
@@ -2547,6 +2637,170 @@ export class LoomLargeThree implements LoomLarge {
       return null;
     }
     return this.playClip(clip, options);
+  }
+
+  /**
+   * Cleanup any mixer actions/clips associated with a snippet name.
+   * Called by the animation scheduler when snippets are removed.
+   */
+  cleanupSnippet(name: string) {
+    if (!this.animationMixer || !this.model) return;
+    // Soft cleanup: pause actions but keep mappings so updates can still target them (parity with baked clips).
+    for (const [clipName, action] of Array.from(this.clipActions.entries())) {
+      if (clipName === name || clipName.startsWith(`${name}_`)) {
+        try { action.paused = true; } catch {}
+      }
+    }
+  }
+
+  /**
+   * Live-update mixer action params for a snippet.
+   */
+  updateClipParams(name: string, params: { weight?: number; rate?: number; loop?: boolean; loopMode?: 'once' | 'repeat' | 'pingpong'; reverse?: boolean; actionId?: string }): boolean {
+    let updated = false;
+    const matches = (clipName: string, action?: AnimationAction | null) => {
+      if (params.actionId) {
+        const aid = action ? this.actionIds.get(action) : this.actionIdToClip.get(params.actionId);
+        if (aid && aid === params.actionId) return true;
+      }
+      return clipName === name || clipName.startsWith(`${name}_`) || clipName.includes(name);
+    };
+
+    const debugSnapshot = () => ({
+      target: name,
+      params,
+      clipActions: Array.from(this.clipActions.entries()).map(([k, a]) => ({ name: k, actionId: this.actionIds.get(a) || (a as any).__actionId })),
+      animationActions: Array.from(this.animationActions.entries()).map(([k, a]) => ({ name: k, actionId: this.actionIds.get(a) || (a as any).__actionId })),
+      clipHandles: Array.from(this.clipHandles.entries()).map(([k, h]) => ({ name: k, actionId: h.actionId })),
+      mixerActions: ((this.animationMixer as any)?._actions || []).map((a: any) => ({ name: a?.getClip?.()?.name || '', actionId: this.actionIds.get(a) || (a as any).__actionId })),
+    });
+
+    console.log('[LoomLarge] updateClipParams start', debugSnapshot());
+
+    const apply = (action: AnimationAction | null | undefined) => {
+      if (!action) return;
+      try { action.paused = false; } catch {}
+      if (typeof params.weight === 'number' && Number.isFinite(params.weight)) {
+        action.setEffectiveWeight(params.weight);
+        updated = true;
+      }
+      if (typeof params.rate === 'number' && Number.isFinite(params.rate)) {
+        const signedRate = params.reverse ? -params.rate : params.rate;
+        action.setEffectiveTimeScale(signedRate);
+        updated = true;
+      } else if (typeof params.reverse === 'boolean') {
+        const current = action.getEffectiveTimeScale?.() ?? 1;
+        const magnitude = Math.abs(current) || 1;
+        const signedRate = params.reverse ? -magnitude : magnitude;
+        action.setEffectiveTimeScale(signedRate);
+        updated = true;
+      }
+      const mode = params.loopMode || (typeof params.loop === 'boolean' ? (params.loop ? 'repeat' : 'once') : undefined);
+      if (mode) {
+        if (mode === 'pingpong') {
+          action.setLoop(LoopPingPong, Infinity);
+        } else if (mode === 'once') {
+          action.setLoop(LoopOnce, 1);
+        } else {
+          action.setLoop(LoopRepeat, Infinity);
+        }
+        updated = true;
+      }
+    };
+
+    // Use tracked actions first
+    if (this.animationMixer && this.model) {
+      for (const [clipName, action] of Array.from(this.clipActions.entries())) {
+        if (matches(clipName, action)) {
+          apply(action);
+        }
+      }
+      // Also update baked/preloaded actions
+      for (const [clipName, action] of Array.from(this.animationActions.entries())) {
+        if (matches(clipName, action)) {
+          apply(action);
+        }
+      }
+
+      // Fallback: scan mixer actions
+      const mixer: any = this.animationMixer as any;
+      const actions: any[] = mixer?._actions || [];
+      for (const action of actions) {
+        try {
+          const clip = action.getClip?.();
+          if (!clip) continue;
+          const clipName = clip.name || '';
+          if (matches(clipName, action)) {
+            apply(action);
+          }
+        } catch {}
+      }
+
+      // Last resort: ask mixer for an action by name (covers untracked actions)
+      try {
+        const clipAsset = this.animationClips.find(c => c.name === name);
+        const direct = this.animationMixer.clipAction((clipAsset as any) ?? (name as any), this.model as any);
+        if (direct && clipAsset) {
+          const aid = params.actionId || this.actionIds.get(direct) || (direct as any).__actionId || makeActionId();
+          this.actionIds.set(direct, aid);
+          this.actionIdToClip.set(aid, clipAsset.name);
+          (direct as any).__actionId = aid;
+          this.clipActions.set(clipAsset.name, direct);
+          this.animationActions.set(clipAsset.name, direct);
+        }
+        apply(direct);
+      } catch {}
+    }
+
+    // Fallback: update via cached clip handles when actions are not yet tracked
+    for (const [clipName, handle] of Array.from(this.clipHandles.entries())) {
+      if (!matches(clipName)) continue;
+      if (typeof params.weight === 'number' && handle.setWeight) {
+        try { handle.setWeight(params.weight); updated = true; } catch {}
+      }
+      if (typeof params.rate === 'number' && handle.setPlaybackRate) {
+        const signedRate = params.reverse ? -params.rate : params.rate;
+        try { handle.setPlaybackRate(signedRate); updated = true; } catch {}
+      } else if (typeof params.reverse === 'boolean' && handle.setPlaybackRate) {
+        try {
+          const signedRate = params.reverse ? -1 : 1;
+          handle.setPlaybackRate(signedRate);
+          updated = true;
+        } catch {}
+      }
+      const mode = params.loopMode || (typeof params.loop === 'boolean' ? (params.loop ? 'repeat' : 'once') : undefined);
+      if (mode && (handle as any).setLoop) {
+        try { (handle as any).setLoop(mode as any); updated = true; } catch {}
+      }
+
+      // If we have a handle but no live action, rehydrate an action from the cached clip
+      if (!updated && this.animationMixer) {
+        const clipAsset = this.animationClips.find(c => c.name === clipName);
+        if (clipAsset) {
+          try {
+            const newAction = this.animationMixer.clipAction(clipAsset);
+            const aid = handle.actionId || makeActionId();
+            this.actionIds.set(newAction, aid);
+            this.actionIdToClip.set(aid, clipAsset.name);
+            (newAction as any).__actionId = aid;
+            this.clipActions.set(clipAsset.name, newAction);
+            this.animationActions.set(clipAsset.name, newAction);
+            const applyNew = () => apply(newAction);
+            applyNew();
+            updated = true;
+            console.log('[LoomLarge] rehydrated action from cached clip', { clip: clipAsset.name, actionId: aid });
+          } catch {}
+        }
+      }
+    }
+
+    if (!updated) {
+      console.warn(`[LoomLarge] updateClipParams: no action matched "${name}"`, debugSnapshot());
+    } else {
+      console.log('[LoomLarge] updateClipParams applied', { target: name, actionId: params.actionId });
+    }
+
+    return updated;
   }
 }
 

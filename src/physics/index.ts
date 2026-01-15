@@ -1,5 +1,5 @@
 /**
- * LoomLarge - Physics Exports
+ * Loom3 - Physics Exports
  */
 
 export {

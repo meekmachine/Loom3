@@ -1,5 +1,5 @@
 /**
- * LoomLarge - Mapping Validation
+ * Loom3 - Mapping Validation
  *
  * Validates that AU mapping presets are compatible with a loaded character model.
  * Checks that bones, morph targets, and meshes referenced in the preset exist in the model.

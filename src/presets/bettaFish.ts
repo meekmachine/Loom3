@@ -857,7 +857,7 @@ export const BETTA_FISH_PRESET = {
   visemeKeys: [] as string[],
 };
 
-// Engine-compatible config format for LoomLargeThree
+// Engine-compatible config format for Loom3Three
 export const AU_MAPPING_CONFIG = {
   name: 'Betta Fish',
   animalType: 'fish',

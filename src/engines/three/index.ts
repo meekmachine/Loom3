@@ -2,5 +2,5 @@
  * Three.js Engine Implementation
  */
 
-export { LoomLargeThree, collectMorphMeshes } from './LoomLargeThree';
+export { Loom3Three, collectMorphMeshes } from './Loom3Three';
 export { AnimationThree } from './AnimationThree';

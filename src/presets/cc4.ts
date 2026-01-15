@@ -622,7 +622,8 @@ export const CC4_PRESET: AUMappingConfig = {
     },
     {
       name: 'face',
-      bones: ['CC_Base_Head', 'CC_Base_L_Eye', 'CC_Base_R_Eye', 'CC_Base_JawRoot'],
+      bones: ['CC_Base_Head'],
+      // meshes: populated by user selection in wizard - varies per character
       paddingFactor: 1.3,
       parent: 'head',
     },

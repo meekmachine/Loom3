@@ -1,5 +1,5 @@
 /**
- * LoomLarge - AU Mapping Types
+ * Loom3 - AU Mapping Types
  *
  * Type definitions for configurable Action Unit mappings.
  * Allows the engine to work with different character rigs (CC4, Mixamo, etc.)

@@ -1,5 +1,5 @@
 /**
- * LoomLarge - Core Type Definitions
+ * Loom3 - Core Type Definitions
  *
  * Type definitions for the 3D character animation engine.
  * These are framework-agnostic interfaces that work with any 3D engine.
@@ -76,9 +76,9 @@ export interface CompositeRotationState {
 export type RotationsState = Record<string, CompositeRotationState>;
 
 /**
- * LoomLargeConfig - Configuration options for the LoomLarge engine
+ * Loom3Config - Configuration options for the Loom3 engine
  */
-export interface LoomLargeConfig {
+export interface Loom3Config {
   /** AU to morph target mappings (defaults to CC4_PRESET) */
   auMappings?: import('../mappings/types').AUMappingConfig;
 }

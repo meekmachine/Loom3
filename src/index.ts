@@ -31,32 +31,29 @@
 // IMPLEMENTATIONS (Three.js)
 // ============================================================================
 
-export { LoomLargeThree, collectMorphMeshes } from './engines/three/LoomLargeThree';
-export { LoomLargeThree as Loom3Three } from './engines/three/LoomLargeThree';
+export { Loom3Three, collectMorphMeshes } from './engines/three/Loom3Three';
 export { AnimationThree } from './engines/three/AnimationThree';
 
 // Default export for convenience
-export { LoomLargeThree as default } from './engines/three/LoomLargeThree';
+export { Loom3Three as default } from './engines/three/Loom3Three';
+
+// Legacy alias (deprecated - use Loom3Three instead)
+export { Loom3Three as LoomLargeThree } from './engines/three/Loom3Three';
 
 // ============================================================================
 // INTERFACES (for implementing custom engines)
 // ============================================================================
 
 export type {
-  LoomLarge,
-  LoomMesh,
-  LoomVector3,
-  LoomEuler,
-  LoomQuaternion,
-  LoomObject3D,
+  Loom3,
   ReadyPayload,
-  LoomLargeConfig,
-} from './interfaces/LoomLarge';
+  Loom3Config,
+  MixerLoopMode,
+} from './interfaces/Loom3';
 
-export type {
-  LoomLarge as Loom3,
-  LoomLargeConfig as Loom3Config,
-} from './interfaces/LoomLarge';
+// Legacy aliases (deprecated)
+export type { Loom3 as LoomLarge, Loom3Config as LoomLargeConfig } from './interfaces/Loom3';
+
 export type { Animation } from './interfaces/Animation';
 
 export type {
@@ -135,7 +132,12 @@ export {
   hasLeftRightMorphs,
 } from './presets/cc4';
 
-// Fish preset removed - now lives in livekit-monorepo/frontend/src/presets/bettaFish.ts
+// Fish/skeletal preset
+export { BETTA_FISH_PRESET, AU_MAPPING_CONFIG as FISH_AU_MAPPING_CONFIG } from './presets/bettaFish';
+
+// Preset resolution by type name
+export { resolvePreset } from './presets';
+export type { PresetType } from './presets';
 
 // ============================================================================
 // PHYSICS
@@ -175,3 +177,40 @@ export type {
   MappingCorrectionOptions,
   MappingCorrectionResult,
 } from './validation/generateMappingCorrections';
+
+// Model extraction and analysis
+export {
+  extractModelData,
+  extractFromGLTF,
+} from './validation/extractModelData';
+
+export type {
+  ModelData,
+  BoneInfo,
+  MorphInfo,
+  ModelMeshInfo,
+  AnimationInfo,
+  TrackInfo,
+} from './validation/extractModelData';
+
+export {
+  analyzeModel,
+} from './validation/analyzeModel';
+
+export type {
+  ModelAnalysisReport,
+  AnalyzeModelOptions,
+  AnimationAnalysis,
+} from './validation/analyzeModel';
+
+// Geometry helpers for face/annotation positioning
+export {
+  findFaceCenter,
+  getModelForwardDirection,
+  detectFacingDirection,
+} from './validation/geometryHelpers';
+
+export type {
+  FaceCenterResult,
+  FindFaceCenterOptions,
+} from './validation/geometryHelpers';

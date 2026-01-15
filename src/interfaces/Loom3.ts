@@ -1,85 +1,39 @@
 /**
- * LoomLarge Engine Interface
+ * Loom3 Engine Interface
  *
  * Defines the contract for 3D character animation engines.
- * Implementations can target different 3D frameworks (Three.js, Babylon.js, etc.)
+ * Uses Three.js types directly - no framework abstraction overhead.
  */
 
+import type { Mesh, Object3D } from 'three';
 import type {
   TransitionHandle,
   AnimationPlayOptions,
   AnimationClipInfo,
   AnimationState,
   AnimationActionHandle,
+  ClipOptions,
+  ClipHandle,
+  CompositeRotation,
+  CurvePoint,
 } from '../core/types';
 import type { AUMappingConfig, MeshInfo } from '../mappings/types';
 
-/**
- * Mesh interface - minimal requirements for meshes with morph targets
- */
-export interface LoomMesh {
-  name: string;
-  visible: boolean;
-  isMesh: boolean;
-  morphTargetInfluences?: number[];
-  morphTargetDictionary?: Record<string, number>;
-}
-
-/**
- * Vector3-like interface
- */
-export interface LoomVector3 {
-  x: number;
-  y: number;
-  z: number;
-  clone(): LoomVector3;
-  copy(v: LoomVector3): void;
-}
-
-/**
- * Euler rotation interface
- */
-export interface LoomEuler {
-  x: number;
-  y: number;
-  z: number;
-  order: string;
-}
-
-/**
- * Quaternion interface
- */
-export interface LoomQuaternion {
-  clone(): LoomQuaternion;
-  copy(q: LoomQuaternion): void;
-}
-
-/**
- * Object3D interface - minimal requirements for scene objects
- */
-export interface LoomObject3D {
-  name?: string;
-  position: LoomVector3;
-  quaternion: LoomQuaternion;
-  rotation: LoomEuler & { set(x: number, y: number, z: number, order: string): void };
-  traverse(callback: (obj: any) => void): void;
-  getObjectByName(name: string): LoomObject3D | undefined;
-  getWorldPosition(target: LoomVector3): LoomVector3;
-  updateMatrixWorld(force: boolean): void;
-}
+/** Loop mode for mixer clips */
+export type MixerLoopMode = 'once' | 'repeat' | 'pingpong';
 
 /**
  * Payload for initializing the engine with a loaded model
  */
 export interface ReadyPayload {
-  meshes: LoomMesh[];
-  model: LoomObject3D;
+  meshes: Mesh[];
+  model: Object3D;
 }
 
 /**
- * Configuration options for the LoomLarge engine
+ * Configuration options for the Loom3 engine
  */
-export interface LoomLargeConfig {
+export interface Loom3Config {
   /** AU to morph target mappings */
   auMappings?: AUMappingConfig;
 }
@@ -88,12 +42,12 @@ export interface LoomLargeConfig {
 export type { MeshInfo } from '../mappings/types';
 
 /**
- * LoomLarge Engine Interface
+ * Loom3 Engine Interface
  *
  * The main interface for controlling 3D character facial animation.
  * Supports Action Units (AUs), morph targets, visemes, and bone control.
  */
-export interface LoomLarge {
+export interface Loom3 {
   // ============================================================================
   // INITIALIZATION & LIFECYCLE
   // ============================================================================
@@ -259,6 +213,14 @@ export interface LoomLarge {
    */
   setMeshVisible(meshName: string, visible: boolean): void;
 
+  /**
+   * Highlight a mesh with an emissive glow effect
+   * @param meshName - Name of the mesh to highlight (null to clear all highlights)
+   * @param color - Highlight color (default: cyan)
+   * @param intensity - Emissive intensity (default: 0.5)
+   */
+  highlightMesh(meshName: string | null, color?: number, intensity?: number): void;
+
   // ============================================================================
   // CONFIGURATION
   // ============================================================================
@@ -369,4 +331,66 @@ export interface LoomLarge {
    * @param options - Additional playback options for the target animation
    */
   crossfadeTo(clipName: string, duration?: number, options?: AnimationPlayOptions): AnimationActionHandle | null;
+
+  // ============================================================================
+  // DYNAMIC CLIP BUILDING (for animation scheduler integration)
+  // ============================================================================
+
+  /**
+   * Get the composite rotations configuration for the current preset.
+   * Used by animation schedulers for coordinated head/eye movements.
+   */
+  getCompositeRotations(): CompositeRotation[];
+
+  /**
+   * Build and play an AnimationClip from curve data.
+   * Used by animation schedulers to convert keyframe data to mixer clips.
+   * @param clipName - Unique name for the clip
+   * @param curves - Map of curve IDs to keyframe arrays
+   * @param options - Playback options
+   * @returns Handle for controlling the clip, or null if not supported
+   */
+  buildClip(
+    clipName: string,
+    curves: Record<string, Array<CurvePoint>>,
+    options?: ClipOptions
+  ): ClipHandle | null;
+
+  /**
+   * Update parameters on an active clip.
+   * @param name - Name of the clip to update
+   * @param params - Parameters to update
+   * @returns true if clip was found and updated
+   */
+  updateClipParams(
+    name: string,
+    params: {
+      weight?: number;
+      rate?: number;
+      loop?: boolean;
+      loopMode?: MixerLoopMode;
+      reverse?: boolean;
+      actionId?: string;
+    }
+  ): boolean;
+
+  /**
+   * Clean up resources for a snippet/clip.
+   * @param name - Name of the snippet to clean up
+   */
+  cleanupSnippet(name: string): void;
+
+  /**
+   * Check if the given curves can be played through buildClip.
+   * Returns false if curves contain bone-only AUs that can't be baked.
+   */
+  supportsClipCurves(
+    curves: Record<string, Array<CurvePoint>>
+  ): boolean;
+
+  /**
+   * Callback when a snippet finishes playback.
+   * Used by animation schedulers for sequencing.
+   */
+  onSnippetEnd?(name: string): void;
 }

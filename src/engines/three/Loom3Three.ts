@@ -1,7 +1,7 @@
 /**
- * LoomLargeThree - Three.js Implementation
+ * Loom3Three - Three.js Implementation
  *
- * Default implementation of the LoomLarge interface for Three.js.
+ * Default implementation of the Loom3 interface for Three.js.
  * Controls 3D character facial animation using Action Units (AUs),
  * morph targets, visemes, and bone transformations.
  */
@@ -18,14 +18,14 @@ import {
   LoopRepeat,
   LoopPingPong,
   LoopOnce,
+  Clock,
 } from 'three';
+import type { Mesh, Object3D } from 'three';
 import type {
-  LoomLarge,
-  LoomMesh,
-  LoomObject3D,
+  Loom3,
   ReadyPayload,
-  LoomLargeConfig,
-} from '../../interfaces/LoomLarge';
+  Loom3Config,
+} from '../../interfaces/Loom3';
 import type { MeshInfo } from '../../mappings/types';
 import type { Animation } from '../../interfaces/Animation';
 import type {
@@ -88,7 +88,7 @@ const makeActionId = () => `act_${Math.random().toString(36).slice(2, 8)}_${Date
  * NodeBase - internal bone snapshot
  */
 interface NodeBase {
-  obj: LoomObject3D;
+  obj: Object3D;
   basePos: { x: number; y: number; z: number };
   baseQuat: any;
   baseEuler: { x: number; y: number; z: number; order: string };
@@ -96,7 +96,7 @@ interface NodeBase {
 
 type ResolvedBones = Partial<Record<string, NodeBase>>;
 
-export class LoomLargeThree implements LoomLarge {
+export class Loom3Three implements Loom3 {
   // Configuration
   private config: AUMappingConfig;
 
@@ -121,11 +121,11 @@ export class LoomLargeThree implements LoomLarge {
   private translations: Record<string, { x: number; y: number; z: number }> = {};
 
   // Mesh references
-  private faceMesh: LoomMesh | null = null;
+  private faceMesh: Mesh | null = null;
   private resolvedFaceMeshes: string[] = [];
-  private meshes: LoomMesh[] = [];
-  private model: LoomObject3D | null = null;
-  private meshByName = new Map<string, LoomMesh>();
+  private meshes: Mesh[] = [];
+  private model: Object3D | null = null;
+  private meshByName = new Map<string, Mesh>();
   private morphCache = new Map<string, { infl: number[]; idx: number }[]>();
 
   // Bones
@@ -164,7 +164,7 @@ export class LoomLargeThree implements LoomLarge {
     smoothedWindX: 0,
     smoothedWindZ: 0,
   };
-  private registeredHairObjects = new Map<string, LoomMesh>();
+  private registeredHairObjects = new Map<string, Mesh>();
   private cachedHairMeshNames: string[] | null = null;
 
   // Baked animation state (Three.js AnimationMixer)
@@ -180,7 +180,12 @@ export class LoomLargeThree implements LoomLarge {
   // Map actionId to clip name for quick reverse lookup
   private actionIdToClip = new Map<string, string>();
 
-  constructor(config: LoomLargeConfig = {}, animation?: Animation) {
+  // Internal animation loop
+  private clock = new Clock(false); // Don't auto-start
+  private animationFrameId: number | null = null;
+  private isRunning = false;
+
+  constructor(config: Loom3Config = {}, animation?: Animation) {
     this.config = config.auMappings || CC4_PRESET;
     this.mixWeights = { ...this.config.auMixDefaults };
     this.animation = animation || new AnimationThree();
@@ -224,8 +229,8 @@ export class LoomLargeThree implements LoomLarge {
     const { meshes, model } = payload;
 
     const collectedMeshes = collectMorphMeshes(model);
-    const meshByKey = new Map<string, LoomMesh>();
-    const addMesh = (mesh: LoomMesh) => {
+    const meshByKey = new Map<string, Mesh>();
+    const addMesh = (mesh: Mesh) => {
       const key = mesh.name || (mesh as any).uuid;
       if (!meshByKey.has(key)) {
         meshByKey.set(key, mesh);
@@ -286,18 +291,18 @@ export class LoomLargeThree implements LoomLarge {
         const morphKeys = faceMesh?.morphTargetDictionary
           ? Object.keys(faceMesh.morphTargetDictionary)
           : [];
-        console.log('[LoomLargeThree] Face mesh resolved:', faceName);
-        console.log('[LoomLargeThree] Face mesh morphs:', morphKeys);
+        console.log('[Loom3Three] Face mesh resolved:', faceName);
+        console.log('[Loom3Three] Face mesh morphs:', morphKeys);
       }
     } else {
-      console.log('[LoomLargeThree] No face mesh resolved from morph targets.');
+      console.log('[Loom3Three] No face mesh resolved from morph targets.');
     }
 
     // Apply render order and material settings from CC4_MESHES
     this.applyMeshMaterialSettings(model);
   }
 
-  private resolveFaceMeshes(meshes: LoomMesh[]): string[] {
+  private resolveFaceMeshes(meshes: Mesh[]): string[] {
     const faceMeshNames = this.config.morphToMesh?.face || [];
     const availableMorphMeshes = meshes.filter((m) => {
       const dict = m.morphTargetDictionary;
@@ -383,11 +388,31 @@ export class LoomLargeThree implements LoomLarge {
     this.updateHairWindIdle(dtSeconds);
   }
 
-  /** No-op for backwards compatibility - engine is driven externally via update() */
-  start(): void {}
+  /** Start the internal animation loop using Three.js Clock */
+  start(): void {
+    if (this.isRunning) return;
+    this.isRunning = true;
+    this.clock.start();
 
-  /** No-op for backwards compatibility - use dispose() to clean up */
-  stop(): void {}
+    const tick = () => {
+      if (!this.isRunning) return;
+      const delta = this.clock.getDelta();
+      this.update(delta);
+      this.animationFrameId = requestAnimationFrame(tick);
+    };
+
+    this.animationFrameId = requestAnimationFrame(tick);
+  }
+
+  /** Stop the internal animation loop */
+  stop(): void {
+    this.isRunning = false;
+    this.clock.stop();
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
 
   dispose(): void {
     this.stop();
@@ -835,7 +860,7 @@ export class LoomLargeThree implements LoomLarge {
     const morphKey = this.config.visemeKeys[visemeIndex];
     this.setMorph(morphKey, val);
 
-    const jawAmount = LoomLargeThree.VISEME_JAW_AMOUNTS[visemeIndex] * val * jawScale;
+    const jawAmount = Loom3Three.VISEME_JAW_AMOUNTS[visemeIndex] * val * jawScale;
     if (Math.abs(jawScale) > 1e-6 && Math.abs(jawAmount) > 1e-6) {
       this.updateBoneRotation('JAW', 'pitch', jawAmount);
     }
@@ -852,7 +877,7 @@ export class LoomLargeThree implements LoomLarge {
 
     const morphHandle = this.transitionMorph(morphKey, target, durationMs);
 
-    const jawAmount = LoomLargeThree.VISEME_JAW_AMOUNTS[visemeIndex] * target * jawScale;
+    const jawAmount = Loom3Three.VISEME_JAW_AMOUNTS[visemeIndex] * target * jawScale;
     if (Math.abs(jawScale) <= 1e-6 || Math.abs(jawAmount) <= 1e-6) {
       return morphHandle;
     }
@@ -986,6 +1011,49 @@ export class LoomLargeThree implements LoomLarge {
     });
   }
 
+  /** Store original emissive colors for highlight reset */
+  private originalEmissive = new Map<string, { color: number; intensity: number }>();
+
+  /**
+   * Highlight a mesh with an emissive glow effect
+   * @param meshName - Name of the mesh to highlight (null to clear all highlights)
+   * @param color - Highlight color (default: cyan 0x00ffff)
+   * @param intensity - Emissive intensity (default: 0.5)
+   */
+  highlightMesh(meshName: string | null, color: number = 0x00ffff, intensity: number = 0.5): void {
+    if (!this.model) return;
+
+    this.model.traverse((obj: any) => {
+      if (!obj.isMesh) return;
+
+      const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+
+      for (const mat of materials) {
+        if (!mat || !('emissive' in mat)) continue;
+
+        if (meshName === null || obj.name !== meshName) {
+          // Reset to original emissive
+          const original = this.originalEmissive.get(obj.name);
+          if (original) {
+            mat.emissive.setHex(original.color);
+            mat.emissiveIntensity = original.intensity;
+          }
+        } else if (obj.name === meshName) {
+          // Store original if not already stored
+          if (!this.originalEmissive.has(obj.name)) {
+            this.originalEmissive.set(obj.name, {
+              color: mat.emissive.getHex(),
+              intensity: mat.emissiveIntensity || 0,
+            });
+          }
+          // Apply highlight
+          mat.emissive.setHex(color);
+          mat.emissiveIntensity = intensity;
+        }
+      }
+    });
+  }
+
   /** Blending mode options for Three.js materials */
   private static readonly BLENDING_MODES: Record<string, number> = {
     'Normal': 1,      // THREE.NormalBlending
@@ -1005,7 +1073,7 @@ export class LoomLargeThree implements LoomLarge {
     blending: string;
   } | null {
     if (!this.model) return null;
-    let result: ReturnType<LoomLargeThree['getMeshMaterialConfig']> = null;
+    let result: ReturnType<Loom3Three['getMeshMaterialConfig']> = null;
 
     this.model.traverse((obj: any) => {
       if (obj.isMesh && obj.name === meshName) {
@@ -1013,7 +1081,7 @@ export class LoomLargeThree implements LoomLarge {
         if (mat) {
           // Reverse lookup blending mode name
           let blendingName = 'Normal';
-          for (const [name, value] of Object.entries(LoomLargeThree.BLENDING_MODES)) {
+          for (const [name, value] of Object.entries(Loom3Three.BLENDING_MODES)) {
             if (mat.blending === value) {
               blendingName = name;
               break;
@@ -1072,7 +1140,7 @@ export class LoomLargeThree implements LoomLarge {
             mat.depthTest = config.depthTest;
           }
           if (config.blending !== undefined) {
-            const blendValue = LoomLargeThree.BLENDING_MODES[config.blending];
+            const blendValue = Loom3Three.BLENDING_MODES[config.blending];
             if (blendValue !== undefined) {
               mat.blending = blendValue;
             }
@@ -1104,7 +1172,7 @@ export class LoomLargeThree implements LoomLarge {
    * Call this after loading the model with objects that should respond to physics.
    * Returns metadata about registered objects for service layer use.
    */
-  registerHairObjects(objects: LoomObject3D[]): Array<{ name: string; isMesh: boolean; isEyebrow: boolean }> {
+  registerHairObjects(objects: Object3D[]): Array<{ name: string; isMesh: boolean; isEyebrow: boolean }> {
     this.registeredHairObjects.clear();
     this.cachedHairMeshNames = null;
 
@@ -1112,7 +1180,7 @@ export class LoomLargeThree implements LoomLarge {
 
     for (const obj of objects) {
       if ((obj as any).isMesh) {
-        const mesh = obj as unknown as LoomMesh;
+        const mesh = obj as unknown as Mesh;
         this.registeredHairObjects.set(mesh.name, mesh);
 
         const meshInfo = CC4_MESHES[mesh.name];
@@ -1130,7 +1198,7 @@ export class LoomLargeThree implements LoomLarge {
   }
 
   /** Get registered hair objects (for service layer) */
-  getRegisteredHairObjects(): LoomMesh[] {
+  getRegisteredHairObjects(): Mesh[] {
     return Array.from(this.registeredHairObjects.values());
   }
 
@@ -1313,7 +1381,7 @@ export class LoomLargeThree implements LoomLarge {
    * Get available hair morph targets from registered hair meshes.
    */
   getHairMorphTargets(meshName?: string): string[] {
-    let targetMesh: LoomMesh | undefined;
+    let targetMesh: Mesh | undefined;
 
     if (meshName) {
       targetMesh = this.registeredHairObjects.get(meshName);
@@ -1622,7 +1690,7 @@ export class LoomLargeThree implements LoomLarge {
     this.model.updateMatrixWorld(true);
   }
 
-  private resolveBones(root: LoomObject3D): ResolvedBones {
+  private resolveBones(root: Object3D): ResolvedBones {
     const resolved: ResolvedBones = {};
 
     const snapshot = (obj: any): NodeBase => ({
@@ -1640,7 +1708,7 @@ export class LoomLargeThree implements LoomLarge {
       : null;
 
     // Find node with exact match first, then fuzzy match with suffix pattern
-    const findNode = (baseName?: string | null): LoomObject3D | undefined => {
+    const findNode = (baseName?: string | null): Object3D | undefined => {
       if (!baseName) return undefined;
 
       // Build full name with prefix and suffix
@@ -1652,7 +1720,7 @@ export class LoomLargeThree implements LoomLarge {
 
       // Try fuzzy match with suffix pattern if configured
       if (suffixRegex) {
-        let found: LoomObject3D | undefined;
+        let found: Object3D | undefined;
         root.traverse((obj: any) => {
           if (found) return; // Already found
           if (obj.name && obj.name.startsWith(fullName)) {
@@ -1714,7 +1782,7 @@ export class LoomLargeThree implements LoomLarge {
    * This ensures proper layering (e.g., hair renders on top of eyebrows).
    * Also auto-registers hair and eyebrow meshes for hair physics.
    */
-  private applyMeshMaterialSettings(root: LoomObject3D): void {
+  private applyMeshMaterialSettings(root: Object3D): void {
     // Clear and rebuild hair object registry
     this.registeredHairObjects.clear();
     this.cachedHairMeshNames = null;
@@ -1802,7 +1870,7 @@ export class LoomLargeThree implements LoomLarge {
           obj.material.depthTest = settings.depthTest;
         }
         if (typeof settings.blending === 'string') {
-          const blendValue = LoomLargeThree.BLENDING_MODES[settings.blending];
+          const blendValue = Loom3Three.BLENDING_MODES[settings.blending];
           if (blendValue !== undefined) {
             obj.material.blending = blendValue;
           }
@@ -1823,7 +1891,7 @@ export class LoomLargeThree implements LoomLarge {
    */
   loadAnimationClips(clips: unknown[]): void {
     if (!this.model) {
-      console.warn('LoomLarge: Cannot load animation clips before calling onReady()');
+      console.warn('Loom3: Cannot load animation clips before calling onReady()');
       return;
     }
 
@@ -1859,7 +1927,7 @@ export class LoomLargeThree implements LoomLarge {
   playAnimation(clipName: string, options: AnimationPlayOptions = {}): AnimationActionHandle | null {
     const action = this.animationActions.get(clipName);
     if (!action) {
-      console.warn(`LoomLarge: Animation clip "${clipName}" not found`);
+      console.warn(`Loom3: Animation clip "${clipName}" not found`);
       return null;
     }
 
@@ -2126,11 +2194,11 @@ export class LoomLargeThree implements LoomLarge {
     options?: ClipOptions
   ): AnimationClip | null {
     if (!this.model) {
-      console.warn(`[LoomLarge] snippetToClip: No model loaded for "${clipName}"`);
+      console.warn(`[Loom3] snippetToClip: No model loaded for "${clipName}"`);
       return null;
     }
     if (Object.keys(curves).length === 0) {
-      console.warn(`[LoomLarge] snippetToClip: Empty curves for "${clipName}"`);
+      console.warn(`[Loom3] snippetToClip: Empty curves for "${clipName}"`);
       return null;
     }
     // Intentionally quiet to avoid per-frame logging in continuous tracking.
@@ -2376,13 +2444,13 @@ export class LoomLargeThree implements LoomLarge {
     }
 
     if (tracks.length === 0) {
-      console.warn(`[LoomLarge] snippetToClip: No tracks created for "${clipName}"`);
+      console.warn(`[Loom3] snippetToClip: No tracks created for "${clipName}"`);
       return null;
     }
 
     // Create the clip with calculated duration
     const clip = new AnimationClip(clipName, maxTime, tracks);
-    console.log(`[LoomLarge] snippetToClip: Created clip "${clipName}" with ${tracks.length} tracks, duration ${maxTime.toFixed(2)}s`);
+    console.log(`[Loom3] snippetToClip: Created clip "${clipName}" with ${tracks.length} tracks, duration ${maxTime.toFixed(2)}s`);
 
     return clip;
   }
@@ -2398,11 +2466,11 @@ export class LoomLargeThree implements LoomLarge {
   ): void {
     const targetMeshNames = this.config.morphToMesh?.face || [];
     const targetMeshes = targetMeshNames.length
-      ? targetMeshNames.map((name) => this.meshByName.get(name)).filter(Boolean) as LoomMesh[]
+      ? targetMeshNames.map((name) => this.meshByName.get(name)).filter(Boolean) as Mesh[]
       : this.meshes;
     let added = false;
 
-    const addTrackForMesh = (mesh: LoomMesh) => {
+    const addTrackForMesh = (mesh: Mesh) => {
       const dict = mesh.morphTargetDictionary;
       if (!dict || dict[morphKey] === undefined) return;
 
@@ -2450,7 +2518,7 @@ export class LoomLargeThree implements LoomLarge {
     this.ensureMixer();
 
     if (!this.animationMixer) {
-      console.warn('[LoomLarge] playClip: No model loaded, cannot create mixer');
+      console.warn('[Loom3] playClip: No model loaded, cannot create mixer');
       return null;
     }
 
@@ -2532,7 +2600,7 @@ export class LoomLargeThree implements LoomLarge {
     this.clipActions.set(clip.name, action);
     // Also mirror into animationActions so all clips (baked or built) share one update surface
     this.animationActions.set(clip.name, action);
-    console.log(`[LoomLarge] playClip: Playing "${clip.name}" (rate: ${playbackRate}, loop: ${loop}, actionId: ${actionId})`);
+    console.log(`[Loom3] playClip: Playing "${clip.name}" (rate: ${playbackRate}, loop: ${loop}, actionId: ${actionId})`);
 
     // Build ClipHandle
     const handle: ClipHandle = {
@@ -2675,7 +2743,7 @@ export class LoomLargeThree implements LoomLarge {
       mixerActions: ((this.animationMixer as any)?._actions || []).map((a: any) => ({ name: a?.getClip?.()?.name || '', actionId: this.actionIds.get(a) || (a as any).__actionId })),
     });
 
-    console.log('[LoomLarge] updateClipParams start', debugSnapshot());
+    console.log('[Loom3] updateClipParams start', debugSnapshot());
 
     const apply = (action: AnimationAction | null | undefined) => {
       if (!action) return;
@@ -2788,27 +2856,39 @@ export class LoomLargeThree implements LoomLarge {
             const applyNew = () => apply(newAction);
             applyNew();
             updated = true;
-            console.log('[LoomLarge] rehydrated action from cached clip', { clip: clipAsset.name, actionId: aid });
+            console.log('[Loom3] rehydrated action from cached clip', { clip: clipAsset.name, actionId: aid });
           } catch {}
         }
       }
     }
 
     if (!updated) {
-      console.warn(`[LoomLarge] updateClipParams: no action matched "${name}"`, debugSnapshot());
+      console.warn(`[Loom3] updateClipParams: no action matched "${name}"`, debugSnapshot());
     } else {
-      console.log('[LoomLarge] updateClipParams applied', { target: name, actionId: params.actionId });
+      console.log('[Loom3] updateClipParams applied', { target: name, actionId: params.actionId });
     }
 
     return updated;
+  }
+
+  /**
+   * Check if curves can be played through buildClip.
+   * Returns false if curves contain bone-only AUs that can't be baked to morph tracks.
+   */
+  supportsClipCurves(
+    curves: Record<string, Array<{ time: number; intensity: number; inherit?: boolean }>>
+  ): boolean {
+    // Currently all curve-based playback is supported - bone AUs are handled via
+    // quaternion tracks in the generated clip
+    return Object.keys(curves).length > 0;
   }
 }
 
 /**
  * Helper function to collect meshes with morph targets from a scene.
  */
-export function collectMorphMeshes(root: LoomObject3D): LoomMesh[] {
-  const meshes: LoomMesh[] = [];
+export function collectMorphMeshes(root: Object3D): Mesh[] {
+  const meshes: Mesh[] = [];
   root.traverse((obj: any) => {
     if (obj.isMesh) {
       const dict = obj.morphTargetDictionary;

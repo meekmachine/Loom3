@@ -1,6 +1,6 @@
 # Loom3
 
-The missing character controlor for ThreeJS, allowing you to bring all your humaniod, and even animal characters to life. Loom3 is based on the Facial Action Coding System (FACS) as the basis of its mappings, thus suppoting morph and bone mapping library for controlling high-definition 3D characters in Three.js.
+The missing character controller for Three.js, allowing you to bring humanoid and animal characters to life. Loom3 is based on the Facial Action Coding System (FACS) as the basis of its mappings, providing a morph and bone mapping library for controlling high-definition 3D characters in Three.js.
 
 Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units to the morph targets and bone transforms found in Character Creator 4 (CC4) characters. Instead of manually figuring out which blend shapes correspond to which facial movements, you can simply say `setAU(12, 0.8)` and the library handles the rest.
 
@@ -51,10 +51,10 @@ npm install three
 ```typescript
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { Loom3Three, collectMorphMeshes, CC4_PRESET } from 'loom3';
+import { Loom3, collectMorphMeshes, CC4_PRESET } from 'loom3';
 
 // 1. Create the Loom3 controller with a preset
-const loom = new Loom3Three({ auMappings: CC4_PRESET });
+const loom = new Loom3({ auMappings: CC4_PRESET });
 
 // 2. Set up your Three.js scene
 const scene = new THREE.Scene();
@@ -78,6 +78,8 @@ loader.load('/character.glb', (gltf) => {
 // 6. In your animation loop, call loom.update(deltaSeconds)
 // This drives all transitions and animations
 ```
+
+If you’re implementing a custom renderer, target the `LoomLarge` interface exported from `loom3`.
 
 ### Quick start examples
 
@@ -143,10 +145,10 @@ import { CC4_PRESET } from 'loom3';
 // CC4_PRESET contains:
 {
   auToMorphs: {
-    // AU number → array of morph target names
-    1: ['Brow_Raise_Inner_L', 'Brow_Raise_Inner_R'],
-    12: ['Mouth_Smile_L', 'Mouth_Smile_R'],
-    45: ['Eye_Blink_L', 'Eye_Blink_R'],
+    // AU number → morph target names split by side
+    1: { left: ['Brow_Raise_Inner_L'], right: ['Brow_Raise_Inner_R'], center: [] },
+    12: { left: ['Mouth_Smile_L'], right: ['Mouth_Smile_R'], center: [] },
+    45: { left: ['Eye_Blink_L'], right: ['Eye_Blink_R'], center: [] },
     // ... 87 AUs total
   },
 
@@ -202,9 +204,24 @@ import { CC4_PRESET } from 'loom3';
 ### Passing a preset to Loom3
 
 ```typescript
-import { Loom3Three, CC4_PRESET } from 'loom3';
+import { Loom3, CC4_PRESET } from 'loom3';
 
-const loom = new Loom3Three({ auMappings: CC4_PRESET });
+const loom = new Loom3({ auMappings: CC4_PRESET });
+```
+
+You can also resolve presets by name and apply overrides without cloning the full preset:
+
+```typescript
+import { Loom3 } from 'loom3';
+
+const loom = new Loom3({
+  presetType: 'cc4',
+  presetOverrides: {
+    auToMorphs: {
+      12: { left: ['MySmile_Left'], right: ['MySmile_Right'], center: [] },
+    },
+  },
+});
 ```
 
 > **Screenshot placeholder:** Add a screenshot showing the preset being applied to a character
@@ -326,34 +343,30 @@ This is especially useful for:
 
 ### Extending an existing preset
 
-Use spread syntax to override specific mappings while keeping the rest:
+Use `mergePreset` to override specific mappings while keeping the rest:
 
 ```typescript
-import { CC4_PRESET } from 'loom3';
+import { CC4_PRESET, mergePreset } from 'loom3';
 
-const MY_PRESET = {
-  ...CC4_PRESET,
+const MY_PRESET = mergePreset(CC4_PRESET, {
 
   // Override AU12 (smile) with custom morph names
   auToMorphs: {
-    ...CC4_PRESET.auToMorphs,
-    12: ['MySmile_Left', 'MySmile_Right'],
+    12: { left: ['MySmile_Left'], right: ['MySmile_Right'], center: [] },
   },
 
   // Add a new bone binding
   auToBones: {
-    ...CC4_PRESET.auToBones,
     99: [{ node: 'CUSTOM_BONE', channel: 'ry', scale: 1, maxDegrees: 45 }],
   },
 
   // Update bone node paths
   boneNodes: {
-    ...CC4_PRESET.boneNodes,
     'CUSTOM_BONE': 'MyRig_CustomBone',
   },
-};
+});
 
-const loom = new Loom3Three({ auMappings: MY_PRESET });
+const loom = new Loom3({ auMappings: MY_PRESET });
 ```
 
 ### Creating a preset from scratch
@@ -363,10 +376,10 @@ import { AUMappingConfig } from 'loom3';
 
 const CUSTOM_PRESET: AUMappingConfig = {
   auToMorphs: {
-    1: ['brow_inner_up_L', 'brow_inner_up_R'],
-    2: ['brow_outer_up_L', 'brow_outer_up_R'],
-    12: ['mouth_smile_L', 'mouth_smile_R'],
-    45: ['eye_blink_L', 'eye_blink_R'],
+    1: { left: ['brow_inner_up_L'], right: ['brow_inner_up_R'], center: [] },
+    2: { left: ['brow_outer_up_L'], right: ['brow_outer_up_R'], center: [] },
+    12: { left: ['mouth_smile_L'], right: ['mouth_smile_R'], center: [] },
+    45: { left: ['eye_blink_L'], right: ['eye_blink_R'], center: [] },
   },
 
   auToBones: {
@@ -612,7 +625,7 @@ export const FISH_CONTINUUM_PAIRS_MAP: Record<number, {
 export const FISH_AU_MAPPING_CONFIG = {
   auToBones: FISH_BONE_BINDINGS,
   boneNodes: FISH_BONE_NODES,
-  auToMorphs: {} as Record<number, string[]>,  // No morph targets
+  auToMorphs: {} as Record<number, { left: string[]; right: string[]; center: string[] }>,  // No morph targets
   morphToMesh: {} as Record<string, string[]>,
   visemeKeys: [] as string[],  // Fish don't speak!
   auInfo: FISH_AU_INFO,
@@ -624,10 +637,10 @@ export const FISH_AU_MAPPING_CONFIG = {
 ### Using the fish preset
 
 ```typescript
-import { Loom3Three } from 'loom3';
+import { Loom3 } from 'loom3';
 import { FISH_AU_MAPPING_CONFIG, FishAction } from './presets/bettaFish';
 
-const fishController = new Loom3Three({
+const fishController = new Loom3({
   auMappings: FISH_AU_MAPPING_CONFIG
 });
 

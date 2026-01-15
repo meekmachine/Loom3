@@ -6,230 +6,449 @@
  * and AU metadata that we painstakingly worked through.
  */
 
-import type { AUMappingConfig, MeshCategory, BlendingMode, MeshMaterialSettings, MeshInfo, MorphCategory } from '../mappings/types';
+import type { AUMappingConfig, MeshCategory, BlendingMode, MeshMaterialSettings, MeshInfo, MorphCategory, MorphTargetsBySide } from '../mappings/types';
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
 
 // ============================================================================
 // AU TO MORPHS - Maps AU IDs to morph target names
 // ============================================================================
 
-export const AU_TO_MORPHS: Record<number, string[]> = {
-  // Brows / Forehead
-  1: ['Brow_Raise_Inner_L','Brow_Raise_Inner_R'],
-  2: ['Brow_Raise_Outer_L','Brow_Raise_Outer_R'],
-  4: ['Brow_Drop_L','Brow_Drop_R'],
-
-  // Eyes / Lids
-  5: ['Eye_Wide_L','Eye_Wide_R'],
-  6: ['Cheek_Raise_L','Cheek_Raise_R'],
-  7: ['Eye_Squint_L','Eye_Squint_R'],
-  43: ['Eye_Blink_L','Eye_Blink_R'],
-  45: ['Eye_Blink_L','Eye_Blink_R'],  // Blink alias
-
-  // Nose / Midface
-  9: ['Nose_Sneer_L','Nose_Sneer_R'],
-  34: ['Cheek_Puff_L','Cheek_Puff_R'],
-
-  // Mouth / Lips
-  8:  ['Mouth_Press_L','Mouth_Press_R','Mouth_Close'],
-  10: ['Nose_Sneer_L','Nose_Sneer_R'],  // Upper Lip Raiser (levator labii superioris) - raises upper lip in disgust/sneer
-  11: ['Mouth_Up_Upper_L','Mouth_Up_Upper_R'],  // Nasolabial Deepener (zygomaticus minor) - no dedicated morph
-  12: ['Mouth_Smile_L','Mouth_Smile_R'],
-  13: ['Mouth_Dimple_L','Mouth_Dimple_R'],  // Sharp Lip Puller (levator anguli oris) - pulls lip corners up
-  14: ['Mouth_Press_L','Mouth_Press_R'],
-  15: ['Mouth_Frown_L','Mouth_Frown_R'],
-  16: ['Mouth_Down_Lower_L','Mouth_Down_Lower_R'],
-  17: ['Mouth_Shrug_Lower'],
-  18: ['Mouth_Pucker'],
-  20: ['Mouth_Stretch_L','Mouth_Stretch_R'],
-  22: ['Mouth_Funnel'],
-  23: ['Mouth_Press_L','Mouth_Press_R'],
-  24: ['Mouth_Press_L','Mouth_Press_R'],
-  25: ['Jaw_Open'],  // Lips Part - small jaw open with morph
-  26: ['Jaw_Open'],  // Jaw Drop - mixed: bone rotation + Jaw_Open morph
-  27: ['Jaw_Open'],  // Mouth Stretch - larger jaw open with morph
-  28: ['Mouth_Roll_In_Upper','Mouth_Roll_In_Lower'],
-  32: ['Mouth_Roll_In_Lower'],  // Lip Bite - using roll in lower as approximation
-
-  // Tongue
-  19: ['Tongue_Out'],
-  36: ['Tongue_Bulge_L','Tongue_Bulge_R'],
-  37: ['Tongue_Up'],      // Tongue Up - morph + bone rotation
-  38: ['Tongue_Down'],    // Tongue Down - morph + bone rotation
-  39: ['Tongue_L'],       // Tongue Left - morph + bone rotation
-  40: ['Tongue_R'],       // Tongue Right - morph + bone rotation
-  41: [],  // Tongue Tilt Left - BONE ONLY
-  42: [],  // Tongue Tilt Right - BONE ONLY
-  // Extended tongue morphs (CC4-specific)
-  73: ['Tongue_Narrow'],
-  74: ['Tongue_Wide'],
-  75: ['Tongue_Roll'],
-  76: ['Tongue_Tip_Up'],
-  77: ['Tongue_Tip_Down'],
-
-  // Jaw
-  29: ['Jaw_Forward'],
-  30: ['Jaw_L'],  // Jaw Left - mixed: bone rotation + Jaw_L morph
-  31: [],  // Jaw Clencher (masseter/temporalis) - no dedicated CC4 morph
-  35: ['Jaw_R'],  // Jaw Right - mixed: bone rotation + Jaw_R morph
-
-  // Head position (M51-M56 in FACS notation)
-  51: ['Head_Turn_L'],   // Head turn left
-  52: ['Head_Turn_R'],   // Head turn right
-  53: ['Head_Turn_Up'],  // Head up
-  54: ['Head_Turn_Down'],
-  55: ['Head_Tilt_L'],
-  56: ['Head_Tilt_R'],
-
-  // Eye Direction (convenience)
-  61: ['Eye_L_Look_L','Eye_R_Look_L'],
-  62: ['Eye_L_Look_R','Eye_R_Look_R'],
-  63: ['Eye_L_Look_Up','Eye_R_Look_Up'],
-  64: ['Eye_L_Look_Down','Eye_R_Look_Down'],
-  // Single-eye controls (Left eye)
-  65: ['Eye_L_Look_L'],
-  66: ['Eye_L_Look_R'],
-  67: ['Eye_L_Look_Up'],
-  68: ['Eye_L_Look_Down'],
-  // Single-eye controls (Right eye)
-  69: ['Eye_R_Look_L'],
-  70: ['Eye_R_Look_R'],
-  71: ['Eye_R_Look_Up'],
-  72: ['Eye_R_Look_Down'],
-
-  // Eye morphs (CC_Base_Eye meshes)
-  // EO morphs control the shadow/depth around the eyes
-  80: ['EO Bulge L', 'EO Bulge R'],
-  81: ['EO Depth L', 'EO Depth R'],
-  82: ['EO Inner Depth L', 'EO Inner Depth R'],
-  83: ['EO Inner Height L', 'EO Inner Height R'],
-  84: ['EO Inner Width L', 'EO Inner Width R'],
-  85: ['EO Outer Depth L', 'EO Outer Depth R'],
-  86: ['EO Outer Height L', 'EO Outer Height R'],
-  87: ['EO Outer Width L', 'EO Outer Width R'],
-  88: ['EO Upper Depth L', 'EO Upper Depth R'],
-  89: ['EO Lower Depth L', 'EO Lower Depth R'],
-  90: ['EO Center Upper Depth L', 'EO Center Upper Depth R'],
-  91: ['EO Center Upper Height L', 'EO Center Upper Height R'],
-  92: ['EO Center Lower Depth L', 'EO Center Lower Depth R'],
-  93: ['EO Center Lower Height L', 'EO Center Lower Height R'],
-  94: ['EO Inner Upper Depth L', 'EO Inner Upper Depth R'],
-  95: ['EO Inner Upper Height L', 'EO Inner Upper Height R'],
-  96: ['EO Inner Lower Depth L', 'EO Inner Lower Depth R'],
-  97: ['EO Inner Lower Height L', 'EO Inner Lower Height R'],
-  98: ['EO Outer Upper Depth L', 'EO Outer Upper Depth R'],
-  99: ['EO Outer Upper Height L', 'EO Outer Upper Height R'],
-  100: ['EO Outer Lower Depth L', 'EO Outer Lower Depth R'],
-  101: ['EO Outer Lower Height L', 'EO Outer Lower Height R'],
-  102: ['EO Duct Depth L', 'EO Duct Depth R'],
-};
-
-// ============================================================================
-// VISEME KEYS - Lip-sync phoneme targets
-// ============================================================================
-
-export const VISEME_KEYS: string[] = [
-  'EE','Er','IH','Ah','Oh','W_OO','S_Z','Ch_J','F_V','TH','T_L_D_N','B_M_P','K_G_H_NG','AE','R'
-];
-
-// ============================================================================
-// BONE BINDINGS - AU to bone rotation/translation mappings
-// ============================================================================
-
-export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
-  // Head turn and tilt (M51-M56) - use HEAD bone only (NECK should not rotate with head)
-  // Axis is derived from COMPOSITE_ROTATIONS, not stored here
-  51: [
-    { node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 65 },   // Head turn left
-  ],
-  52: [
-    { node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 65 },  // Head turn right
-  ],
-  53: [
-    { node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 40 },  // Head up
-  ],
-  54: [
-    { node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 40 },   // Head down
-  ],
-  55: [
-    { node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 35 },  // Head tilt left
-  ],
-  56: [
-    { node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 35 },   // Head tilt right
-  ],
-  // Eyes - CC4 rigs use rz for horizontal, rx for vertical
-  61: [
-    { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 32 },   // Eyes look left
-    { node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 32 },
-  ],
-  62: [
-    { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 32 },  // Eyes look right
-    { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 32 },
-  ],
-  63: [
-    { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 25 },  // Eyes Up
-    { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 25 },
-  ],
-  64: [
-    { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 25 },   // Eyes Down
-    { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 25 },
-  ],
-  // Single-eye (Left) — horizontal (rz for CC4) and vertical (rx)
-  65: [ { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 15 } ],
-  66: [ { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 15 } ],
-  67: [ { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 12 } ],  // Left Eye Up
-  68: [ { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 12 } ],   // Left Eye Down
-  // Single-eye (Right) — horizontal (rz for CC4) and vertical (rx)
-  69: [ { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 15 } ],
-  70: [ { node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 15 } ],
-  71: [ { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 12 } ],  // Right Eye Up
-  72: [ { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 12 } ],   // Right Eye Down
-
-  // Jaw / Mouth
-  8: [ // Lips Toward Each Other - slight jaw open helps sell the lip press
-    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 8 },
-  ],
-  25: [ // Lips Part — small jaw open
-    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 5.84 },
-  ],
-  26: [
-    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 28 },
-  ],
-  27: [ // Mouth Stretch — larger jaw open
-    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 32 },
-  ],
-  29: [
-    { node: 'JAW', channel: 'tz', scale: -1, maxUnits: 0.02 },  // Translation
-  ],
-  30: [ // Jaw Left
-    { node: 'JAW', channel: 'ry', scale: -1, maxDegrees: 5 },
-  ],
-  35: [ // Jaw Right
-    { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 5 },
-  ],
-
-  // Tongue
-  19: [
-    { node: 'TONGUE', channel: 'tz', scale: -1, maxUnits: 0.008 },  // Translation
-  ],
-  37: [ // Tongue Up
-    { node: 'TONGUE', channel: 'rz', scale: -1, maxDegrees: 45 },
-  ],
-  38: [ // Tongue Down
-    { node: 'TONGUE', channel: 'rz', scale: 1, maxDegrees: 45 },
-  ],
-  39: [ // Tongue Left
-    { node: 'TONGUE', channel: 'ry', scale: -1, maxDegrees: 10 },
-  ],
-  40: [ // Tongue Right
-    { node: 'TONGUE', channel: 'ry', scale: 1, maxDegrees: 10 },
-  ],
-  41: [ // Tongue Tilt Left
-    { node: 'TONGUE', channel: 'rx', scale: -1, maxDegrees: 20 },
-  ],
-  42: [ // Tongue Tilt Right
-    { node: 'TONGUE', channel: 'rx', scale: 1, maxDegrees: 20 },
-  ],
+export const AU_TO_MORPHS: Record<number, MorphTargetsBySide> = {
+  1: {
+    left: ['Brow_Raise_Inner_L'],
+    right: ['Brow_Raise_Inner_R'],
+    center: [],
+  },
+  2: {
+    left: ['Brow_Raise_Outer_L'],
+    right: ['Brow_Raise_Outer_R'],
+    center: [],
+  },
+  4: {
+    left: ['Brow_Drop_L'],
+    right: ['Brow_Drop_R'],
+    center: [],
+  },
+  5: {
+    left: ['Eye_Wide_L'],
+    right: ['Eye_Wide_R'],
+    center: [],
+  },
+  6: {
+    left: ['Cheek_Raise_L'],
+    right: ['Cheek_Raise_R'],
+    center: [],
+  },
+  7: {
+    left: ['Eye_Squint_L'],
+    right: ['Eye_Squint_R'],
+    center: [],
+  },
+  8: {
+    left: ['Mouth_Press_L'],
+    right: ['Mouth_Press_R'],
+    center: ['Mouth_Close'],
+  },
+  9: {
+    left: ['Nose_Sneer_L'],
+    right: ['Nose_Sneer_R'],
+    center: [],
+  },
+  10: {
+    left: ['Nose_Sneer_L'],
+    right: ['Nose_Sneer_R'],
+    center: [],
+  },
+  11: {
+    left: ['Mouth_Up_Upper_L'],
+    right: ['Mouth_Up_Upper_R'],
+    center: [],
+  },
+  12: {
+    left: ['Mouth_Smile_L'],
+    right: ['Mouth_Smile_R'],
+    center: [],
+  },
+  13: {
+    left: ['Mouth_Dimple_L'],
+    right: ['Mouth_Dimple_R'],
+    center: [],
+  },
+  14: {
+    left: ['Mouth_Press_L'],
+    right: ['Mouth_Press_R'],
+    center: [],
+  },
+  15: {
+    left: ['Mouth_Frown_L'],
+    right: ['Mouth_Frown_R'],
+    center: [],
+  },
+  16: {
+    left: ['Mouth_Down_Lower_L'],
+    right: ['Mouth_Down_Lower_R'],
+    center: [],
+  },
+  17: {
+    left: [],
+    right: [],
+    center: ['Mouth_Shrug_Lower'],
+  },
+  18: {
+    left: [],
+    right: [],
+    center: ['Mouth_Pucker'],
+  },
+  19: {
+    left: [],
+    right: [],
+    center: ['Tongue_Out'],
+  },
+  20: {
+    left: ['Mouth_Stretch_L'],
+    right: ['Mouth_Stretch_R'],
+    center: [],
+  },
+  22: {
+    left: [],
+    right: [],
+    center: ['Mouth_Funnel'],
+  },
+  23: {
+    left: ['Mouth_Press_L'],
+    right: ['Mouth_Press_R'],
+    center: [],
+  },
+  24: {
+    left: ['Mouth_Press_L'],
+    right: ['Mouth_Press_R'],
+    center: [],
+  },
+  25: {
+    left: [],
+    right: [],
+    center: ['Jaw_Open'],
+  },
+  26: {
+    left: [],
+    right: [],
+    center: ['Jaw_Open'],
+  },
+  27: {
+    left: [],
+    right: [],
+    center: ['Jaw_Open'],
+  },
+  28: {
+    left: [],
+    right: [],
+    center: ['Mouth_Roll_In_Upper', 'Mouth_Roll_In_Lower'],
+  },
+  29: {
+    left: [],
+    right: [],
+    center: ['Jaw_Forward'],
+  },
+  30: {
+    left: ['Jaw_L'],
+    right: [],
+    center: [],
+  },
+  31: {
+    left: [],
+    right: [],
+    center: [],
+  },
+  32: {
+    left: [],
+    right: [],
+    center: ['Mouth_Roll_In_Lower'],
+  },
+  34: {
+    left: ['Cheek_Puff_L'],
+    right: ['Cheek_Puff_R'],
+    center: [],
+  },
+  35: {
+    left: [],
+    right: ['Jaw_R'],
+    center: [],
+  },
+  36: {
+    left: ['Tongue_Bulge_L'],
+    right: ['Tongue_Bulge_R'],
+    center: [],
+  },
+  37: {
+    left: [],
+    right: [],
+    center: ['Tongue_Up'],
+  },
+  38: {
+    left: [],
+    right: [],
+    center: ['Tongue_Down'],
+  },
+  39: {
+    left: ['Tongue_L'],
+    right: [],
+    center: [],
+  },
+  40: {
+    left: [],
+    right: ['Tongue_R'],
+    center: [],
+  },
+  41: {
+    left: [],
+    right: [],
+    center: [],
+  },
+  42: {
+    left: [],
+    right: [],
+    center: [],
+  },
+  43: {
+    left: ['Eye_Blink_L'],
+    right: ['Eye_Blink_R'],
+    center: [],
+  },
+  45: {
+    left: ['Eye_Blink_L'],
+    right: ['Eye_Blink_R'],
+    center: [],
+  },
+  51: {
+    left: ['Head_Turn_L'],
+    right: [],
+    center: [],
+  },
+  52: {
+    left: [],
+    right: ['Head_Turn_R'],
+    center: [],
+  },
+  53: {
+    left: [],
+    right: [],
+    center: ['Head_Turn_Up'],
+  },
+  54: {
+    left: [],
+    right: [],
+    center: ['Head_Turn_Down'],
+  },
+  55: {
+    left: ['Head_Tilt_L'],
+    right: [],
+    center: [],
+  },
+  56: {
+    left: [],
+    right: ['Head_Tilt_R'],
+    center: [],
+  },
+  61: {
+    left: ['Eye_L_Look_L', 'Eye_R_Look_L'],
+    right: [],
+    center: [],
+  },
+  62: {
+    left: [],
+    right: ['Eye_L_Look_R', 'Eye_R_Look_R'],
+    center: [],
+  },
+  63: {
+    left: [],
+    right: [],
+    center: ['Eye_L_Look_Up', 'Eye_R_Look_Up'],
+  },
+  64: {
+    left: [],
+    right: [],
+    center: ['Eye_L_Look_Down', 'Eye_R_Look_Down'],
+  },
+  65: {
+    left: ['Eye_L_Look_L'],
+    right: [],
+    center: [],
+  },
+  66: {
+    left: [],
+    right: ['Eye_L_Look_R'],
+    center: [],
+  },
+  67: {
+    left: [],
+    right: [],
+    center: ['Eye_L_Look_Up'],
+  },
+  68: {
+    left: [],
+    right: [],
+    center: ['Eye_L_Look_Down'],
+  },
+  69: {
+    left: ['Eye_R_Look_L'],
+    right: [],
+    center: [],
+  },
+  70: {
+    left: [],
+    right: ['Eye_R_Look_R'],
+    center: [],
+  },
+  71: {
+    left: [],
+    right: [],
+    center: ['Eye_R_Look_Up'],
+  },
+  72: {
+    left: [],
+    right: [],
+    center: ['Eye_R_Look_Down'],
+  },
+  73: {
+    left: [],
+    right: [],
+    center: ['Tongue_Narrow'],
+  },
+  74: {
+    left: [],
+    right: [],
+    center: ['Tongue_Wide'],
+  },
+  75: {
+    left: [],
+    right: [],
+    center: ['Tongue_Roll'],
+  },
+  76: {
+    left: [],
+    right: [],
+    center: ['Tongue_Tip_Up'],
+  },
+  77: {
+    left: [],
+    right: [],
+    center: ['Tongue_Tip_Down'],
+  },
+  80: {
+    left: ['EO Bulge L'],
+    right: ['EO Bulge R'],
+    center: [],
+  },
+  81: {
+    left: ['EO Depth L'],
+    right: ['EO Depth R'],
+    center: [],
+  },
+  82: {
+    left: ['EO Inner Depth L'],
+    right: ['EO Inner Depth R'],
+    center: [],
+  },
+  83: {
+    left: ['EO Inner Height L'],
+    right: ['EO Inner Height R'],
+    center: [],
+  },
+  84: {
+    left: ['EO Inner Width L'],
+    right: ['EO Inner Width R'],
+    center: [],
+  },
+  85: {
+    left: ['EO Outer Depth L'],
+    right: ['EO Outer Depth R'],
+    center: [],
+  },
+  86: {
+    left: ['EO Outer Height L'],
+    right: ['EO Outer Height R'],
+    center: [],
+  },
+  87: {
+    left: ['EO Outer Width L'],
+    right: ['EO Outer Width R'],
+    center: [],
+  },
+  88: {
+    left: ['EO Upper Depth L'],
+    right: ['EO Upper Depth R'],
+    center: [],
+  },
+  89: {
+    left: ['EO Lower Depth L'],
+    right: ['EO Lower Depth R'],
+    center: [],
+  },
+  90: {
+    left: ['EO Center Upper Depth L'],
+    right: ['EO Center Upper Depth R'],
+    center: [],
+  },
+  91: {
+    left: ['EO Center Upper Height L'],
+    right: ['EO Center Upper Height R'],
+    center: [],
+  },
+  92: {
+    left: ['EO Center Lower Depth L'],
+    right: ['EO Center Lower Depth R'],
+    center: [],
+  },
+  93: {
+    left: ['EO Center Lower Height L'],
+    right: ['EO Center Lower Height R'],
+    center: [],
+  },
+  94: {
+    left: ['EO Inner Upper Depth L'],
+    right: ['EO Inner Upper Depth R'],
+    center: [],
+  },
+  95: {
+    left: ['EO Inner Upper Height L'],
+    right: ['EO Inner Upper Height R'],
+    center: [],
+  },
+  96: {
+    left: ['EO Inner Lower Depth L'],
+    right: ['EO Inner Lower Depth R'],
+    center: [],
+  },
+  97: {
+    left: ['EO Inner Lower Height L'],
+    right: ['EO Inner Lower Height R'],
+    center: [],
+  },
+  98: {
+    left: ['EO Outer Upper Depth L'],
+    right: ['EO Outer Upper Depth R'],
+    center: [],
+  },
+  99: {
+    left: ['EO Outer Upper Height L'],
+    right: ['EO Outer Upper Height R'],
+    center: [],
+  },
+  100: {
+    left: ['EO Outer Lower Depth L'],
+    right: ['EO Outer Lower Depth R'],
+    center: [],
+  },
+  101: {
+    left: ['EO Outer Lower Height L'],
+    right: ['EO Outer Lower Height R'],
+    center: [],
+  },
+  102: {
+    left: ['EO Duct Depth L'],
+    right: ['EO Duct Depth R'],
+    center: [],
+  },
 };
 
 // ============================================================================
@@ -237,14 +456,16 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
 // ============================================================================
 
 /** Check if an AU has both morphs and bones (can blend between them) */
-export const isMixedAU = (id: number): boolean =>
-  !!(AU_TO_MORPHS[id]?.length && BONE_AU_TO_BINDINGS[id]?.length);
+export const isMixedAU = (id: number): boolean => {
+  const morphs = AU_TO_MORPHS[id];
+  const hasMorphs = !!(morphs?.left?.length || morphs?.right?.length || morphs?.center?.length);
+  return !!(hasMorphs && BONE_AU_TO_BINDINGS[id]?.length);
+};
 
 /** Check if an AU has separate left/right morphs */
 export const hasLeftRightMorphs = (auId: number): boolean => {
-  const keys = AU_TO_MORPHS[auId] || [];
-  // Match: _L, _R, Left, Right, or " L"/" R" (space+letter) at end of string
-  return keys.some(k => /_L$|_R$| L$| R$|Left$|Right$/i.test(k));
+  const morphs = AU_TO_MORPHS[auId];
+  return !!(morphs?.left?.length && morphs?.right?.length);
 };
 
 /** Check if an AU has bilateral bone bindings (L and R nodes) in CC4 preset */

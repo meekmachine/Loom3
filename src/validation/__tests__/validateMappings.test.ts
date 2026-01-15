@@ -78,7 +78,7 @@ describe('validateMappingConfig', () => {
   it('warns when AU info is missing for referenced AUs', () => {
     const config: AUMappingConfig = {
       ...createBaseConfig(),
-      auToMorphs: { 5: ['Smile'] },
+      auToMorphs: { 5: { left: [], right: [], center: ['Smile'] } },
       auInfo: {
         '1': { id: '1', name: 'Brow Raise' },
       },
@@ -97,7 +97,7 @@ describe('validateMappings', () => {
     const skeleton = { bones: [{ name: 'Head' }] };
     const config: AUMappingConfig = {
       ...createBaseConfig(),
-      auToMorphs: { 1: ['Smile', 'Frown'] },
+      auToMorphs: { 1: { left: [], right: [], center: ['Smile', 'Frown'] } },
       auToBones: { 2: [{ node: 'HEAD', channel: 'rx', scale: 1 }] },
     };
 
@@ -131,7 +131,7 @@ describe('validateMappings', () => {
     const skeleton = { bones: [{ name: 'Head' }] };
     const config: AUMappingConfig = {
       ...createBaseConfig(),
-      auToMorphs: { 1: ['Smyle'] },
+      auToMorphs: { 1: { left: [], right: [], center: ['Smyle'] } },
     };
 
     const result = validateMappings(meshes, skeleton, config, { suggestCorrections: true });
@@ -148,7 +148,7 @@ describe('generateMappingCorrections', () => {
     const skeleton = { bones: [{ name: 'Head' }] };
     const config: AUMappingConfig = {
       ...createBaseConfig(),
-      auToMorphs: { 1: ['Smyle'] },
+      auToMorphs: { 1: { left: [], right: [], center: ['Smyle'] } },
       morphToMesh: { face: ['FaceMsh'] },
     };
 

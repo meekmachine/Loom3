@@ -200,13 +200,13 @@ export function findFaceCenter(
     };
   }
 
-  // PRIORITY 3: Use head bone with default forward (+Z)
+  // PRIORITY 3: Use head bone with model forward direction
   const headPos = findHeadBone();
   if (headPos) {
-    debugInfo.push('No eyes found, using head bone + default forward (+Z)');
+    const forwardDir = getModelForwardDirection(model);
+    debugInfo.push('No eyes found, using head bone + model forward direction');
     const scaledOffset = forwardOffset * scale;
-    const faceCenter = headPos.clone();
-    faceCenter.z += scaledOffset;
+    const faceCenter = headPos.clone().add(forwardDir.multiplyScalar(scaledOffset));
 
     debugInfo.push(`Face center: (${faceCenter.x.toFixed(3)}, ${faceCenter.y.toFixed(3)}, ${faceCenter.z.toFixed(3)})`);
 

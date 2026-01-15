@@ -84,101 +84,94 @@ export const BONES = [
 ] as const;
 
 // ============================================================================
+// BONE NAME CONFIGURATION
+// Uses prefix/suffix system: 'Bone.' + baseNumber + '_Armature' = 'Bone.001_Armature'
+// ============================================================================
+
+export const BONE_PREFIX = 'Bone.';
+export const BONE_SUFFIX = '_Armature';
+
+// ============================================================================
 // SEMANTIC BONE MAPPINGS - Human-readable names for key bones
-// Note: Names include dots to match actual GLTF bone names (e.g., "Bone.001_Armature")
+// Uses base names that get combined with prefix/suffix
+// Exception: ROOT, BODY_ROOT, and EYE nodes use full names (don't follow pattern)
 // ============================================================================
 
 export const BONE_NODES = {
-  // Root and body spine
+  // Root bones (special - don't use prefix/suffix)
   ROOT: 'Armature_rootJoint',
   BODY_ROOT: 'Bone_Armature',
-  HEAD: 'Bone.001_Armature',
-  BODY_FRONT: 'Bone.002_Armature',
-  BODY_MID: 'Bone.003_Armature',
-  BODY_BACK: 'Bone.004_Armature',
-  TAIL_BASE: 'Bone.005_Armature',
 
-  // GILLS (operculum + branchiostegal membrane) - bilateral
-  // Fish have gills on BOTH sides - bones 046-051 are left/right pairs
-  // Even numbers (046, 048, 050) = LEFT side
-  // Odd numbers (047, 049, 051) = RIGHT side
-  GILL_L: 'Bone.046_Armature',
-  GILL_L_MID: 'Bone.048_Armature',
-  GILL_L_TIP: 'Bone.050_Armature',
-  GILL_R: 'Bone.047_Armature',
-  GILL_R_MID: 'Bone.049_Armature',
-  GILL_R_TIP: 'Bone.051_Armature',
+  // Head and body (use base names)
+  HEAD: '001',
+  BODY_FRONT: '002',
+  BODY_MID: '003',
+  BODY_BACK: '004',
+  TAIL_BASE: '005',
 
-  // Dorsal fin (top fin) - sibling of BODY_ROOT
-  DORSAL_ROOT: 'Bone.006_Armature',
-  DORSAL_L: 'Bone.007_Armature',
-  DORSAL_R: 'Bone.008_Armature',
+  // Gills - bilateral (even = left, odd = right)
+  GILL_L: '046',
+  GILL_L_MID: '048',
+  GILL_L_TIP: '050',
+  GILL_R: '047',
+  GILL_R_MID: '049',
+  GILL_R_TIP: '051',
 
-  // Ventral fins (under body mid) - these look like the front belly fins
-  // Bone018/033 are children of BODY_MID, likely ventral/pelvic fins
-  VENTRAL_L: 'Bone.018_Armature',
-  VENTRAL_L_MID: 'Bone.021_Armature',
-  VENTRAL_L_TIP: 'Bone.022_Armature',
-  VENTRAL_R: 'Bone.033_Armature',
-  VENTRAL_R_MID: 'Bone.035_Armature',
-  VENTRAL_R_TIP: 'Bone.037_Armature',
+  // Dorsal fin (top fin)
+  DORSAL_ROOT: '006',
+  DORSAL_L: '007',
+  DORSAL_R: '008',
 
-  // PECTORAL FINS (front fins on head) - these are the decorative head fins
-  // User confirmed: "Gill flare L moves the front most bottom fin"
-  // So these head-attached bones (009-017) are actually pectoral/front fins
-  // Left side chain: Bone009 → Bone027 → Bone029 → Bone031
-  //                          → Bone028 → Bone030 → Bone032
-  PECTORAL_L_ROOT: 'Bone.009_Armature',
-  PECTORAL_L_CHAIN1: 'Bone.027_Armature',
-  PECTORAL_L_CHAIN1_MID: 'Bone.029_Armature',
-  PECTORAL_L_CHAIN1_TIP: 'Bone.031_Armature',
-  PECTORAL_L_CHAIN2: 'Bone.028_Armature',
-  PECTORAL_L_CHAIN2_MID: 'Bone.030_Armature',
-  PECTORAL_L_CHAIN2_TIP: 'Bone.032_Armature',
+  // Ventral fins (belly fins)
+  VENTRAL_L: '018',
+  VENTRAL_L_MID: '021',
+  VENTRAL_L_TIP: '022',
+  VENTRAL_R: '033',
+  VENTRAL_R_MID: '035',
+  VENTRAL_R_TIP: '037',
 
-  // Right side chain: Bone010 → Bone012 → Bone014, Bone016
-  PECTORAL_R_ROOT: 'Bone.010_Armature',
-  PECTORAL_R_CHAIN1: 'Bone.012_Armature',
-  PECTORAL_R_CHAIN1_A: 'Bone.014_Armature',
-  PECTORAL_R_CHAIN1_B: 'Bone.016_Armature',
+  // Pectoral fins - left side chain
+  PECTORAL_L_ROOT: '009',
+  PECTORAL_L_CHAIN1: '027',
+  PECTORAL_L_CHAIN1_MID: '029',
+  PECTORAL_L_CHAIN1_TIP: '031',
+  PECTORAL_L_CHAIN2: '028',
+  PECTORAL_L_CHAIN2_MID: '030',
+  PECTORAL_L_CHAIN2_TIP: '032',
 
-  // Another front fin chain: Bone011 → Bone013 → Bone015, Bone017
-  PECTORAL_R_ROOT2: 'Bone.011_Armature',
-  PECTORAL_R_CHAIN2: 'Bone.013_Armature',
-  PECTORAL_R_CHAIN2_A: 'Bone.015_Armature',
-  PECTORAL_R_CHAIN2_B: 'Bone.017_Armature',
+  // Pectoral fins - right side chain
+  PECTORAL_R_ROOT: '010',
+  PECTORAL_R_CHAIN1: '012',
+  PECTORAL_R_CHAIN1_A: '014',
+  PECTORAL_R_CHAIN1_B: '016',
+  PECTORAL_R_ROOT2: '011',
+  PECTORAL_R_CHAIN2: '013',
+  PECTORAL_R_CHAIN2_A: '015',
+  PECTORAL_R_CHAIN2_B: '017',
 
-  // Eyes - The fish has EYES_0 skinned mesh
-  // In Three.js, SkinnedMesh transform is applied AFTER skinning,
-  // so rotating the mesh object should rotate the final result
+  // Eyes (special - mesh name, not bone)
   EYE_L: 'EYES_0',
   EYE_R: 'EYES_0',
 
-  // Main tail fins (children of TAIL_BASE = Bone005)
-  // Chain 1: Bone020 → Bone025 → Bone026
-  TAIL_TOP: 'Bone.020_Armature',
-  TAIL_TOP_MID: 'Bone.025_Armature',
-  TAIL_TOP_TIP: 'Bone.026_Armature',
+  // Main tail fins
+  TAIL_TOP: '020',
+  TAIL_TOP_MID: '025',
+  TAIL_TOP_TIP: '026',
+  TAIL_MID: '039',
+  TAIL_MID_A: '040',
+  TAIL_MID_A_TIP: '041',
+  TAIL_MID_B: '042',
+  TAIL_MID_B_TIP: '043',
+  TAIL_MID_C: '044',
+  TAIL_MID_C_TIP: '045',
 
-  // Chain 2: Bone039 → multiple sub-chains (main tail fan)
-  TAIL_MID: 'Bone.039_Armature',
-  TAIL_MID_A: 'Bone.040_Armature',
-  TAIL_MID_A_TIP: 'Bone.041_Armature',
-  TAIL_MID_B: 'Bone.042_Armature',
-  TAIL_MID_B_TIP: 'Bone.043_Armature',
-  TAIL_MID_C: 'Bone.044_Armature',
-  TAIL_MID_C_TIP: 'Bone.045_Armature',
-
-  // Side tail chains (children of BODY_BACK = Bone004)
-  // Bone019 → Bone023 → Bone024
-  TAIL_SIDE_L: 'Bone.019_Armature',
-  TAIL_SIDE_L_MID: 'Bone.023_Armature',
-  TAIL_SIDE_L_TIP: 'Bone.024_Armature',
-
-  // Bone034 → Bone036 → Bone038
-  TAIL_SIDE_R: 'Bone.034_Armature',
-  TAIL_SIDE_R_MID: 'Bone.036_Armature',
-  TAIL_SIDE_R_TIP: 'Bone.038_Armature',
+  // Side tail chains
+  TAIL_SIDE_L: '019',
+  TAIL_SIDE_L_MID: '023',
+  TAIL_SIDE_L_TIP: '024',
+  TAIL_SIDE_R: '034',
+  TAIL_SIDE_R_MID: '036',
+  TAIL_SIDE_R_TIP: '038',
 } as const;
 
 // ============================================================================
@@ -852,24 +845,24 @@ export const BETTA_FISH_PRESET = {
   actionInfo: AU_INFO,
   eyeMeshNodes: EYE_MESH_NODES,
   // No morph targets in this model
-  auToMorphs: {} as Record<number, string[]>,
+  auToMorphs: {} as Record<number, import('../mappings/types').MorphTargetsBySide>,
   morphToMesh: {} as Record<string, string[]>,
   visemeKeys: [] as string[],
 };
 
-// Engine-compatible config format for Loom3Three
+// Engine-compatible config format for Loom3
 export const AU_MAPPING_CONFIG = {
   name: 'Betta Fish',
   animalType: 'fish',
   emoji: '🐟',
   auToBones: BONE_BINDINGS,
   boneNodes: BONE_NODES,
-  // No prefix/suffix for fish bones - they use full names like "Bone.001_Armature"
-  bonePrefix: '',
-  boneSuffix: '',
+  // Prefix/suffix for bone resolution: 'Bone.' + '001' + '_Armature' = 'Bone.001_Armature'
+  bonePrefix: BONE_PREFIX,
+  boneSuffix: BONE_SUFFIX,
   // Suffix pattern for fuzzy matching (Sketchfab/Blender exports)
   suffixPattern: '_\\d+$|\\.\\d+$',
-  auToMorphs: {} as Record<number, string[]>,
+  auToMorphs: {} as Record<number, import('../mappings/types').MorphTargetsBySide>,
   morphToMesh: {} as Record<string, string[]>,
   visemeKeys: [] as string[],
   auInfo: AU_INFO,

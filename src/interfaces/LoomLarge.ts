@@ -1,5 +1,5 @@
 /**
- * Loom3 Engine Interface
+ * LoomLarge Engine Interface
  *
  * Defines the contract for 3D character animation engines.
  * Uses Three.js types directly - no framework abstraction overhead.
@@ -18,6 +18,7 @@ import type {
   CurvePoint,
 } from '../core/types';
 import type { AUMappingConfig, MeshInfo } from '../mappings/types';
+import type { PresetType } from '../presets';
 
 /** Loop mode for mixer clips */
 export type MixerLoopMode = 'once' | 'repeat' | 'pingpong';
@@ -33,9 +34,13 @@ export interface ReadyPayload {
 /**
  * Configuration options for the Loom3 engine
  */
-export interface Loom3Config {
-  /** AU to morph target mappings */
+export interface LoomLargeConfig {
+  /** AU to morph target mappings (fully resolved). */
   auMappings?: AUMappingConfig;
+  /** Preset type to resolve if auMappings is not provided. */
+  presetType?: PresetType | string;
+  /** Partial overrides merged on top of the resolved preset. */
+  presetOverrides?: Partial<AUMappingConfig>;
 }
 
 // MeshInfo is imported from mappings/types.ts
@@ -47,7 +52,7 @@ export type { MeshInfo } from '../mappings/types';
  * The main interface for controlling 3D character facial animation.
  * Supports Action Units (AUs), morph targets, visemes, and bone control.
  */
-export interface Loom3 {
+export interface LoomLarge {
   // ============================================================================
   // INITIALIZATION & LIFECYCLE
   // ============================================================================
@@ -394,3 +399,7 @@ export interface Loom3 {
    */
   onSnippetEnd?(name: string): void;
 }
+
+// Backward-compatible aliases (deprecated).
+export type Loom3 = LoomLarge;
+export type Loom3Config = LoomLargeConfig;

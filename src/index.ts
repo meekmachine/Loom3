@@ -6,10 +6,10 @@
  *
  * @example
  * ```typescript
- * import { Loom3Three, collectMorphMeshes, CC4_PRESET } from 'loom3';
+ * import { Loom3, collectMorphMeshes, CC4_PRESET } from 'loom3';
  * import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
  *
- * const loom = new Loom3Three({ auMappings: CC4_PRESET });
+ * const loom = new Loom3({ auMappings: CC4_PRESET });
  *
  * const loader = new GLTFLoader();
  * loader.load('/character.glb', (gltf) => {
@@ -31,28 +31,27 @@
 // IMPLEMENTATIONS (Three.js)
 // ============================================================================
 
-export { Loom3Three, collectMorphMeshes } from './engines/three/Loom3Three';
+export { Loom3, collectMorphMeshes } from './engines/three/Loom3';
 export { AnimationThree } from './engines/three/AnimationThree';
 
 // Default export for convenience
-export { Loom3Three as default } from './engines/three/Loom3Three';
+export { Loom3 as default } from './engines/three/Loom3';
 
-// Legacy alias (deprecated - use Loom3Three instead)
-export { Loom3Three as LoomLargeThree } from './engines/three/Loom3Three';
+// Legacy aliases (deprecated - use Loom3 instead)
+export { Loom3 as Loom3Three } from './engines/three/Loom3';
+export { Loom3 as LoomLargeThree } from './engines/three/Loom3';
 
 // ============================================================================
 // INTERFACES (for implementing custom engines)
 // ============================================================================
 
 export type {
-  Loom3,
+  LoomLarge,
   ReadyPayload,
+  LoomLargeConfig,
   Loom3Config,
   MixerLoopMode,
-} from './interfaces/Loom3';
-
-// Legacy aliases (deprecated)
-export type { Loom3 as LoomLarge, Loom3Config as LoomLargeConfig } from './interfaces/Loom3';
+} from './interfaces/LoomLarge';
 
 export type { Animation } from './interfaces/Animation';
 
@@ -111,6 +110,7 @@ export { BLENDING_MODES } from './mappings/types';
 // ============================================================================
 
 export { CC4_PRESET } from './presets/cc4';
+export { mergePreset } from './presets/mergePreset';
 
 // Individual CC4 preset components (for apps that need direct access)
 export {
@@ -136,7 +136,7 @@ export {
 export { BETTA_FISH_PRESET, AU_MAPPING_CONFIG as FISH_AU_MAPPING_CONFIG } from './presets/bettaFish';
 
 // Preset resolution by type name
-export { resolvePreset } from './presets';
+export { resolvePreset, resolvePresetWithOverrides } from './presets';
 export type { PresetType } from './presets';
 
 // ============================================================================

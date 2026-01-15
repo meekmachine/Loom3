@@ -23,8 +23,8 @@ export interface AUMappingConfig {
   /** Emoji representing this animal type (e.g., '😊' for human, '🐟' for fish) */
   emoji?: string;
 
-  /** AU ID to morph target names (e.g., AU 12 → ['Mouth_Smile_L', 'Mouth_Smile_R']) */
-  auToMorphs: Record<number, string[]>;
+  /** AU ID to morph target names split by side */
+  auToMorphs: Record<number, MorphTargetsBySide>;
 
   /** AU ID to bone bindings (e.g., AU 51 → [{ node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 }]) */
   auToBones: Record<number, BoneBinding[]>;
@@ -151,6 +151,15 @@ export interface AnnotationRegion {
   };
   groupId?: string;
   isFallback?: boolean;
+}
+
+/**
+ * Morph targets split by side for balance-aware AUs.
+ */
+export interface MorphTargetsBySide {
+  left: string[];
+  right: string[];
+  center: string[];
 }
 
 /**

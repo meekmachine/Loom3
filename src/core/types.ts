@@ -32,6 +32,8 @@ export interface BoneBinding {
   scale: -1 | 1;
   maxDegrees?: number;  // for rotation channels
   maxUnits?: number;    // for translation channels
+  /** Optional side hint for balance-aware AUs. */
+  side?: 'left' | 'right';
 }
 
 /**
@@ -81,6 +83,10 @@ export type RotationsState = Record<string, CompositeRotationState>;
 export interface Loom3Config {
   /** AU to morph target mappings (defaults to CC4_PRESET) */
   auMappings?: import('../mappings/types').AUMappingConfig;
+  /** Preset type to resolve if auMappings is not provided. */
+  presetType?: import('../presets').PresetType | string;
+  /** Partial overrides merged on top of the resolved preset. */
+  presetOverrides?: Partial<import('../mappings/types').AUMappingConfig>;
 }
 
 // ============================================================================

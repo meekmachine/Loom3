@@ -8,6 +8,10 @@
 // CC4 preset (default for humanoid characters)
 export { CC4_PRESET, default } from './cc4';
 export * from './cc4';
+export { mergePreset } from './mergePreset';
+
+import type { AUMappingConfig } from '../mappings/types';
+import { mergePreset } from './mergePreset';
 
 // Betta fish preset (skeletal animation, no morphs)
 import { AU_MAPPING_CONFIG } from './bettaFish';
@@ -22,7 +26,7 @@ export {
 } from './bettaFish';
 
 /**
- * Preset types that can be passed to Loom3Three
+ * Preset types that can be passed to Loom3
  */
 export type PresetType = 'cc4' | 'skeletal' | 'fish' | 'custom';
 
@@ -43,4 +47,15 @@ export function resolvePreset(presetType: PresetType | string | undefined) {
     default:
       return CC4_PRESET;
   }
+}
+
+/**
+ * Resolve a preset and merge optional overrides.
+ */
+export function resolvePresetWithOverrides(
+  presetType: PresetType | string | undefined,
+  overrides?: Partial<AUMappingConfig>
+): AUMappingConfig {
+  const base = resolvePreset(presetType);
+  return overrides ? mergePreset(base, overrides) : base;
 }

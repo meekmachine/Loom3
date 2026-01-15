@@ -5,7 +5,7 @@
  * This is a best-effort helper that can be layered on top of validation.
  */
 
-import type { AUMappingConfig } from '../mappings/types';
+import type { AUMappingConfig, MorphTargetsBySide } from '../mappings/types';
 
 interface MorphMesh {
   name: string;
@@ -265,9 +265,15 @@ export function generateMappingCorrections(
     });
   };
 
+  const updateMorphsBySide = (entry: MorphTargetsBySide | undefined, auId?: number): MorphTargetsBySide => ({
+    left: entry ? updateMorphList(entry.left, auId) : [],
+    right: entry ? updateMorphList(entry.right, auId) : [],
+    center: entry ? updateMorphList(entry.center, auId) : [],
+  });
+
   for (const [auIdStr, morphs] of Object.entries(config.auToMorphs)) {
     const auId = Number(auIdStr);
-    correctedConfig.auToMorphs[auId] = updateMorphList(morphs, auId);
+    correctedConfig.auToMorphs[auId] = updateMorphsBySide(morphs, auId);
   }
 
   correctedConfig.visemeKeys = updateMorphList(config.visemeKeys);

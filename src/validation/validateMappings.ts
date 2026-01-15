@@ -5,7 +5,7 @@
  * Checks that bones, morph targets, and meshes referenced in the preset exist in the model.
  */
 
-import type { AUMappingConfig } from '../mappings/types';
+import type { AUMappingConfig, MorphTargetsBySide } from '../mappings/types';
 import type { MappingCorrection, MappingCorrectionOptions } from './generateMappingCorrections';
 import { generateMappingCorrections } from './generateMappingCorrections';
 
@@ -427,7 +427,7 @@ export function validateMappingConfig(config: AUMappingConfig): MappingConsisten
       const auId = Number(key);
       if (
         Number.isNaN(auId) ||
-        (!config.auToBones?.[auId] && !config.auToMorphs?.[auId] && !continuumPairs[auId])
+        (!config.auToBones?.[auId] && !collectMorphs(config.auToMorphs?.[auId]).length && !continuumPairs[auId])
       ) {
         push(
           'warning',
@@ -455,6 +455,12 @@ export function validateMappingConfig(config: AUMappingConfig): MappingConsisten
  * @param config - AU mapping preset to validate against
  * @returns ValidationResult with detailed compatibility info
  */
+const collectMorphs = (entry?: MorphTargetsBySide) => [
+  ...(entry?.left ?? []),
+  ...(entry?.right ?? []),
+  ...(entry?.center ?? []),
+];
+
 export function validateMappings(
   meshes: MorphMesh[],
   skeleton: Skeleton | null,
@@ -499,8 +505,8 @@ export function validateMappings(
 
   // Get all unique morph targets referenced in preset
   const presetMorphs = new Set<string>();
-  for (const morphList of Object.values(config.auToMorphs)) {
-    for (const morph of morphList) {
+  for (const entry of Object.values(config.auToMorphs)) {
+    for (const morph of collectMorphs(entry)) {
       presetMorphs.add(morph);
     }
   }

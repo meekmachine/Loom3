@@ -6,15 +6,17 @@
  */
 
 export type {
-  Loom3,
+  LoomLarge,
   LoomMesh,
   LoomVector3,
   LoomEuler,
   LoomQuaternion,
   LoomObject3D,
   ReadyPayload,
+  LoomLargeConfig,
+  Loom3,
   Loom3Config,
-} from './Loom3';
+} from './LoomLarge';
 
 export type { MeshInfo } from '../mappings/types';
 

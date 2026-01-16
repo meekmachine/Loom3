@@ -14,36 +14,36 @@ describe('CC4 Preset', () => {
   describe('AU_TO_MORPHS', () => {
     it('should have mappings for standard facial AUs', () => {
       // Brows
-      expect(AU_TO_MORPHS[1]).toContain('Brow_Raise_Inner_L');
-      expect(AU_TO_MORPHS[2]).toContain('Brow_Raise_Outer_L');
-      expect(AU_TO_MORPHS[4]).toContain('Brow_Drop_L');
+      expect(AU_TO_MORPHS[1].left).toContain('Brow_Raise_Inner_L');
+      expect(AU_TO_MORPHS[2].left).toContain('Brow_Raise_Outer_L');
+      expect(AU_TO_MORPHS[4].left).toContain('Brow_Drop_L');
 
       // Eyes
-      expect(AU_TO_MORPHS[5]).toContain('Eye_Wide_L');
-      expect(AU_TO_MORPHS[7]).toContain('Eye_Squint_L');
-      expect(AU_TO_MORPHS[43]).toContain('Eye_Blink_L');
+      expect(AU_TO_MORPHS[5].left).toContain('Eye_Wide_L');
+      expect(AU_TO_MORPHS[7].left).toContain('Eye_Squint_L');
+      expect(AU_TO_MORPHS[43].left).toContain('Eye_Blink_L');
 
       // Mouth
-      expect(AU_TO_MORPHS[12]).toContain('Mouth_Smile_L');
-      expect(AU_TO_MORPHS[15]).toContain('Mouth_Frown_L');
-      expect(AU_TO_MORPHS[18]).toContain('Mouth_Pucker');
-      expect(AU_TO_MORPHS[26]).toContain('Jaw_Open');
+      expect(AU_TO_MORPHS[12].left).toContain('Mouth_Smile_L');
+      expect(AU_TO_MORPHS[15].left).toContain('Mouth_Frown_L');
+      expect(AU_TO_MORPHS[18].center).toContain('Mouth_Pucker');
+      expect(AU_TO_MORPHS[26].center).toContain('Jaw_Open');
     });
 
     it('should have mappings for head position AUs (51-56)', () => {
-      expect(AU_TO_MORPHS[51]).toContain('Head_Turn_L');
-      expect(AU_TO_MORPHS[52]).toContain('Head_Turn_R');
-      expect(AU_TO_MORPHS[53]).toContain('Head_Turn_Up');
-      expect(AU_TO_MORPHS[54]).toContain('Head_Turn_Down');
-      expect(AU_TO_MORPHS[55]).toContain('Head_Tilt_L');
-      expect(AU_TO_MORPHS[56]).toContain('Head_Tilt_R');
+      expect(AU_TO_MORPHS[51].left).toContain('Head_Turn_L');
+      expect(AU_TO_MORPHS[52].right).toContain('Head_Turn_R');
+      expect(AU_TO_MORPHS[53].center).toContain('Head_Turn_Up');
+      expect(AU_TO_MORPHS[54].center).toContain('Head_Turn_Down');
+      expect(AU_TO_MORPHS[55].left).toContain('Head_Tilt_L');
+      expect(AU_TO_MORPHS[56].right).toContain('Head_Tilt_R');
     });
 
     it('should have mappings for eye direction AUs (61-64)', () => {
-      expect(AU_TO_MORPHS[61]).toContain('Eye_L_Look_L');
-      expect(AU_TO_MORPHS[62]).toContain('Eye_L_Look_R');
-      expect(AU_TO_MORPHS[63]).toContain('Eye_L_Look_Up');
-      expect(AU_TO_MORPHS[64]).toContain('Eye_L_Look_Down');
+      expect(AU_TO_MORPHS[61].left).toContain('Eye_L_Look_L');
+      expect(AU_TO_MORPHS[62].right).toContain('Eye_L_Look_R');
+      expect(AU_TO_MORPHS[63].center).toContain('Eye_L_Look_Up');
+      expect(AU_TO_MORPHS[64].center).toContain('Eye_L_Look_Down');
     });
 
     it('should have bilateral morphs (L and R) for applicable AUs', () => {
@@ -51,8 +51,8 @@ describe('CC4 Preset', () => {
       const bilateralAUs = [1, 2, 4, 5, 6, 7, 12, 15, 43];
       for (const auId of bilateralAUs) {
         const morphs = AU_TO_MORPHS[auId];
-        const hasLeft = morphs.some(m => /_L$|Left$/i.test(m));
-        const hasRight = morphs.some(m => /_R$|Right$/i.test(m));
+        const hasLeft = morphs.left.some(m => /_L$|Left$/i.test(m));
+        const hasRight = morphs.right.some(m => /_R$|Right$/i.test(m));
         expect(hasLeft, `AU ${auId} should have left morph`).toBe(true);
         expect(hasRight, `AU ${auId} should have right morph`).toBe(true);
       }

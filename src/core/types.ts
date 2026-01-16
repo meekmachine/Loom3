@@ -82,11 +82,9 @@ export type RotationsState = Record<string, CompositeRotationState>;
  */
 export interface Loom3Config {
   /** AU to morph target mappings (defaults to CC4_PRESET) */
-  auMappings?: import('../mappings/types').AUMappingConfig;
-  /** Preset type to resolve if auMappings is not provided. */
+  profile?: import('../mappings/types').Profile;
+  /** Preset type to resolve if profile is not provided. */
   presetType?: import('../presets').PresetType | string;
-  /** Partial overrides merged on top of the resolved preset. */
-  presetOverrides?: Partial<import('../mappings/types').AUMappingConfig>;
 }
 
 // ============================================================================
@@ -214,6 +212,13 @@ export interface ClipOptions {
   intensityScale?: number;
   /** Snippet category - when 'visemeSnippet', numeric curve IDs (0-14) are viseme indices; otherwise they're AU IDs */
   snippetCategory?: 'auSnippet' | 'visemeSnippet';
+  /**
+   * When true, automatically generate jaw bone rotation from viseme curves.
+   * Uses VISEME_JAW_AMOUNTS to determine jaw opening per viseme index.
+   * Only applies when snippetCategory is 'visemeSnippet'.
+   * Default: true (for backwards compatibility with transitionViseme behavior)
+   */
+  autoVisemeJaw?: boolean;
 }
 
 /**

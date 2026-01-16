@@ -17,7 +17,7 @@ import type {
   CompositeRotation,
   CurvePoint,
 } from '../core/types';
-import type { AUMappingConfig, MeshInfo } from '../mappings/types';
+import type { Profile, MeshInfo } from '../mappings/types';
 import type { PresetType } from '../presets';
 
 /** Loop mode for mixer clips */
@@ -36,11 +36,9 @@ export interface ReadyPayload {
  */
 export interface LoomLargeConfig {
   /** AU to morph target mappings (fully resolved). */
-  auMappings?: AUMappingConfig;
-  /** Preset type to resolve if auMappings is not provided. */
+  profile?: Profile;
+  /** Preset type to resolve if profile is not provided. */
   presetType?: PresetType | string;
-  /** Partial overrides merged on top of the resolved preset. */
-  presetOverrides?: Partial<AUMappingConfig>;
 }
 
 // MeshInfo is imported from mappings/types.ts
@@ -233,12 +231,12 @@ export interface LoomLarge {
   /**
    * Update AU mappings configuration
    */
-  setAUMappings(mappings: AUMappingConfig): void;
+  setProfile(profile: Profile): void;
 
   /**
    * Get current AU mappings configuration
    */
-  getAUMappings(): AUMappingConfig;
+  getProfile(): Profile;
 
   // ============================================================================
   // BAKED ANIMATION CONTROL (Three.js AnimationMixer)

@@ -5,7 +5,7 @@
  * This is a best-effort helper that can be layered on top of validation.
  */
 
-import type { AUMappingConfig, MorphTargetsBySide } from '../mappings/types';
+import type { Profile, MorphTargetsBySide, MorphTargetKey } from '../mappings/types';
 
 interface MorphMesh {
   name: string;
@@ -29,7 +29,7 @@ export interface MappingCorrection {
 }
 
 export interface MappingCorrectionResult {
-  correctedConfig: AUMappingConfig;
+  correctedConfig: Profile;
   corrections: MappingCorrection[];
   unresolved: MappingCorrection[];
 }
@@ -163,7 +163,7 @@ function collectModelAssets(meshes: MorphMesh[], skeleton: Skeleton | null) {
 export function generateMappingCorrections(
   meshes: MorphMesh[],
   skeleton: Skeleton | null,
-  config: AUMappingConfig,
+  config: Profile,
   options: MappingCorrectionOptions = {}
 ): MappingCorrectionResult {
   const { minConfidence = DEFAULT_MIN_CONFIDENCE, useResolvedNames = false } = options;
@@ -178,7 +178,7 @@ export function generateMappingCorrections(
   const corrections: MappingCorrection[] = [];
   const unresolved: MappingCorrection[] = [];
 
-  const correctedConfig: AUMappingConfig = {
+  const correctedConfig: Profile = {
     ...config,
     boneNodes: { ...config.boneNodes },
     auToMorphs: { ...config.auToMorphs },
@@ -229,8 +229,12 @@ export function generateMappingCorrections(
   }
 
   // Morph corrections (AU morphs + visemes)
-  const updateMorphList = (items: string[], auId?: number): string[] => {
+  const updateMorphList = (items: MorphTargetKey[], auId?: number): MorphTargetKey[] => {
     return items.map((morphName) => {
+      if (typeof morphName !== 'string') {
+        return morphName;
+      }
+
       if (modelMorphs.has(morphName)) return morphName;
 
       const match = findBestMatch(morphName, modelMorphs, morphPrefix, morphSuffix, suffixPattern);
@@ -276,7 +280,9 @@ export function generateMappingCorrections(
     correctedConfig.auToMorphs[auId] = updateMorphsBySide(morphs, auId);
   }
 
-  correctedConfig.visemeKeys = updateMorphList(config.visemeKeys);
+  correctedConfig.visemeKeys = updateMorphList(config.visemeKeys).filter(
+    (key): key is string => typeof key === 'string'
+  );
 
   // morphToMesh corrections
   for (const [category, meshList] of Object.entries(config.morphToMesh || {})) {

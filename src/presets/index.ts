@@ -10,7 +10,7 @@ export { CC4_PRESET, default } from './cc4';
 export * from './cc4';
 export { mergePreset } from './mergePreset';
 
-import type { AUMappingConfig } from '../mappings/types';
+import type { Profile } from '../mappings/types';
 import { mergePreset } from './mergePreset';
 
 // Betta fish preset (skeletal animation, no morphs)
@@ -54,8 +54,8 @@ export function resolvePreset(presetType: PresetType | string | undefined) {
  */
 export function resolvePresetWithOverrides(
   presetType: PresetType | string | undefined,
-  overrides?: Partial<AUMappingConfig>
-): AUMappingConfig {
+  overrides?: Partial<Profile>
+): Profile {
   const base = resolvePreset(presetType);
   return overrides ? mergePreset(base, overrides) : base;
 }

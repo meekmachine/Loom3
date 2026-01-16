@@ -1,4 +1,4 @@
-import type { AUMappingConfig, AnnotationRegion, MorphTargetsBySide } from '../mappings/types';
+import type { Profile, AnnotationRegion, MorphTargetsBySide } from '../mappings/types';
 import type { BoneBinding } from '../core/types';
 
 type RecordValue = string | number | boolean | object | null | undefined;
@@ -105,7 +105,7 @@ const mergeAnnotationRegions = (
  * - Arrays: replaced when override is provided (except annotationRegions).
  * - annotationRegions: merged by region name, shallow field merge (override wins).
  */
-export function mergePreset(base: AUMappingConfig, override: Partial<AUMappingConfig>): AUMappingConfig {
+export function mergePreset(base: Profile, override: Partial<Profile>): Profile {
   return {
     ...base,
     ...override,

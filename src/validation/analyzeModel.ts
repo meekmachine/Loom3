@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import type { AUMappingConfig } from '../mappings/types';
+import type { Profile } from '../mappings/types';
 import { extractModelData, extractFromGLTF, type ModelData, type AnimationInfo } from './extractModelData';
 import { validateMappings, type ValidationResult } from './validateMappings';
 
@@ -55,7 +55,7 @@ export interface AnalyzeModelOptions {
     | { type: 'runtime'; model: THREE.Object3D; meshes: THREE.Mesh[]; animations: THREE.AnimationClip[] };
 
   /** Optional preset to validate against */
-  preset?: AUMappingConfig;
+  preset?: Profile;
 
   /** Request correction suggestions */
   suggestCorrections?: boolean;

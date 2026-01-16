@@ -31,7 +31,7 @@ import type {
   BoneKey,
   CompositeRotation,
 } from '../../core/types';
-import type { AUMappingConfig } from '../../mappings/types';
+import type { Profile } from '../../mappings/types';
 import type { Animation } from '../../interfaces/Animation';
 import type { ResolvedBones } from './types';
 
@@ -176,7 +176,7 @@ export interface BakedAnimationHost {
   getMeshes: () => Mesh[];
   getMeshByName: (name: string) => Mesh | undefined;
   getBones: () => ResolvedBones;
-  getConfig: () => AUMappingConfig;
+  getConfig: () => Profile;
   getCompositeRotations: () => CompositeRotation[];
   computeSideValues: (base: number, balance?: number) => { left: number; right: number };
   getAUMixWeight: (auId: number) => number;
@@ -521,6 +521,60 @@ export class BakedAnimationController {
       }
     }
 
+    // Auto-generate jaw bone rotation from viseme curves when enabled
+    // This replicates transitionViseme behavior for clip-based playback
+    const autoVisemeJaw = options?.autoVisemeJaw !== false; // Default true
+    const jawScale = options?.jawScale ?? 1.0;
+    const visemeJawAmounts = config.visemeJawAmounts;
+
+    if (
+      autoVisemeJaw &&
+      jawScale > 0 &&
+      visemeJawAmounts &&
+      options?.snippetCategory === 'visemeSnippet' &&
+      keyframeTimes.length > 0
+    ) {
+      const bones = this.host.getBones();
+      const jawEntry = bones['JAW'];
+
+      if (jawEntry) {
+        // Sample all viseme curves at each keyframe time and compute weighted jaw amount
+        const jawValues: number[] = [];
+
+        for (const t of keyframeTimes) {
+          let jawAmount = 0;
+
+          // Sum contributions from all active visemes at time t
+          for (let visemeIdx = 0; visemeIdx < config.visemeKeys.length; visemeIdx++) {
+            const visemeCurve = curves[String(visemeIdx)];
+            if (!visemeCurve) continue;
+
+            const visemeValue = clampIntensity(sampleAt(visemeCurve, t) * intensityScale);
+            if (visemeValue > 0 && visemeIdx < visemeJawAmounts.length) {
+              // Take max jaw amount across all active visemes (like transitionViseme)
+              const visemeJaw = visemeJawAmounts[visemeIdx] * visemeValue * jawScale;
+              if (visemeJaw > jawAmount) {
+                jawAmount = visemeJaw;
+              }
+            }
+          }
+
+          // Convert jaw amount to quaternion rotation
+          // JAW pitch uses rz axis with maxDegrees from AU 26 binding
+          const jawBinding = config.auToBones[26]?.[0];
+          const maxDegrees = jawBinding?.maxDegrees ?? 30;
+          const radians = (maxDegrees * Math.PI / 180) * jawAmount;
+          const jawQ = new Quaternion().copy(jawEntry.baseQuat);
+          jawQ.multiply(new Quaternion().setFromAxisAngle(Z_AXIS, radians));
+
+          jawValues.push(jawQ.x, jawQ.y, jawQ.z, jawQ.w);
+        }
+
+        const trackName = `${(jawEntry.obj as any).uuid}.quaternion`;
+        tracks.push(new QuaternionKeyframeTrack(trackName, keyframeTimes, jawValues));
+      }
+    }
+
     if (keyframeTimes.length > 0) {
       const bones = this.host.getBones();
       const compositeRotations = this.host.getCompositeRotations();
@@ -584,8 +638,21 @@ export class BakedAnimationController {
         return sampleCurve(String(axisConfig.aus[0]), t);
       };
 
+      // Track if autoVisemeJaw already added a JAW track
+      const autoVisemeJawHandledJaw =
+        autoVisemeJaw &&
+        jawScale > 0 &&
+        visemeJawAmounts &&
+        options?.snippetCategory === 'visemeSnippet';
+
       for (const composite of compositeRotations) {
         const nodeKey = composite.node as BoneKey;
+
+        // Skip JAW composite if autoVisemeJaw already handled it
+        if (nodeKey === 'JAW' && autoVisemeJawHandledJaw) {
+          continue;
+        }
+
         const entry = bones[nodeKey];
         if (!entry) {
           console.log(`[snippetToClip] Skipping composite for "${nodeKey}" - bone not resolved`);
@@ -903,7 +970,7 @@ export class BakedAnimationController {
 
   private addMorphTracks(
     tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack>,
-    morphKey: string,
+    morphKey: string | number,
     keyframes: Array<{ time: number; intensity: number }>,
     intensityScale: number
   ): void {
@@ -915,11 +982,21 @@ export class BakedAnimationController {
       : meshes;
     let added = false;
 
+    const numericIndex = (() => {
+      if (typeof morphKey === 'number' && Number.isInteger(morphKey)) return morphKey;
+      if (typeof morphKey === 'string' && /^\d+$/.test(morphKey)) return Number(morphKey);
+      return null;
+    })();
+
     const addTrackForMesh = (mesh: Mesh) => {
       const dict = mesh.morphTargetDictionary;
-      if (!dict || dict[morphKey] === undefined) return;
+      if (numericIndex !== null) {
+        if (!mesh.morphTargetInfluences || numericIndex >= mesh.morphTargetInfluences.length) return;
+      } else {
+        if (!dict || dict[morphKey as string] === undefined) return;
+      }
 
-      const morphIndex = dict[morphKey];
+      const morphIndex = numericIndex !== null ? numericIndex : dict![morphKey as string];
 
       const times: number[] = [];
       const values: number[] = [];

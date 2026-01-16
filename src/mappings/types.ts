@@ -1,19 +1,19 @@
 /**
- * Loom3 - AU Mapping Types
+ * Loom3 - Profile Types
  *
- * Type definitions for configurable Action Unit mappings.
- * Allows the engine to work with different character rigs (CC4, Mixamo, etc.)
+ * Type definitions for character profiles.
+ * Profiles define how Action Units map to morphs/bones for a specific rig.
  */
 
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
 
 /**
- * AUMappingConfig - Complete configuration for AU-to-morph/bone mappings
+ * Profile - Complete configuration for AU-to-morph/bone mappings
  *
  * This is the main configuration object that defines how Action Units
  * map to morph targets and bone transformations for a specific rig type.
  */
-export interface AUMappingConfig {
+export interface Profile {
   /** Human-readable name for this profile (e.g., 'Character Creator 4', 'Betta Fish') */
   name?: string;
 
@@ -70,6 +70,9 @@ export interface AUMappingConfig {
   /** Viseme keys in order (typically 15 phoneme positions) */
   visemeKeys: string[];
 
+  /** Optional: Jaw opening amounts per viseme index (0-1). Used for auto-generating jaw rotation in clips. */
+  visemeJawAmounts?: number[];
+
   /** Optional: Default mix weights for bone/morph blending (0 = morph only, 1 = bone only) */
   auMixDefaults?: Record<number, number>;
 
@@ -112,6 +115,7 @@ export interface AUMappingConfig {
    */
   annotationRegions?: AnnotationRegion[];
 }
+
 
 /**
  * Annotation region definition for camera markers.
@@ -156,10 +160,12 @@ export interface AnnotationRegion {
 /**
  * Morph targets split by side for balance-aware AUs.
  */
+export type MorphTargetKey = string | number;
+
 export interface MorphTargetsBySide {
-  left: string[];
-  right: string[];
-  center: string[];
+  left: MorphTargetKey[];
+  right: MorphTargetKey[];
+  center: MorphTargetKey[];
 }
 
 /**

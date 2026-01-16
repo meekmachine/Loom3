@@ -6,7 +6,7 @@
  * and AU metadata that we painstakingly worked through.
  */
 
-import type { AUMappingConfig, MeshCategory, BlendingMode, MeshMaterialSettings, MeshInfo, MorphCategory, MorphTargetsBySide } from '../mappings/types';
+import type { Profile, MeshCategory, BlendingMode, MeshMaterialSettings, MeshInfo, MorphCategory, MorphTargetsBySide } from '../mappings/types';
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
 
 // ============================================================================
@@ -452,6 +452,106 @@ export const AU_TO_MORPHS: Record<number, MorphTargetsBySide> = {
 };
 
 // ============================================================================
+// AU TO BONES - Maps AU IDs to bone bindings (CC4 head/eye/jaw/tongue)
+// ============================================================================
+
+export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
+  // Jaw open/close (jaw drop)
+  25: [{ node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 20 }],
+  26: [{ node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 30 }],
+  27: [{ node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 35 }],
+
+  // Jaw lateral (left/right)
+  30: [{ node: 'JAW', channel: 'ry', scale: -1, maxDegrees: 15 }],
+  35: [{ node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 15 }],
+
+  // Head yaw (turn left/right)
+  51: [{ node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 60 }],
+  52: [{ node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 60 }],
+
+  // Head pitch (up/down)
+  53: [{ node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 30 }],
+  54: [{ node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 30 }],
+
+  // Head roll (tilt)
+  55: [{ node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 25 }],
+  56: [{ node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 25 }],
+
+  // Eyes horizontal (left/right) - CC4 uses rz for yaw
+  61: [
+    { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 25, side: 'left' },
+    { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 25, side: 'right' },
+  ],
+  62: [
+    { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 25, side: 'left' },
+    { node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 25, side: 'right' },
+  ],
+
+  // Eyes vertical (up/down) - rx
+  63: [
+    { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 20, side: 'left' },
+    { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 20, side: 'right' },
+  ],
+  64: [
+    { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 20, side: 'left' },
+    { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 20, side: 'right' },
+  ],
+
+  // Tongue controls (optional, for rigs that expose them)
+  37: [{ node: 'TONGUE', channel: 'rz', scale: 1, maxDegrees: 20 }],
+  38: [{ node: 'TONGUE', channel: 'rz', scale: -1, maxDegrees: 20 }],
+  39: [{ node: 'TONGUE', channel: 'ry', scale: -1, maxDegrees: 20 }],
+  40: [{ node: 'TONGUE', channel: 'ry', scale: 1, maxDegrees: 20 }],
+  41: [{ node: 'TONGUE', channel: 'rx', scale: -1, maxDegrees: 20 }],
+  42: [{ node: 'TONGUE', channel: 'rx', scale: 1, maxDegrees: 20 }],
+};
+
+// ============================================================================
+// VISEME KEYS - CC4 viseme morph targets (15)
+// ============================================================================
+
+export const VISEME_KEYS: string[] = [
+  'EE',
+  'Ah',
+  'Oh',
+  'OO',
+  'I',
+  'U',
+  'W',
+  'L',
+  'F_V',
+  'Th',
+  'S_Z',
+  'B_M_P',
+  'K_G_H_NG',
+  'AE',
+  'R',
+];
+
+/**
+ * Jaw opening amounts for each viseme index (0-14).
+ * Values are 0-1 representing how much the jaw should open.
+ * Used by snippetToClip when autoVisemeJaw is enabled.
+ */
+export const VISEME_JAW_AMOUNTS: number[] = [
+  0.15, // 0: EE
+  0.35, // 1: Ah
+  0.25, // 2: Oh
+  0.70, // 3: OO
+  0.55, // 4: I
+  0.30, // 5: U
+  0.10, // 6: W
+  0.20, // 7: L
+  0.08, // 8: F_V
+  0.12, // 9: Th
+  0.18, // 10: S_Z
+  0.02, // 11: B_M_P
+  0.25, // 12: K_G_H_NG
+  0.60, // 13: AE
+  0.40, // 14: R
+];
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
@@ -808,10 +908,10 @@ export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {
 };
 
 // ============================================================================
-// CC4_PRESET - Main export for AUMappingConfig
+// CC4_PRESET - Main export for Profile
 // ============================================================================
 
-export const CC4_PRESET: AUMappingConfig = {
+export const CC4_PRESET: Profile = {
   name: 'Character Creator 4',
   animalType: 'human',
   // No emoji for humans - uses FaTheaterMasks icon instead
@@ -822,6 +922,7 @@ export const CC4_PRESET: AUMappingConfig = {
   suffixPattern: CC4_SUFFIX_PATTERN,
   morphToMesh: MORPH_TO_MESH,
   visemeKeys: VISEME_KEYS,
+  visemeJawAmounts: VISEME_JAW_AMOUNTS,
   auMixDefaults: AU_MIX_DEFAULTS,
   auInfo: AU_INFO,
   eyeMeshNodes: CC4_EYE_MESH_NODES,

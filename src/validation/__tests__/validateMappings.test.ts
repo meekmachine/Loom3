@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import type { AUMappingConfig } from '../../mappings/types';
+import type { Profile } from '../../mappings/types';
 import { validateMappings, validateMappingConfig } from '../validateMappings';
 import { generateMappingCorrections } from '../generateMappingCorrections';
 
-const createBaseConfig = (): AUMappingConfig => ({
+const createBaseConfig = (): Profile => ({
   auToMorphs: {},
   auToBones: {},
   boneNodes: { HEAD: 'Head' },
@@ -13,7 +13,7 @@ const createBaseConfig = (): AUMappingConfig => ({
 
 describe('validateMappingConfig', () => {
   it('flags missing bone nodes referenced by auToBones', () => {
-    const config: AUMappingConfig = {
+    const config: Profile = {
       ...createBaseConfig(),
       auToBones: {
         1: [{ node: 'JAW', channel: 'rx', scale: 1 }],
@@ -26,7 +26,7 @@ describe('validateMappingConfig', () => {
   });
 
   it('flags composite axes missing negative/positive AUs', () => {
-    const config: AUMappingConfig = {
+    const config: Profile = {
       ...createBaseConfig(),
       compositeRotations: [
         {
@@ -43,7 +43,7 @@ describe('validateMappingConfig', () => {
   });
 
   it('requires reciprocal continuum pairs', () => {
-    const config: AUMappingConfig = {
+    const config: Profile = {
       ...createBaseConfig(),
       continuumPairs: {
         1: { pairId: 2, isNegative: true, axis: 'yaw', node: 'HEAD' },
@@ -55,7 +55,7 @@ describe('validateMappingConfig', () => {
   });
 
   it('warns when continuum pairs do not match composite axes', () => {
-    const config: AUMappingConfig = {
+    const config: Profile = {
       ...createBaseConfig(),
       compositeRotations: [
         {
@@ -76,7 +76,7 @@ describe('validateMappingConfig', () => {
   });
 
   it('warns when AU info is missing for referenced AUs', () => {
-    const config: AUMappingConfig = {
+    const config: Profile = {
       ...createBaseConfig(),
       auToMorphs: { 5: { left: [], right: [], center: ['Smile'] } },
       auInfo: {
@@ -95,7 +95,7 @@ describe('validateMappings', () => {
       { name: 'FaceMesh', morphTargetDictionary: { Smile: 0 } },
     ];
     const skeleton = { bones: [{ name: 'Head' }] };
-    const config: AUMappingConfig = {
+    const config: Profile = {
       ...createBaseConfig(),
       auToMorphs: { 1: { left: [], right: [], center: ['Smile', 'Frown'] } },
       auToBones: { 2: [{ node: 'HEAD', channel: 'rx', scale: 1 }] },
@@ -112,7 +112,7 @@ describe('validateMappings', () => {
       { name: 'FaceMesh', morphTargetDictionary: { Smile: 0 } },
     ];
     const skeleton = { bones: [{ name: 'Head' }] };
-    const config: AUMappingConfig = {
+    const config: Profile = {
       ...createBaseConfig(),
       morphToMesh: {
         face: ['FaceMesh', 'MissingMesh'],
@@ -129,7 +129,7 @@ describe('validateMappings', () => {
       { name: 'FaceMesh', morphTargetDictionary: { Smile: 0 } },
     ];
     const skeleton = { bones: [{ name: 'Head' }] };
-    const config: AUMappingConfig = {
+    const config: Profile = {
       ...createBaseConfig(),
       auToMorphs: { 1: { left: [], right: [], center: ['Smyle'] } },
     };
@@ -146,7 +146,7 @@ describe('generateMappingCorrections', () => {
       { name: 'FaceMesh', morphTargetDictionary: { Smile: 0 } },
     ];
     const skeleton = { bones: [{ name: 'Head' }] };
-    const config: AUMappingConfig = {
+    const config: Profile = {
       ...createBaseConfig(),
       auToMorphs: { 1: { left: [], right: [], center: ['Smyle'] } },
       morphToMesh: { face: ['FaceMsh'] },

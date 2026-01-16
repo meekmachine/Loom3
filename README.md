@@ -54,7 +54,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Loom3, collectMorphMeshes, CC4_PRESET } from 'loom3';
 
 // 1. Create the Loom3 controller with a preset
-const loom = new Loom3({ auMappings: CC4_PRESET });
+const loom = new Loom3({ profile: CC4_PRESET });
 
 // 2. Set up your Three.js scene
 const scene = new THREE.Scene();
@@ -206,7 +206,7 @@ import { CC4_PRESET } from 'loom3';
 ```typescript
 import { Loom3, CC4_PRESET } from 'loom3';
 
-const loom = new Loom3({ auMappings: CC4_PRESET });
+const loom = new Loom3({ profile: CC4_PRESET });
 ```
 
 You can also resolve presets by name and apply overrides without cloning the full preset:
@@ -216,11 +216,32 @@ import { Loom3 } from 'loom3';
 
 const loom = new Loom3({
   presetType: 'cc4',
-  presetOverrides: {
+  profile: {
     auToMorphs: {
       12: { left: ['MySmile_Left'], right: ['MySmile_Right'], center: [] },
     },
   },
+});
+```
+
+### Profiles (preset overrides)
+
+A **profile** is a partial override object that extends a base preset. Use it to customize a single character without copying the full preset:
+
+```typescript
+import type { Profile } from 'loom3';
+import { Loom3 } from 'loom3';
+
+const DAISY_PROFILE: Profile = {
+  morphToMesh: { face: ['Object_9'] },
+  annotationRegions: [
+    { name: 'face', bones: ['CC_Base_Head'] },
+  ],
+};
+
+const loom = new Loom3({
+  presetType: 'cc4',
+  profile: DAISY_PROFILE,
 });
 ```
 
@@ -289,6 +310,31 @@ console.log(bones);
 //   'TONGUE': { position: [0, 152.3, 1.8], rotation: [0, 0, 0] },
 // }
 ```
+
+### Validation & analysis
+
+Loom3 includes validation and analysis helpers so you can verify presets against a model and generate corrections:
+
+```typescript
+import {
+  extractModelData,
+  analyzeModel,
+  validateMappings,
+  generateMappingCorrections,
+  resolvePreset,
+} from 'loom3';
+
+const preset = resolvePreset('cc4');
+const modelData = extractModelData({ model, meshes, animations });
+const analysis = analyzeModel(modelData, { preset });
+const validation = validateMappings(modelData, preset);
+const corrections = generateMappingCorrections(modelData, preset);
+```
+
+Use these helpers to:
+- Find missing morphs/bones and mesh mismatches
+- Score preset compatibility
+- Suggest corrections before you ship a profile
 
 ### Controlling mesh visibility
 
@@ -366,15 +412,15 @@ const MY_PRESET = mergePreset(CC4_PRESET, {
   },
 });
 
-const loom = new Loom3({ auMappings: MY_PRESET });
+const loom = new Loom3({ profile: MY_PRESET });
 ```
 
 ### Creating a preset from scratch
 
 ```typescript
-import { AUMappingConfig } from 'loom3';
+import { Profile } from 'loom3';
 
-const CUSTOM_PRESET: AUMappingConfig = {
+const CUSTOM_PRESET: Profile = {
   auToMorphs: {
     1: { left: ['brow_inner_up_L'], right: ['brow_inner_up_R'], center: [] },
     2: { left: ['brow_outer_up_L'], right: ['brow_outer_up_R'], center: [] },
@@ -404,10 +450,10 @@ const CUSTOM_PRESET: AUMappingConfig = {
 
 ```typescript
 // Switch to a different preset
-loom.setAUMappings(ANOTHER_PRESET);
+loom.setProfile(ANOTHER_PRESET);
 
 // Get current mappings
-const current = loom.getAUMappings();
+const current = loom.getProfile();
 ```
 
 > **Screenshot placeholder:** Add a screenshot showing custom preset in action
@@ -641,7 +687,7 @@ import { Loom3 } from 'loom3';
 import { FISH_AU_MAPPING_CONFIG, FishAction } from './presets/bettaFish';
 
 const fishController = new Loom3({
-  auMappings: FISH_AU_MAPPING_CONFIG
+  profile: FISH_AU_MAPPING_CONFIG
 });
 
 // Load the fish model

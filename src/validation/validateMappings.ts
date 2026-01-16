@@ -5,7 +5,7 @@
  * Checks that bones, morph targets, and meshes referenced in the preset exist in the model.
  */
 
-import type { AUMappingConfig, MorphTargetsBySide } from '../mappings/types';
+import type { Profile, MorphTargetsBySide, MorphTargetKey } from '../mappings/types';
 import type { MappingCorrection, MappingCorrectionOptions } from './generateMappingCorrections';
 import { generateMappingCorrections } from './generateMappingCorrections';
 
@@ -50,7 +50,7 @@ export interface ValidationResult {
   warnings: string[];
 
   /** Optional: corrected config when suggestions are requested */
-  suggestedConfig?: AUMappingConfig;
+  suggestedConfig?: Profile;
 
   /** Optional: corrections applied or suggested */
   corrections?: MappingCorrection[];
@@ -162,7 +162,7 @@ function isEyeNodeKey(nodeKey: string) {
 /**
  * Validate that the mapping dictionaries are internally consistent.
  */
-export function validateMappingConfig(config: AUMappingConfig): MappingConsistencyResult {
+export function validateMappingConfig(config: Profile): MappingConsistencyResult {
   const errors: MappingIssue[] = [];
   const warnings: MappingIssue[] = [];
 
@@ -455,16 +455,19 @@ export function validateMappingConfig(config: AUMappingConfig): MappingConsisten
  * @param config - AU mapping preset to validate against
  * @returns ValidationResult with detailed compatibility info
  */
-const collectMorphs = (entry?: MorphTargetsBySide) => [
-  ...(entry?.left ?? []),
-  ...(entry?.right ?? []),
-  ...(entry?.center ?? []),
-];
+const isStringMorph = (key: MorphTargetKey): key is string => typeof key === 'string';
+
+const collectMorphs = (entry?: MorphTargetsBySide) =>
+  [
+    ...(entry?.left ?? []),
+    ...(entry?.right ?? []),
+    ...(entry?.center ?? []),
+  ].filter(isStringMorph);
 
 export function validateMappings(
   meshes: MorphMesh[],
   skeleton: Skeleton | null,
-  config: AUMappingConfig,
+  config: Profile,
   options: ValidateMappingOptions = {}
 ): ValidationResult {
   const warnings: string[] = [];
@@ -690,7 +693,7 @@ export function validateMappings(
 export function isPresetCompatible(
   meshes: MorphMesh[],
   skeleton: Skeleton | null,
-  config: AUMappingConfig
+  config: Profile
 ): boolean {
   const result = validateMappings(meshes, skeleton, config);
   return result.score >= 50;
@@ -699,7 +702,7 @@ export function isPresetCompatible(
 /**
  * Suggest the best preset from a list based on validation scores.
  */
-export function suggestBestPreset<T extends AUMappingConfig>(
+export function suggestBestPreset<T extends Profile>(
   meshes: MorphMesh[],
   skeleton: Skeleton | null,
   presets: T[]

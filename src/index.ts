@@ -9,7 +9,7 @@
  * import { Loom3, collectMorphMeshes, CC4_PRESET } from 'loom3';
  * import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
  *
- * const loom = new Loom3({ auMappings: CC4_PRESET });
+ * const loom = new Loom3({ presetType: 'cc4' });
  *
  * const loader = new GLTFLoader();
  * loader.load('/character.glb', (gltf) => {
@@ -95,7 +95,7 @@ export type {
 // ============================================================================
 
 export type {
-  AUMappingConfig,
+  Profile,
   MorphCategory,
   MeshCategory,
   BlendingMode,
@@ -104,6 +104,37 @@ export type {
 } from './mappings/types';
 
 export { BLENDING_MODES } from './mappings/types';
+
+// ============================================================================
+// CHARACTER CONFIG (Regions, Markers)
+// ============================================================================
+
+export type {
+  LineStyle,
+  LineCurve,
+  NamedDirection,
+  LineConfig,
+  MarkerStyleOverrides,
+  ExpandAnimation,
+  ExpandedRegionState,
+  FallbackConfig,
+  MarkerGroup,
+  Region,
+  MarkerStyle,
+  CharacterConfig,
+  CharacterRegistry,
+} from './characters/types';
+
+// ========================================================================
+// REGION MAPPING HELPERS
+// ========================================================================
+
+export {
+  fuzzyNameMatch,
+  resolveBoneName,
+  resolveBoneNames,
+  resolveFaceCenter,
+} from './regions/regionMapping';
 
 // ============================================================================
 // PRESETS
@@ -123,6 +154,7 @@ export {
   CC4_EYE_MESH_NODES,
   CC4_MESHES,
   VISEME_KEYS,
+  VISEME_JAW_AMOUNTS,
   MORPH_TO_MESH,
   AU_INFO,
   COMPOSITE_ROTATIONS,

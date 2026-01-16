@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { AUMappingConfig } from '../../mappings/types';
+import type { Profile } from '../../mappings/types';
 import { mergePreset } from '../mergePreset';
 
-const basePreset: AUMappingConfig = {
+const basePreset: Profile = {
   name: 'base',
   auToMorphs: { 1: { left: [], right: [], center: ['A'] } },
   auToBones: { 51: [{ node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 }] },

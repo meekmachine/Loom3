@@ -466,12 +466,16 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
   35: [{ node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 15 }],
 
   // Head yaw (turn left/right)
-  51: [{ node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 60 }],
-  52: [{ node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 60 }],
+  // AU 51 = Turn Left: positive ry rotation (scale: 1)
+  // AU 52 = Turn Right: negative ry rotation (scale: -1)
+  51: [{ node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 60 }],
+  52: [{ node: 'HEAD', channel: 'ry', scale: -1, maxDegrees: 60 }],
 
   // Head pitch (up/down)
-  53: [{ node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 30 }],
-  54: [{ node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 30 }],
+  // AU 53 = Head Up: negative rx rotation (scale: -1)
+  // AU 54 = Head Down: positive rx rotation (scale: 1)
+  53: [{ node: 'HEAD', channel: 'rx', scale: -1, maxDegrees: 30 }],
+  54: [{ node: 'HEAD', channel: 'rx', scale: 1, maxDegrees: 30 }],
 
   // Head roll (tilt)
   55: [{ node: 'HEAD', channel: 'rz', scale: -1, maxDegrees: 25 }],

@@ -68,7 +68,7 @@ export interface Profile {
   morphToMesh: Record<string, string[]>;
 
   /** Viseme keys in order (typically 15 phoneme positions) */
-  visemeKeys: string[];
+  visemeKeys: MorphTargetKey[];
 
   /** Optional: Jaw opening amounts per viseme index (0-1). Used for auto-generating jaw rotation in clips. */
   visemeJawAmounts?: number[];

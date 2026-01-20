@@ -7,11 +7,6 @@
 
 export type {
   LoomLarge,
-  LoomMesh,
-  LoomVector3,
-  LoomEuler,
-  LoomQuaternion,
-  LoomObject3D,
   ReadyPayload,
   LoomLargeConfig,
   Loom3,

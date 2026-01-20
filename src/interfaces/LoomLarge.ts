@@ -106,7 +106,7 @@ export interface LoomLarge {
   transitionAU(id: number | string, to: number, durationMs?: number, balance?: number): TransitionHandle;
 
   /**
-   * Get current AU value
+   * Get current AU value (from cached auValues)
    */
   getAU(id: number): number;
 
@@ -372,6 +372,7 @@ export interface LoomLarge {
       rate?: number;
       loop?: boolean;
       loopMode?: MixerLoopMode;
+      repeatCount?: number;
       reverse?: boolean;
       actionId?: string;
     }

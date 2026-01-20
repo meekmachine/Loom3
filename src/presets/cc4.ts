@@ -482,23 +482,29 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
   56: [{ node: 'HEAD', channel: 'rz', scale: 1, maxDegrees: 25 }],
 
   // Eyes horizontal (left/right) - CC4 uses rz for yaw
+  // AU 61 = Eyes Turn Left = character looks toward THEIR left = viewer's RIGHT
+  // AU 62 = Eyes Turn Right = character looks toward THEIR right = viewer's LEFT
+  // For CC4 rigs: positive rz = eyes rotate left (look right), negative rz = eyes rotate right (look left)
   61: [
-    { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 25, side: 'left' },
-    { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 25, side: 'right' },
-  ],
-  62: [
     { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 25, side: 'left' },
     { node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 25, side: 'right' },
   ],
+  62: [
+    { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 25, side: 'left' },
+    { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 25, side: 'right' },
+  ],
 
   // Eyes vertical (up/down) - rx
+  // AU 63 = Eyes Up = character looks up
+  // AU 64 = Eyes Down = character looks down
+  // For CC4 rigs: negative rx = eyes rotate up, positive rx = eyes rotate down
   63: [
-    { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 20, side: 'left' },
-    { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 20, side: 'right' },
-  ],
-  64: [
     { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 20, side: 'left' },
     { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 20, side: 'right' },
+  ],
+  64: [
+    { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 20, side: 'left' },
+    { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 20, side: 'right' },
   ],
 
   // Tongue controls (optional, for rigs that expose them)
@@ -902,13 +908,33 @@ export const CC4_MESHES: Record<string, MeshInfo> = {
 
 /** Which mesh each morph category applies to */
 export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {
-  // Face/AU morphs affect the main face mesh and both eyebrow meshes.
-  face: ['CC_Base_Body_1', 'Male_Bushy_1', 'Male_Bushy_2'],
-  viseme: ['CC_Base_Body_1'],
-  eye: ['CC_Base_EyeOcclusion_1', 'CC_Base_EyeOcclusion_2'],
-  tearLine: ['CC_Base_TearLine_1', 'CC_Base_TearLine_2'],
-  tongue: ['CC_Base_Tongue'],
-  hair: ['Side_part_wavy_1', 'Side_part_wavy_2'],
+  // Face/AU morphs affect the main face mesh plus brows/occlusion/tearline.
+  // Include both CC4 naming variants (with and without _1/_2 suffixes).
+  face: [
+    'CC_Base_Body',
+    'CC_Base_Body_1',
+    'Male_Bushy',
+    'Male_Bushy_1',
+    'Male_Bushy_2',
+    'CC_Base_EyeOcclusion',
+    'CC_Base_EyeOcclusion_1',
+    'CC_Base_EyeOcclusion_2',
+    'CC_Base_TearLine',
+    'CC_Base_TearLine_1',
+    'CC_Base_TearLine_2',
+  ],
+  viseme: ['CC_Base_Body', 'CC_Base_Body_1'],
+  eye: [
+    'CC_Base_EyeOcclusion',
+    'CC_Base_EyeOcclusion_1',
+    'CC_Base_EyeOcclusion_2',
+    'CC_Base_TearLine',
+    'CC_Base_TearLine_1',
+    'CC_Base_TearLine_2',
+  ],
+  tearLine: ['CC_Base_TearLine', 'CC_Base_TearLine_1', 'CC_Base_TearLine_2'],
+  tongue: ['CC_Base_Tongue', 'CC_Base_Tongue_1'],
+  hair: ['Side_part_wavy', 'Side_part_wavy_1', 'Side_part_wavy_2'],
 };
 
 // ============================================================================

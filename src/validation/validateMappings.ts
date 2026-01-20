@@ -411,6 +411,7 @@ export function validateMappingConfig(config: Profile): MappingConsistencyResult
   // Validate viseme keys (duplicates or blanks)
   const visemeSeen = new Set<string>();
   for (const key of config.visemeKeys || []) {
+    if (typeof key !== 'string') continue;
     if (!key) {
       push('warning', 'VISEME_EMPTY', 'Viseme key is empty');
       continue;
@@ -514,7 +515,9 @@ export function validateMappings(
     }
   }
   for (const viseme of config.visemeKeys) {
-    presetMorphs.add(viseme);
+    if (typeof viseme === 'string') {
+      presetMorphs.add(viseme);
+    }
   }
 
   // Get all unique bone names referenced in preset

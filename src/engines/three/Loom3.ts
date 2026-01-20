@@ -18,7 +18,7 @@ import type {
   ReadyPayload,
   LoomLargeConfig,
 } from '../../interfaces/LoomLarge';
-import type { MeshInfo } from '../../mappings/types';
+import type { MeshInfo, MorphTargetKey } from '../../mappings/types';
 import type { Animation } from '../../interfaces/Animation';
 import type {
   TransitionHandle,
@@ -77,7 +77,17 @@ function clamp01(x: number) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
+type MorphTargetHandle = { infl: number[]; idx: number };
+type ResolvedMorphTargetsBySide = {
+  left: MorphTargetHandle[];
+  right: MorphTargetHandle[];
+  center: MorphTargetHandle[];
+};
+
 export class Loom3 implements LoomLarge {
+  // Optional hook for animation schedulers.
+  onSnippetEnd?: (name: string) => void;
+
   // Configuration
   private config: Profile;
 
@@ -106,7 +116,9 @@ export class Loom3 implements LoomLarge {
   private meshes: Mesh[] = [];
   private model: Object3D | null = null;
   private meshByName = new Map<string, Mesh>();
-  private morphCache = new Map<string, { infl: number[]; idx: number }[]>();
+  private morphCache = new Map<string, MorphTargetHandle[]>();
+  private resolvedAUMorphTargets = new Map<number, ResolvedMorphTargetsBySide>();
+  private resolvedVisemeTargets: MorphTargetHandle[][] = [];
 
   // Bones
   private bones: ResolvedBones = {};
@@ -222,6 +234,8 @@ export class Loom3 implements LoomLarge {
       };
     }
 
+    this.rebuildMorphTargetsCache();
+
     if (this.resolvedFaceMeshes.length > 0) {
       for (const faceName of this.resolvedFaceMeshes) {
         const faceMesh = this.meshByName.get(faceName);
@@ -237,6 +251,44 @@ export class Loom3 implements LoomLarge {
 
     // Apply render order and material settings from CC4_MESHES
     this.applyMeshMaterialSettings(model);
+  }
+
+  private rebuildMorphTargetsCache(): void {
+    this.morphCache.clear();
+    this.resolvedAUMorphTargets.clear();
+    this.resolvedVisemeTargets = [];
+
+    if (!this.meshes.length) return;
+
+    const resolveTargetsForKeys = (keys: MorphTargetKey[], meshNames: string[]): MorphTargetHandle[] => {
+      if (!keys || keys.length === 0) return [];
+      const targets: MorphTargetHandle[] = [];
+      for (const key of keys) {
+        const resolved = this.resolveMorphTargets(key, meshNames);
+        if (resolved.length > 0) {
+          targets.push(...resolved);
+        }
+      }
+      return targets;
+    };
+
+    for (const [auIdStr, entry] of Object.entries(this.config.auToMorphs || {})) {
+      const auId = Number(auIdStr);
+      if (Number.isNaN(auId) || !entry) continue;
+      const meshNames = this.getMeshNamesForAU(auId);
+      const resolved: ResolvedMorphTargetsBySide = {
+        left: resolveTargetsForKeys(entry.left, meshNames),
+        right: resolveTargetsForKeys(entry.right, meshNames),
+        center: resolveTargetsForKeys(entry.center, meshNames),
+      };
+      this.resolvedAUMorphTargets.set(auId, resolved);
+    }
+
+    for (let i = 0; i < (this.config.visemeKeys || []).length; i += 1) {
+      const key = this.config.visemeKeys[i];
+      const targets = this.resolveMorphTargets(key);
+      this.resolvedVisemeTargets[i] = targets;
+    }
   }
 
   private resolveFaceMeshes(meshes: Mesh[]): string[] {
@@ -394,8 +446,27 @@ export class Loom3 implements LoomLarge {
       this.auBalances[id] = balance;
     }
 
+    const resolvedMorphTargets = this.resolvedAUMorphTargets.get(id);
     const { left: leftKeys, right: rightKeys, center: centerKeys } = this.getAUMorphsBySide(id);
-    if (leftKeys.length || rightKeys.length || centerKeys.length) {
+
+    if (resolvedMorphTargets) {
+      const mixWeight = this.isMixedAU(id) ? this.getAUMixWeight(id) : 1.0;
+      const base = clamp01(v) * mixWeight;
+      const { left: leftVal, right: rightVal } = this.computeSideValues(base, balance);
+
+      if (resolvedMorphTargets.left.length || resolvedMorphTargets.right.length) {
+        for (const t of resolvedMorphTargets.left) {
+          t.infl[t.idx] = leftVal;
+        }
+        for (const t of resolvedMorphTargets.right) {
+          t.infl[t.idx] = rightVal;
+        }
+      }
+
+      for (const t of resolvedMorphTargets.center) {
+        t.infl[t.idx] = base;
+      }
+    } else if (leftKeys.length || rightKeys.length || centerKeys.length) {
       const mixWeight = this.isMixedAU(id) ? this.getAUMixWeight(id) : 1.0;
       const base = clamp01(v) * mixWeight;
       const meshNames = this.getMeshNamesForAU(id);
@@ -805,8 +876,15 @@ export class Loom3 implements LoomLarge {
     const val = clamp01(value);
     this.visemeValues[visemeIndex] = val;
 
-    const morphKey = this.config.visemeKeys[visemeIndex];
-    this.setMorph(morphKey, val);
+    const targets = this.resolvedVisemeTargets[visemeIndex];
+    if (targets && targets.length > 0) {
+      for (const t of targets) {
+        t.infl[t.idx] = val;
+      }
+    } else {
+      const morphKey = this.config.visemeKeys[visemeIndex];
+      this.setMorph(morphKey, val);
+    }
 
     const jawAmount = Loom3.VISEME_JAW_AMOUNTS[visemeIndex] * val * jawScale;
     if (Math.abs(jawScale) > 1e-6 && Math.abs(jawAmount) > 1e-6) {
@@ -925,6 +1003,24 @@ export class Loom3 implements LoomLarge {
       if (dict) {
         result[mesh.name] = Object.keys(dict).sort();
       }
+    }
+    return result;
+  }
+
+  /** Get morph target indices mapped to labels for each mesh */
+  getMorphTargetIndices(): Record<string, { index: number; name: string }[]> {
+    const result: Record<string, { index: number; name: string }[]> = {};
+    for (const mesh of this.meshes) {
+      const dict = mesh.morphTargetDictionary;
+      if (!dict) continue;
+
+      const entries = Object.entries(dict).map(([name, index]) => ({
+        name,
+        index,
+      }));
+
+      entries.sort((a, b) => a.index - b.index);
+      result[mesh.name] = entries;
     }
     return result;
   }
@@ -1103,6 +1199,9 @@ export class Loom3 implements LoomLarge {
   setProfile(profile: Profile): void {
     this.config = profile;
     this.mixWeights = { ...profile.auMixDefaults };
+    if (this.model) {
+      this.rebuildMorphTargetsCache();
+    }
   }
 
   getProfile(): Profile { return this.config; }
@@ -1668,7 +1767,7 @@ export class Loom3 implements LoomLarge {
 
   updateClipParams(
     name: string,
-    params: { weight?: number; rate?: number; loop?: boolean; loopMode?: 'once' | 'repeat' | 'pingpong'; reverse?: boolean; actionId?: string }
+    params: { weight?: number; rate?: number; loop?: boolean; loopMode?: 'once' | 'repeat' | 'pingpong'; repeatCount?: number; reverse?: boolean; actionId?: string }
   ): boolean {
     return this.bakedAnimations.updateClipParams(name, params);
   }

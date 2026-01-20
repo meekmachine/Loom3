@@ -261,6 +261,7 @@ export class BakedAnimationController {
       intensity = 1.0,
       loop = true,
       loopMode = 'repeat',
+      repeatCount,
       crossfadeDuration = 0,
       clampWhenFinished = true,
       startTime = 0,
@@ -270,12 +271,13 @@ export class BakedAnimationController {
     action.setEffectiveWeight(intensity);
     action.clampWhenFinished = clampWhenFinished;
 
+    const reps = repeatCount ?? Infinity;
     if (!loop || loopMode === 'once') {
       action.setLoop(LoopOnce, 1);
     } else if (loopMode === 'pingpong') {
-      action.setLoop(LoopPingPong, Infinity);
+      action.setLoop(LoopPingPong, reps);
     } else {
-      action.setLoop(LoopRepeat, Infinity);
+      action.setLoop(LoopRepeat, reps);
     }
 
     if (startTime > 0) {
@@ -310,24 +312,67 @@ export class BakedAnimationController {
     const action = this.animationActions.get(clipName);
     if (action) {
       action.stop();
+      // Fully remove from mixer to prevent accumulation
+      if (this.animationMixer) {
+        try {
+          const clip = action.getClip();
+          if (clip) {
+            this.animationMixer.uncacheAction(clip);
+            this.animationMixer.uncacheClip(clip);
+          }
+        } catch {}
+      }
+      this.animationActions.delete(clipName);
       this.animationFinishedCallbacks.delete(clipName);
     }
     const clipAction = this.clipActions.get(clipName);
     if (clipAction && clipAction !== action) {
-      try { clipAction.stop(); } catch {}
+      try {
+        clipAction.stop();
+        if (this.animationMixer) {
+          const clip = clipAction.getClip();
+          if (clip) {
+            this.animationMixer.uncacheAction(clip);
+            this.animationMixer.uncacheClip(clip);
+          }
+        }
+      } catch {}
+      this.clipActions.delete(clipName);
     }
+    this.clipHandles.delete(clipName);
   }
 
   stopAllAnimations(): void {
     for (const [name, action] of this.animationActions) {
-      try { action.paused = true; } catch {}
+      try {
+        action.stop();
+        if (this.animationMixer) {
+          const clip = action.getClip();
+          if (clip) {
+            this.animationMixer.uncacheAction(clip);
+            this.animationMixer.uncacheClip(clip);
+          }
+        }
+      } catch {}
       try { this.animationFinishedCallbacks.delete(name); } catch {}
     }
     for (const [name, action] of this.clipActions) {
       if (!this.animationActions.has(name)) {
-        try { action.paused = true; } catch {}
+        try {
+          action.stop();
+          if (this.animationMixer) {
+            const clip = action.getClip();
+            if (clip) {
+              this.animationMixer.uncacheAction(clip);
+              this.animationMixer.uncacheClip(clip);
+            }
+          }
+        } catch {}
       }
     }
+    this.animationActions.clear();
+    this.clipActions.clear();
+    this.clipHandles.clear();
   }
 
   pauseAnimation(clipName: string): void {
@@ -749,6 +794,7 @@ export class BakedAnimationController {
     const {
       loop = false,
       loopMode,
+      repeatCount,
       reverse = false,
       playbackRate = 1.0,
       mixerWeight,
@@ -781,13 +827,14 @@ export class BakedAnimationController {
     action.setEffectiveWeight(weight);
     const mode = loopMode || (loop ? 'repeat' : 'once');
     action.clampWhenFinished = mode === 'once';
+    const reps = repeatCount ?? Infinity;
 
     if (mode === 'pingpong') {
-      action.setLoop(LoopPingPong, Infinity);
+      action.setLoop(LoopPingPong, reps);
     } else if (mode === 'once') {
       action.setLoop(LoopOnce, 1);
     } else {
-      action.setLoop(LoopRepeat, Infinity);
+      action.setLoop(LoopRepeat, reps);
     }
 
     let resolveFinished: () => void;
@@ -824,6 +871,13 @@ export class BakedAnimationController {
 
       stop: () => {
         action.stop();
+        // Fully remove action from mixer to prevent accumulation and weight blending issues
+        if (this.animationMixer) {
+          try { this.animationMixer.uncacheAction(clip); } catch {}
+          try { this.animationMixer.uncacheClip(clip); } catch {}
+        }
+        this.clipActions.delete(clip.name);
+        this.animationActions.delete(clip.name);
         this.animationFinishedCallbacks.delete(clip.name);
         resolveFinished();
         cleanup();
@@ -846,14 +900,21 @@ export class BakedAnimationController {
         action.setEffectiveTimeScale(rate);
       },
 
-      setLoop: (mode: 'once' | 'repeat' | 'pingpong') => {
+      setLoop: (mode: 'once' | 'repeat' | 'pingpong', repeatCount?: number) => {
+        const reps = repeatCount ?? Infinity;
         if (mode === 'pingpong') {
-          action.setLoop(LoopPingPong, Infinity);
+          action.setLoop(LoopPingPong, reps);
         } else if (mode === 'once') {
           action.setLoop(LoopOnce, 1);
         } else {
-          action.setLoop(LoopRepeat, Infinity);
+          action.setLoop(LoopRepeat, reps);
         }
+      },
+
+      setTime: (t: number) => {
+        const clamped = Math.max(0, Math.min(clip.duration, t));
+        action.time = clamped;
+        try { this.animationMixer?.update(0); } catch {}
       },
 
       getTime: () => action.time,
@@ -894,12 +955,24 @@ export class BakedAnimationController {
     if (!this.animationMixer || !this.host.getModel()) return;
     for (const [clipName, action] of Array.from(this.clipActions.entries())) {
       if (clipName === name || clipName.startsWith(`${name}_`)) {
-        try { action.paused = true; } catch {}
+        try {
+          action.stop();
+          // Fully remove action from mixer to prevent accumulation
+          const clip = action.getClip();
+          if (clip) {
+            this.animationMixer.uncacheAction(clip);
+            this.animationMixer.uncacheClip(clip);
+          }
+        } catch {}
+        this.clipActions.delete(clipName);
+        this.animationActions.delete(clipName);
+        this.clipHandles.delete(clipName);
+        this.animationFinishedCallbacks.delete(clipName);
       }
     }
   }
 
-  updateClipParams(name: string, params: { weight?: number; rate?: number; loop?: boolean; loopMode?: 'once' | 'repeat' | 'pingpong'; reverse?: boolean; actionId?: string }): boolean {
+  updateClipParams(name: string, params: { weight?: number; rate?: number; loop?: boolean; loopMode?: 'once' | 'repeat' | 'pingpong'; repeatCount?: number; reverse?: boolean; actionId?: string }): boolean {
     let updated = false;
     const matches = (clipName: string, action?: AnimationAction | null) => {
       if (params.actionId) {
@@ -932,14 +1005,15 @@ export class BakedAnimationController {
         action.setEffectiveTimeScale(signedRate);
         updated = true;
       }
-      if (typeof params.loop === 'boolean' || params.loopMode) {
+      if (typeof params.loop === 'boolean' || params.loopMode || params.repeatCount !== undefined) {
         const mode = params.loopMode || (params.loop ? 'repeat' : 'once');
+        const reps = params.repeatCount ?? Infinity;
         if (mode === 'pingpong') {
-          action.setLoop(LoopPingPong, Infinity);
+          action.setLoop(LoopPingPong, reps);
         } else if (mode === 'once') {
           action.setLoop(LoopOnce, 1);
         } else {
-          action.setLoop(LoopRepeat, Infinity);
+          action.setLoop(LoopRepeat, reps);
         }
         updated = true;
       }

@@ -103,6 +103,8 @@ export interface AnimationPlayOptions {
   loop?: boolean;
   /** Loop mode: 'repeat' (restart from beginning), 'pingpong' (reverse direction), 'once' (no loop) */
   loopMode?: 'repeat' | 'pingpong' | 'once';
+  /** Number of repetitions when looping (default: Infinity for repeat/pingpong) */
+  repeatCount?: number;
   /** Crossfade duration in seconds when transitioning from another animation (default: 0.3) */
   crossfadeDuration?: number;
   /** Clamp animation at end when not looping (default: true) */
@@ -198,6 +200,8 @@ export interface ClipOptions {
   loop?: boolean;
   /** Loop mode: repeat (default), pingpong (forward/back), or once */
   loopMode?: 'repeat' | 'pingpong' | 'once';
+  /** Number of repetitions when looping (default: Infinity for repeat/pingpong) */
+  repeatCount?: number;
   /** Playback rate multiplier (default: 1.0) */
   playbackRate?: number;
   /** Play clip backwards when true (implemented via negative time scale) */
@@ -242,7 +246,9 @@ export interface ClipHandle {
   /** Optional playback-rate setter for live mixer updates */
   setPlaybackRate?: (r: number) => void;
   /** Optional loop setter for live mixer updates */
-  setLoop?: (mode: 'once' | 'repeat' | 'pingpong') => void;
+  setLoop?: (mode: 'once' | 'repeat' | 'pingpong', repeatCount?: number) => void;
+  /** Optional time setter for scrubbing */
+  setTime?: (time: number) => void;
   /** Get current playback time in seconds */
   getTime: () => number;
   /** Get total clip duration in seconds */

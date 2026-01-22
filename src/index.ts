@@ -47,10 +47,9 @@ export type {
   ReadyPayload,
   LoomLargeConfig,
   Loom3Config,
-  MixerLoopMode,
 } from './interfaces/LoomLarge';
 
-export type { Animation } from './interfaces/Animation';
+export type { Animation, MixerLoopMode } from './interfaces/Animation';
 
 export type {
   HairPhysics as HairPhysicsInterface,
@@ -60,6 +59,13 @@ export type {
   HeadState,
   HairMorphOutput,
 } from './interfaces/HairPhysics';
+
+export type {
+  Hair,
+  HairPhysicsRuntimeConfig,
+  HairObjectRef,
+  HairObjectState,
+} from './interfaces/Hair';
 
 // ============================================================================
 // CORE TYPES

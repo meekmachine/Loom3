@@ -15,6 +15,13 @@ export type {
 
 export type { MeshInfo } from '../mappings/types';
 
-export type { Animation } from './Animation';
+export type { Animation, MixerLoopMode } from './Animation';
 
 export type { HairPhysics, HairPhysicsConfig, HairStrand, HairState } from './HairPhysics';
+
+export type {
+  Hair,
+  HairPhysicsRuntimeConfig,
+  HairObjectRef,
+  HairObjectState,
+} from './Hair';

@@ -55,8 +55,8 @@ export const AU_TO_MORPHS: Record<number, MorphTargetsBySide> = {
     center: [],
   },
   10: {
-    left: ['Nose_Sneer_L'],
-    right: ['Nose_Sneer_R'],
+    left: ['Mouth_Up_Upper_L'],
+    right: ['Mouth_Up_Upper_R'],
     center: [],
   },
   11: {
@@ -75,9 +75,8 @@ export const AU_TO_MORPHS: Record<number, MorphTargetsBySide> = {
     center: [],
   },
   14: {
-    // AU 14 = Dimpler (buccinator) - pulls lip corners inward, creating cheek dimples
-    left: ['Mouth_Dimple_L'],
-    right: ['Mouth_Dimple_R'],
+    left: ['Mouth_Press_L'],
+    right: ['Mouth_Press_R'],
     center: [],
   },
   15: {

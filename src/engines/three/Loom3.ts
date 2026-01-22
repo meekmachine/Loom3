@@ -18,8 +18,7 @@ import type {
   ReadyPayload,
   LoomLargeConfig,
 } from '../../interfaces/LoomLarge';
-import type { MeshInfo, MorphTargetKey } from '../../mappings/types';
-import type { Animation } from '../../interfaces/Animation';
+import type { MeshInfo, MorphTargetRef } from '../../mappings/types';
 import type {
   TransitionHandle,
   BoneKey,
@@ -91,8 +90,20 @@ export class Loom3 implements LoomLarge {
   // Configuration
   private config: Profile;
 
-  // Animation system (injectable)
-  private animation: Animation;
+  // Animation driver (injectable)
+  private animation: {
+    tick(dtSeconds: number): void;
+    addTransition(
+      key: string,
+      from: number,
+      to: number,
+      durationMs: number,
+      apply: (value: number) => void,
+      easing?: (t: number) => number
+    ): TransitionHandle;
+    clearTransitions(): void;
+    getActiveTransitionCount(): number;
+  };
 
   // Composite rotation mappings (built from config or default CC4)
   private compositeRotations: CompositeRotation[];
@@ -116,7 +127,8 @@ export class Loom3 implements LoomLarge {
   private meshes: Mesh[] = [];
   private model: Object3D | null = null;
   private meshByName = new Map<string, Mesh>();
-  private morphCache = new Map<string, MorphTargetHandle[]>();
+  private morphKeyCache = new Map<string, MorphTargetHandle[]>();
+  private morphIndexCache = new Map<string, MorphTargetHandle[]>();
   private resolvedAUMorphTargets = new Map<number, ResolvedMorphTargetsBySide>();
   private resolvedVisemeTargets: MorphTargetHandle[][] = [];
 
@@ -142,7 +154,22 @@ export class Loom3 implements LoomLarge {
   private animationFrameId: number | null = null;
   private isRunning = false;
 
-  constructor(config: LoomLargeConfig = {}, animation?: Animation) {
+  constructor(
+    config: LoomLargeConfig = {},
+    animation?: {
+      tick(dtSeconds: number): void;
+      addTransition(
+        key: string,
+        from: number,
+        to: number,
+        durationMs: number,
+        apply: (value: number) => void,
+        easing?: (t: number) => number
+      ): TransitionHandle;
+      clearTransitions(): void;
+      getActiveTransitionCount(): number;
+    }
+  ) {
     const basePreset = config.presetType ? resolvePreset(config.presetType) : CC4_PRESET;
     this.config = config.profile ? mergePreset(basePreset, config.profile) : basePreset;
     this.mixWeights = { ...this.config.auMixDefaults };
@@ -192,7 +219,8 @@ export class Loom3 implements LoomLarge {
     this.meshes = Array.from(meshByKey.values());
     this.model = model;
     this.meshByName.clear();
-    this.morphCache.clear();
+    this.morphKeyCache.clear();
+    this.morphIndexCache.clear();
 
     // Build mesh lookup
     model.traverse((obj: any) => {
@@ -254,17 +282,20 @@ export class Loom3 implements LoomLarge {
   }
 
   private rebuildMorphTargetsCache(): void {
-    this.morphCache.clear();
+    this.morphKeyCache.clear();
+    this.morphIndexCache.clear();
     this.resolvedAUMorphTargets.clear();
     this.resolvedVisemeTargets = [];
 
     if (!this.meshes.length) return;
 
-    const resolveTargetsForKeys = (keys: MorphTargetKey[], meshNames: string[]): MorphTargetHandle[] => {
+    const resolveTargetsForKeys = (keys: MorphTargetRef[], meshNames: string[]): MorphTargetHandle[] => {
       if (!keys || keys.length === 0) return [];
       const targets: MorphTargetHandle[] = [];
       for (const key of keys) {
-        const resolved = this.resolveMorphTargets(key, meshNames);
+        const resolved = typeof key === 'number'
+          ? this.resolveMorphTargetsByIndex(key, meshNames)
+          : this.resolveMorphTargets(key, meshNames);
         if (resolved.length > 0) {
           targets.push(...resolved);
         }
@@ -286,7 +317,9 @@ export class Loom3 implements LoomLarge {
 
     for (let i = 0; i < (this.config.visemeKeys || []).length; i += 1) {
       const key = this.config.visemeKeys[i];
-      const targets = this.resolveMorphTargets(key);
+      const targets = typeof key === 'number'
+        ? this.resolveMorphTargetsByIndex(key)
+        : this.resolveMorphTargets(key);
       this.resolvedVisemeTargets[i] = targets;
     }
   }
@@ -475,12 +508,19 @@ export class Loom3 implements LoomLarge {
       const { left: leftVal, right: rightVal } = this.computeSideValues(base, balance);
 
       if (leftKeys.length || rightKeys.length) {
-        for (const k of leftKeys) this.setMorph(k, leftVal, meshNames);
-        for (const k of rightKeys) this.setMorph(k, rightVal, meshNames);
+        for (const k of leftKeys) {
+          if (typeof k === 'number') this.setMorphInfluence(k, leftVal, meshNames);
+          else this.setMorph(k, leftVal, meshNames);
+        }
+        for (const k of rightKeys) {
+          if (typeof k === 'number') this.setMorphInfluence(k, rightVal, meshNames);
+          else this.setMorph(k, rightVal, meshNames);
+        }
       }
 
       for (const k of centerKeys) {
-        this.setMorph(k, base, meshNames);
+        if (typeof k === 'number') this.setMorphInfluence(k, base, meshNames);
+        else this.setMorph(k, base, meshNames);
       }
     }
 
@@ -581,15 +621,27 @@ export class Loom3 implements LoomLarge {
 
     if (leftKeys.length || rightKeys.length) {
       for (const k of leftKeys) {
-        handles.push(this.transitionMorph(k, leftVal, durationMs, meshNames));
+        handles.push(
+          typeof k === 'number'
+            ? this.transitionMorphInfluence(k, leftVal, durationMs, meshNames)
+            : this.transitionMorph(k, leftVal, durationMs, meshNames)
+        );
       }
       for (const k of rightKeys) {
-        handles.push(this.transitionMorph(k, rightVal, durationMs, meshNames));
+        handles.push(
+          typeof k === 'number'
+            ? this.transitionMorphInfluence(k, rightVal, durationMs, meshNames)
+            : this.transitionMorph(k, rightVal, durationMs, meshNames)
+        );
       }
     }
 
     for (const k of centerKeys) {
-      handles.push(this.transitionMorph(k, base, durationMs, meshNames));
+      handles.push(
+        typeof k === 'number'
+          ? this.transitionMorphInfluence(k, base, durationMs, meshNames)
+          : this.transitionMorph(k, base, durationMs, meshNames)
+      );
     }
 
     // Handle bone rotations using auToCompositeMap
@@ -706,10 +758,10 @@ export class Loom3 implements LoomLarge {
    * 2. String key with cache hit - one Map lookup
    * 3. String key cache miss - dictionary lookup, then cached for next time
    */
-  setMorph(key: string | number, v: number, meshNames?: string[]): void;
-  setMorph(key: string | number, v: number, targets: { infl: number[]; idx: number }[]): void;
+  setMorph(key: string, v: number, meshNames?: string[]): void;
+  setMorph(key: string, v: number, targets: { infl: number[]; idx: number }[]): void;
   setMorph(
-    key: string | number,
+    key: string,
     v: number,
     meshNamesOrTargets?: string[] | { infl: number[]; idx: number }[]
   ): void {
@@ -718,113 +770,40 @@ export class Loom3 implements LoomLarge {
     // Fast path: pre-resolved targets array (from transitionMorph)
     if (Array.isArray(meshNamesOrTargets) && meshNamesOrTargets.length > 0 && typeof meshNamesOrTargets[0] === 'object' && 'infl' in meshNamesOrTargets[0]) {
       const targets = meshNamesOrTargets as { infl: number[]; idx: number }[];
-      for (const target of targets) {
-        target.infl[target.idx] = val;
-      }
+      this.applyMorphTargets(targets, val);
       return;
     }
 
     const meshNames = meshNamesOrTargets as string[] | undefined;
-    const targetMeshes = meshNames || this.config.morphToMesh?.face || [];
+    const targets = this.resolveMorphTargets(key, meshNames);
+    if (targets.length === 0) return;
+    this.applyMorphTargets(targets, val);
+  }
 
-    const numericIndex = this.getMorphIndex(key);
-    const cacheKey = this.getMorphCacheKey(key, meshNames);
-
-    // Fast path: cache hit
-    const cached = this.morphCache.get(cacheKey);
-    if (cached) {
-      for (const target of cached) {
-        target.infl[target.idx] = val;
-      }
-      return;
-    }
-
-    // Slow path: resolve and cache
-    const targets: { infl: number[]; idx: number }[] = [];
-
-    if (numericIndex !== null) {
-      if (targetMeshes.length) {
-        for (const name of targetMeshes) {
-          const mesh = this.meshByName.get(name);
-          if (!mesh) continue;
-          const infl = mesh.morphTargetInfluences;
-          if (!infl || numericIndex < 0 || numericIndex >= infl.length) continue;
-          targets.push({ infl, idx: numericIndex });
-          infl[numericIndex] = val;
-        }
-      } else {
-        for (const mesh of this.meshes) {
-          const infl = mesh.morphTargetInfluences;
-          if (!infl || numericIndex < 0 || numericIndex >= infl.length) continue;
-          targets.push({ infl, idx: numericIndex });
-          infl[numericIndex] = val;
-        }
-      }
-    } else if (targetMeshes.length) {
-      for (const name of targetMeshes) {
-        const mesh = this.meshByName.get(name);
-        if (!mesh) continue;
-        const dict = mesh.morphTargetDictionary;
-        const infl = mesh.morphTargetInfluences;
-        if (!dict || !infl) continue;
-        const idx = dict[key];
-        if (idx !== undefined) {
-          targets.push({ infl, idx });
-          infl[idx] = val;
-        }
-      }
-    } else {
-      for (const mesh of this.meshes) {
-        const dict = mesh.morphTargetDictionary;
-        const infl = mesh.morphTargetInfluences;
-        if (!dict || !infl) continue;
-        const idx = dict[key];
-        if (idx !== undefined) {
-          targets.push({ infl, idx });
-          infl[idx] = val;
-        }
-      }
-    }
-
-    if (targets.length > 0) {
-      this.morphCache.set(cacheKey, targets);
-    }
+  setMorphInfluence(index: number, v: number, meshNames?: string[]): void {
+    const val = clamp01(v);
+    const targets = this.resolveMorphTargetsByIndex(index, meshNames);
+    if (targets.length === 0) return;
+    this.applyMorphTargets(targets, val);
   }
 
   /**
    * Resolve morph key to direct targets for ultra-fast repeated access.
    * Use this when you need to set the same morph many times (e.g., in animation loops).
    */
-  resolveMorphTargets(key: string | number, meshNames?: string[]): { infl: number[]; idx: number }[] {
+  resolveMorphTargets(key: string, meshNames?: string[]): { infl: number[]; idx: number }[] {
     // Cache key includes mesh names to avoid conflicts between face and hair morphs
     const targetMeshes = meshNames || this.config.morphToMesh?.face || [];
-    const cacheKey = this.getMorphCacheKey(key, meshNames);
+    const cacheKey = this.getMorphKeyCacheKey(key, meshNames);
 
     // Check cache first
-    const cached = this.morphCache.get(cacheKey);
+    const cached = this.morphKeyCache.get(cacheKey);
     if (cached) return cached;
 
     // Resolve and cache
     const targets: { infl: number[]; idx: number }[] = [];
 
-    const numericIndex = this.getMorphIndex(key);
-    if (numericIndex !== null) {
-      if (targetMeshes.length) {
-        for (const name of targetMeshes) {
-          const mesh = this.meshByName.get(name);
-          if (!mesh) continue;
-          const infl = mesh.morphTargetInfluences;
-          if (!infl || numericIndex < 0 || numericIndex >= infl.length) continue;
-          targets.push({ infl, idx: numericIndex });
-        }
-      } else {
-        for (const mesh of this.meshes) {
-          const infl = mesh.morphTargetInfluences;
-          if (!infl || numericIndex < 0 || numericIndex >= infl.length) continue;
-          targets.push({ infl, idx: numericIndex });
-        }
-      }
-    } else if (targetMeshes.length) {
+    if (targetMeshes.length) {
       for (const name of targetMeshes) {
         const mesh = this.meshByName.get(name);
         if (!mesh) continue;
@@ -849,15 +828,48 @@ export class Loom3 implements LoomLarge {
     }
 
     if (targets.length > 0) {
-      this.morphCache.set(cacheKey, targets);
+      this.morphKeyCache.set(cacheKey, targets);
     }
     return targets;
   }
 
-  transitionMorph(key: string | number, to: number, durationMs = 120, meshNames?: string[]): TransitionHandle {
+  resolveMorphTargetsByIndex(index: number, meshNames?: string[]): { infl: number[]; idx: number }[] {
+    const idx = Number.isInteger(index) && index >= 0 ? index : null;
+    if (idx === null) return [];
+    const targetMeshes = meshNames || this.config.morphToMesh?.face || [];
+    const cacheKey = this.getMorphIndexCacheKey(idx, meshNames);
+
+    const cached = this.morphIndexCache.get(cacheKey);
+    if (cached) return cached;
+
+    const targets: { infl: number[]; idx: number }[] = [];
+
+    if (targetMeshes.length) {
+      for (const name of targetMeshes) {
+        const mesh = this.meshByName.get(name);
+        if (!mesh) continue;
+        const infl = mesh.morphTargetInfluences;
+        if (!infl || idx >= infl.length) continue;
+        targets.push({ infl, idx });
+      }
+    } else {
+      for (const mesh of this.meshes) {
+        const infl = mesh.morphTargetInfluences;
+        if (!infl || idx >= infl.length) continue;
+        targets.push({ infl, idx });
+      }
+    }
+
+    if (targets.length > 0) {
+      this.morphIndexCache.set(cacheKey, targets);
+    }
+    return targets;
+  }
+
+  transitionMorph(key: string, to: number, durationMs = 120, meshNames?: string[]): TransitionHandle {
     const transitionKey = meshNames?.length
-      ? `morph_${this.getMorphCacheKey(key, meshNames)}`
-      : `morph_${this.getMorphCacheKey(key)}`;
+      ? `morph_${this.getMorphKeyCacheKey(key, meshNames)}`
+      : `morph_${this.getMorphKeyCacheKey(key)}`;
     const target = clamp01(to);
 
     // Pre-resolve targets once, then use direct access during animation
@@ -869,9 +881,22 @@ export class Loom3 implements LoomLarge {
     return this.animation.addTransition(transitionKey, from, target, durationMs, (value) => {
       // Ultra-fast path: direct array access, no lookups
       const val = clamp01(value);
-      for (const t of targets) {
-        t.infl[t.idx] = val;
-      }
+      this.applyMorphTargets(targets, val);
+    });
+  }
+
+  transitionMorphInfluence(index: number, to: number, durationMs = 120, meshNames?: string[]): TransitionHandle {
+    const transitionKey = meshNames?.length
+      ? `morph_${this.getMorphIndexCacheKey(index, meshNames)}`
+      : `morph_${this.getMorphIndexCacheKey(index)}`;
+    const target = clamp01(to);
+
+    const targets = this.resolveMorphTargetsByIndex(index, meshNames);
+    const from = targets.length > 0 ? (targets[0].infl[targets[0].idx] ?? 0) : this.getMorphValueByIndex(index);
+
+    return this.animation.addTransition(transitionKey, from, target, durationMs, (value) => {
+      const val = clamp01(value);
+      this.applyMorphTargets(targets, val);
     });
   }
 
@@ -887,12 +912,14 @@ export class Loom3 implements LoomLarge {
 
     const targets = this.resolvedVisemeTargets[visemeIndex];
     if (targets && targets.length > 0) {
-      for (const t of targets) {
-        t.infl[t.idx] = val;
-      }
+      this.applyMorphTargets(targets, val);
     } else {
       const morphKey = this.config.visemeKeys[visemeIndex];
-      this.setMorph(morphKey, val);
+      if (typeof morphKey === 'number') {
+        this.setMorphInfluence(morphKey, val);
+      } else if (typeof morphKey === 'string') {
+        this.setMorph(morphKey, val);
+      }
     }
 
     const jawAmount = Loom3.VISEME_JAW_AMOUNTS[visemeIndex] * val * jawScale;
@@ -910,7 +937,9 @@ export class Loom3 implements LoomLarge {
     const target = clamp01(to);
     this.visemeValues[visemeIndex] = target;
 
-    const morphHandle = this.transitionMorph(morphKey, target, durationMs);
+    const morphHandle = typeof morphKey === 'number'
+      ? this.transitionMorphInfluence(morphKey, target, durationMs)
+      : this.transitionMorph(morphKey, target, durationMs);
 
     const jawAmount = Loom3.VISEME_JAW_AMOUNTS[visemeIndex] * target * jawScale;
     if (Math.abs(jawScale) <= 1e-6 || Math.abs(jawAmount) <= 1e-6) {
@@ -1298,7 +1327,7 @@ export class Loom3 implements LoomLarge {
 
   private getAUMorphsBySide(
     auId: number
-  ): { left: (string | number)[]; right: (string | number)[]; center: (string | number)[] } {
+  ): { left: MorphTargetRef[]; right: MorphTargetRef[]; center: MorphTargetRef[] } {
     const entry = this.config.auToMorphs[auId];
     return {
       left: entry ? [...entry.left] : [],
@@ -1307,16 +1336,18 @@ export class Loom3 implements LoomLarge {
     };
   }
 
-  private getMorphValue(key: string | number): number {
-    const numericIndex = this.getMorphIndex(key);
+  private applyMorphTargets(targets: MorphTargetHandle[], val: number): void {
+    for (const target of targets) {
+      target.infl[target.idx] = val;
+    }
+  }
+
+  private getMorphValue(key: string): number {
     if (this.faceMesh) {
       const dict = this.faceMesh.morphTargetDictionary;
       const infl = this.faceMesh.morphTargetInfluences;
       if (dict && infl) {
-        if (numericIndex !== null) {
-          return infl[numericIndex] ?? 0;
-        }
-        const idx = dict[key as string];
+        const idx = dict[key];
         if (idx !== undefined) return infl[idx] ?? 0;
       }
       return 0;
@@ -1325,30 +1356,36 @@ export class Loom3 implements LoomLarge {
       const dict = mesh.morphTargetDictionary;
       const infl = mesh.morphTargetInfluences;
       if (!dict || !infl) continue;
-      if (numericIndex !== null) {
-        return infl[numericIndex] ?? 0;
-      }
-      const idx = dict[key as string];
+      const idx = dict[key];
       if (idx !== undefined) return infl[idx] ?? 0;
     }
     return 0;
   }
 
-  private getMorphIndex(key: string | number): number | null {
-    if (typeof key === 'number') {
-      return Number.isInteger(key) && key >= 0 ? key : null;
+  private getMorphValueByIndex(index: number): number {
+    const idx = Number.isInteger(index) && index >= 0 ? index : null;
+    if (idx === null) return 0;
+    if (this.faceMesh) {
+      const infl = this.faceMesh.morphTargetInfluences;
+      if (infl && idx < infl.length) {
+        return infl[idx] ?? 0;
+      }
+      return 0;
     }
-    if (/^\d+$/.test(key)) {
-      const parsed = Number(key);
-      return Number.isInteger(parsed) ? parsed : null;
+    for (const mesh of this.meshes) {
+      const infl = mesh.morphTargetInfluences;
+      if (!infl) continue;
+      if (idx < infl.length) return infl[idx] ?? 0;
     }
-    return null;
+    return 0;
   }
 
-  private getMorphCacheKey(key: string | number, meshNames?: string[]): string {
-    const numericIndex = this.getMorphIndex(key);
-    const keyToken = numericIndex !== null ? `#${numericIndex}` : String(key);
-    return meshNames?.length ? `${keyToken}@${meshNames.join(',')}` : keyToken;
+  private getMorphKeyCacheKey(key: string, meshNames?: string[]): string {
+    return meshNames?.length ? `key:${key}@${meshNames.join(',')}` : `key:${key}`;
+  }
+
+  private getMorphIndexCacheKey(index: number, meshNames?: string[]): string {
+    return meshNames?.length ? `idx:${index}@${meshNames.join(',')}` : `idx:${index}`;
   }
 
   private isMixedAU(id: number): boolean {

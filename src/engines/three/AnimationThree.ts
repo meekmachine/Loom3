@@ -1,8 +1,7 @@
 /**
- * AnimationThree - Lerp-based animation system
+ * AnimationThree - Lerp-based animation driver
  *
- * Default implementation of the Animation interface.
- * Uses simple lerp interpolation with easing functions.
+ * Internal driver for time-based interpolation with easing functions.
  */
 
 import {
@@ -32,7 +31,6 @@ import type {
   CompositeRotation,
 } from '../../core/types';
 import type { Profile } from '../../mappings/types';
-import type { Animation } from '../../interfaces/Animation';
 import type { ResolvedBones } from './types';
 
 type Transition = {
@@ -55,7 +53,7 @@ const easeInOutCubic = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 
 // Export easing functions for external use
 export { easeInOutQuad, easeInOutCubic };
 
-export class AnimationThree implements Animation {
+export class AnimationThree {
   private transitions = new Map<string, Transition>();
 
   /**
@@ -535,7 +533,9 @@ export class BakedAnimationController {
 
         if (isVisemeIndex(curveId)) {
           const visemeKey = config.visemeKeys[auId];
-          if (visemeKey) {
+          if (typeof visemeKey === 'number') {
+            this.addMorphIndexTracks(tracks, visemeKey, keyframes, intensityScale);
+          } else if (visemeKey) {
             this.addMorphTracks(tracks, visemeKey, keyframes, intensityScale);
           }
         } else {
@@ -549,16 +549,28 @@ export class BakedAnimationController {
           for (const morphKey of leftKeys) {
             let effectiveScale = intensityScale * mixWeight;
             if (balance > 0) effectiveScale *= (1 - balance);
-            this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale);
+            if (typeof morphKey === 'number') {
+              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale);
+            } else {
+              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale);
+            }
           }
           for (const morphKey of rightKeys) {
             let effectiveScale = intensityScale * mixWeight;
             if (balance < 0) effectiveScale *= (1 + balance);
-            this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale);
+            if (typeof morphKey === 'number') {
+              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale);
+            } else {
+              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale);
+            }
           }
           for (const morphKey of centerKeys) {
             const effectiveScale = intensityScale * mixWeight;
-            this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale);
+            if (typeof morphKey === 'number') {
+              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale);
+            } else {
+              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale);
+            }
           }
         }
       } else {
@@ -1044,7 +1056,7 @@ export class BakedAnimationController {
 
   private addMorphTracks(
     tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack>,
-    morphKey: string | number,
+    morphKey: string,
     keyframes: Array<{ time: number; intensity: number }>,
     intensityScale: number
   ): void {
@@ -1056,21 +1068,56 @@ export class BakedAnimationController {
       : meshes;
     let added = false;
 
-    const numericIndex = (() => {
-      if (typeof morphKey === 'number' && Number.isInteger(morphKey)) return morphKey;
-      if (typeof morphKey === 'string' && /^\d+$/.test(morphKey)) return Number(morphKey);
-      return null;
-    })();
-
     const addTrackForMesh = (mesh: Mesh) => {
       const dict = mesh.morphTargetDictionary;
-      if (numericIndex !== null) {
-        if (!mesh.morphTargetInfluences || numericIndex >= mesh.morphTargetInfluences.length) return;
-      } else {
-        if (!dict || dict[morphKey as string] === undefined) return;
+      if (!dict || dict[morphKey] === undefined) return;
+
+      const morphIndex = dict[morphKey];
+
+      const times: number[] = [];
+      const values: number[] = [];
+
+      for (const kf of keyframes) {
+        times.push(kf.time);
+        values.push(Math.max(0, Math.min(2, kf.intensity * intensityScale)));
       }
 
-      const morphIndex = numericIndex !== null ? numericIndex : dict![morphKey as string];
+      const trackName = `${(mesh as any).uuid}.morphTargetInfluences[${morphIndex}]`;
+      const track = new NumberKeyframeTrack(trackName, times, values);
+
+      tracks.push(track);
+      added = true;
+    };
+
+    for (const mesh of targetMeshes) {
+      addTrackForMesh(mesh);
+    }
+
+    if (!added && targetMeshes !== meshes) {
+      for (const mesh of meshes) {
+        addTrackForMesh(mesh);
+      }
+    }
+  }
+
+  private addMorphIndexTracks(
+    tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack>,
+    morphIndex: number,
+    keyframes: Array<{ time: number; intensity: number }>,
+    intensityScale: number
+  ): void {
+    if (!Number.isInteger(morphIndex) || morphIndex < 0) return;
+    const config = this.host.getConfig();
+    const meshes = this.host.getMeshes();
+    const targetMeshNames = config.morphToMesh?.face || [];
+    const targetMeshes = targetMeshNames.length
+      ? targetMeshNames.map((name) => this.host.getMeshByName(name)).filter(Boolean) as Mesh[]
+      : meshes;
+    let added = false;
+
+    const addTrackForMesh = (mesh: Mesh) => {
+      const infl = mesh.morphTargetInfluences;
+      if (!infl || morphIndex < 0 || morphIndex >= infl.length) return;
 
       const times: number[] = [];
       const values: number[] = [];

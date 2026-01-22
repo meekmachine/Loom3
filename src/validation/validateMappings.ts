@@ -5,7 +5,7 @@
  * Checks that bones, morph targets, and meshes referenced in the preset exist in the model.
  */
 
-import type { Profile, MorphTargetsBySide, MorphTargetKey } from '../mappings/types';
+import type { Profile, MorphTargetsBySide, MorphTargetRef } from '../mappings/types';
 import type { MappingCorrection, MappingCorrectionOptions } from './generateMappingCorrections';
 import { generateMappingCorrections } from './generateMappingCorrections';
 
@@ -456,7 +456,7 @@ export function validateMappingConfig(config: Profile): MappingConsistencyResult
  * @param config - AU mapping preset to validate against
  * @returns ValidationResult with detailed compatibility info
  */
-const isStringMorph = (key: MorphTargetKey): key is string => typeof key === 'string';
+const isStringMorph = (key: MorphTargetRef): key is string => typeof key === 'string';
 
 const collectMorphs = (entry?: MorphTargetsBySide) =>
   [

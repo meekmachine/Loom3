@@ -67,8 +67,8 @@ export interface Profile {
   /** Morph category to mesh names (e.g., 'face' → ['CC_Base_Body_1']) */
   morphToMesh: Record<string, string[]>;
 
-  /** Viseme keys in order (typically 15 phoneme positions) */
-  visemeKeys: MorphTargetKey[];
+  /** Viseme targets in order (typically 15 phoneme positions) */
+  visemeKeys: MorphTargetRef[];
 
   /** Optional: Jaw opening amounts per viseme index (0-1). Used for auto-generating jaw rotation in clips. */
   visemeJawAmounts?: number[];
@@ -158,14 +158,24 @@ export interface AnnotationRegion {
 }
 
 /**
- * Morph targets split by side for balance-aware AUs.
+ * Morph target key (name in morphTargetDictionary).
  */
-export type MorphTargetKey = string | number;
+export type MorphTargetKey = string;
+
+/**
+ * Morph target index (morphTargetInfluences slot).
+ */
+export type MorphTargetIndex = number;
+
+/**
+ * Morph target reference (key or index).
+ */
+export type MorphTargetRef = MorphTargetKey | MorphTargetIndex;
 
 export interface MorphTargetsBySide {
-  left: MorphTargetKey[];
-  right: MorphTargetKey[];
-  center: MorphTargetKey[];
+  left: MorphTargetRef[];
+  right: MorphTargetRef[];
+  center: MorphTargetRef[];
 }
 
 /**

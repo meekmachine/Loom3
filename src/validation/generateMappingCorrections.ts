@@ -5,7 +5,7 @@
  * This is a best-effort helper that can be layered on top of validation.
  */
 
-import type { Profile, MorphTargetsBySide, MorphTargetKey } from '../mappings/types';
+import type { Profile, MorphTargetsBySide, MorphTargetRef } from '../mappings/types';
 
 interface MorphMesh {
   name: string;
@@ -229,7 +229,7 @@ export function generateMappingCorrections(
   }
 
   // Morph corrections (AU morphs + visemes)
-  const updateMorphList = (items: MorphTargetKey[], auId?: number): MorphTargetKey[] => {
+  const updateMorphList = (items: MorphTargetRef[], auId?: number): MorphTargetRef[] => {
     return items.map((morphName) => {
       if (typeof morphName !== 'string') {
         return morphName;

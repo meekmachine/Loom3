@@ -429,13 +429,14 @@ export class Loom3 implements LoomLarge {
     }
 
     // Handle negative values for continuum pairs:
-    // If v < 0 and this AU has a continuum pair, activate the opposite AU instead
+    // If v < 0 and this AU has a continuum pair, forward to setContinuum
     if (v < 0 && this.config.continuumPairs) {
       const pairInfo = this.config.continuumPairs[id];
       if (pairInfo) {
-        // Activate the pair AU with the absolute value, deactivate this AU
-        this.setAU(pairInfo.pairId, Math.abs(v), balance);
-        this.setAU(id, 0, balance);
+        const negAU = pairInfo.isNegative ? id : pairInfo.pairId;
+        const posAU = pairInfo.isNegative ? pairInfo.pairId : id;
+        const continuumValue = pairInfo.isNegative ? -v : v;
+        this.setContinuum(negAU, posAU, continuumValue, balance);
         return;
       }
     }
@@ -552,14 +553,14 @@ export class Loom3 implements LoomLarge {
     const numId = typeof id === 'string' ? Number(id.replace(/[^\d]/g, '')) : id;
 
     // Handle negative values for continuum pairs:
-    // If to < 0 and this AU has a continuum pair, transition the opposite AU instead
+    // If to < 0 and this AU has a continuum pair, forward to transitionContinuum
     if (to < 0 && this.config.continuumPairs) {
       const pairInfo = this.config.continuumPairs[numId];
       if (pairInfo) {
-        // Transition the pair AU to the absolute value, and this AU to 0
-        const pairHandle = this.transitionAU(pairInfo.pairId, Math.abs(to), durationMs, balance);
-        const thisHandle = this.transitionAU(numId, 0, durationMs, balance);
-        return this.combineHandles([pairHandle, thisHandle]);
+        const negAU = pairInfo.isNegative ? numId : pairInfo.pairId;
+        const posAU = pairInfo.isNegative ? pairInfo.pairId : numId;
+        const continuumValue = pairInfo.isNegative ? -to : to;
+        return this.transitionContinuum(negAU, posAU, continuumValue, durationMs, balance);
       }
     }
 
@@ -651,17 +652,24 @@ export class Loom3 implements LoomLarge {
    * @param negAU - AU ID for negative direction (e.g., 61 for eyes left)
    * @param posAU - AU ID for positive direction (e.g., 62 for eyes right)
    * @param continuumValue - Value from -1 (full negative) to +1 (full positive)
+   * @param balance - Optional L/R balance for bilateral morphs
    */
-  setContinuum(negAU: number, posAU: number, continuumValue: number): void {
+  setContinuum(negAU: number, posAU: number, continuumValue: number, balance?: number): void {
     const value = Math.max(-1, Math.min(1, continuumValue));
 
-    // Negative value = activate negAU, zero posAU
-    // Positive value = activate posAU, zero negAU
-    const negVal = value < 0 ? Math.abs(value) : 0;
-    const posVal = value > 0 ? value : 0;
+    if (value < 0) {
+      this.setAU(posAU, 0, balance);
+      this.setAU(negAU, Math.abs(value), balance);
+      return;
+    }
+    if (value > 0) {
+      this.setAU(negAU, 0, balance);
+      this.setAU(posAU, value, balance);
+      return;
+    }
 
-    this.setAU(negAU, negVal);
-    this.setAU(posAU, posVal);
+    this.setAU(negAU, 0, balance);
+    this.setAU(posAU, 0, balance);
   }
 
   /**
@@ -672,8 +680,9 @@ export class Loom3 implements LoomLarge {
    * @param posAU - AU ID for positive direction (e.g., 62 for eyes right)
    * @param continuumValue - Target value from -1 (full negative) to +1 (full positive)
    * @param durationMs - Transition duration in milliseconds
+   * @param balance - Optional L/R balance for bilateral morphs
    */
-  transitionContinuum(negAU: number, posAU: number, continuumValue: number, durationMs = 200): TransitionHandle {
+  transitionContinuum(negAU: number, posAU: number, continuumValue: number, durationMs = 200, balance?: number): TransitionHandle {
     const target = Math.max(-1, Math.min(1, continuumValue));
     const driverKey = `continuum_${negAU}_${posAU}`;
 
@@ -682,7 +691,7 @@ export class Loom3 implements LoomLarge {
     const currentPos = this.auValues[posAU] ?? 0;
     const currentContinuum = currentPos - currentNeg;
 
-    return this.animation.addTransition(driverKey, currentContinuum, target, durationMs, (value) => this.setContinuum(negAU, posAU, value));
+    return this.animation.addTransition(driverKey, currentContinuum, target, durationMs, (value) => this.setContinuum(negAU, posAU, value, balance));
   }
 
   // ============================================================================

@@ -34,9 +34,6 @@
 export { Loom3, collectMorphMeshes } from './engines/three/Loom3';
 export { AnimationThree } from './engines/three/AnimationThree';
 
-// Default export for convenience
-export { Loom3 as default } from './engines/three/Loom3';
-
 // Legacy aliases (deprecated - use Loom3 instead)
 export { Loom3 as Loom3Three } from './engines/three/Loom3';
 export { Loom3 as LoomLargeThree } from './engines/three/Loom3';

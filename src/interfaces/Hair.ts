@@ -25,6 +25,8 @@ export interface HairPhysicsRuntimeConfig {
   windDirectionZ: number;
   windTurbulence: number;
   windFrequency: number;
+  idleClipDuration: number;
+  impulseClipDuration: number;
 }
 
 export interface HairObjectState {

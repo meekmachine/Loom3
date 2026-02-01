@@ -482,6 +482,7 @@ export class BakedAnimationController {
     const tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack> = [];
     const intensityScale = options?.intensityScale ?? 1.0;
     const balance = options?.balance ?? 0;
+    const meshNames = options?.meshNames;
     let maxTime = 0;
 
     const isNumericAU = (id: string) => /^\d+$/.test(id);
@@ -534,9 +535,9 @@ export class BakedAnimationController {
         if (isVisemeIndex(curveId)) {
           const visemeKey = config.visemeKeys[auId];
           if (typeof visemeKey === 'number') {
-            this.addMorphIndexTracks(tracks, visemeKey, keyframes, intensityScale);
+            this.addMorphIndexTracks(tracks, visemeKey, keyframes, intensityScale, meshNames);
           } else if (visemeKey) {
-            this.addMorphTracks(tracks, visemeKey, keyframes, intensityScale);
+            this.addMorphTracks(tracks, visemeKey, keyframes, intensityScale, meshNames);
           }
         } else {
           const morphsBySide = config.auToMorphs[auId];
@@ -550,31 +551,31 @@ export class BakedAnimationController {
             let effectiveScale = intensityScale * mixWeight;
             if (balance > 0) effectiveScale *= (1 - balance);
             if (typeof morphKey === 'number') {
-              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale);
+              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
             } else {
-              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale);
+              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
             }
           }
           for (const morphKey of rightKeys) {
             let effectiveScale = intensityScale * mixWeight;
             if (balance < 0) effectiveScale *= (1 + balance);
             if (typeof morphKey === 'number') {
-              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale);
+              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
             } else {
-              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale);
+              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
             }
           }
           for (const morphKey of centerKeys) {
             const effectiveScale = intensityScale * mixWeight;
             if (typeof morphKey === 'number') {
-              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale);
+              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
             } else {
-              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale);
+              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
             }
           }
         }
       } else {
-        this.addMorphTracks(tracks, curveId, keyframes, intensityScale);
+        this.addMorphTracks(tracks, curveId, keyframes, intensityScale, meshNames);
       }
     }
 
@@ -1058,11 +1059,13 @@ export class BakedAnimationController {
     tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack>,
     morphKey: string,
     keyframes: Array<{ time: number; intensity: number }>,
-    intensityScale: number
+    intensityScale: number,
+    meshNames?: string[]
   ): void {
     const config = this.host.getConfig();
     const meshes = this.host.getMeshes();
-    const targetMeshNames = config.morphToMesh?.face || [];
+    const hasExplicitMeshes = !!(meshNames && meshNames.length > 0);
+    const targetMeshNames = hasExplicitMeshes ? meshNames : (config.morphToMesh?.face || []);
     const targetMeshes = targetMeshNames.length
       ? targetMeshNames.map((name) => this.host.getMeshByName(name)).filter(Boolean) as Mesh[]
       : meshes;
@@ -1093,7 +1096,7 @@ export class BakedAnimationController {
       addTrackForMesh(mesh);
     }
 
-    if (!added && targetMeshes !== meshes) {
+    if (!added && !hasExplicitMeshes && targetMeshes !== meshes) {
       for (const mesh of meshes) {
         addTrackForMesh(mesh);
       }
@@ -1104,12 +1107,14 @@ export class BakedAnimationController {
     tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack>,
     morphIndex: number,
     keyframes: Array<{ time: number; intensity: number }>,
-    intensityScale: number
+    intensityScale: number,
+    meshNames?: string[]
   ): void {
     if (!Number.isInteger(morphIndex) || morphIndex < 0) return;
     const config = this.host.getConfig();
     const meshes = this.host.getMeshes();
-    const targetMeshNames = config.morphToMesh?.face || [];
+    const hasExplicitMeshes = !!(meshNames && meshNames.length > 0);
+    const targetMeshNames = hasExplicitMeshes ? meshNames : (config.morphToMesh?.face || []);
     const targetMeshes = targetMeshNames.length
       ? targetMeshNames.map((name) => this.host.getMeshByName(name)).filter(Boolean) as Mesh[]
       : meshes;
@@ -1138,7 +1143,7 @@ export class BakedAnimationController {
       addTrackForMesh(mesh);
     }
 
-    if (!added && targetMeshes !== meshes) {
+    if (!added && !hasExplicitMeshes && targetMeshes !== meshes) {
       for (const mesh of meshes) {
         addTrackForMesh(mesh);
       }

@@ -1,4 +1,5 @@
 import type { Mesh, Object3D } from 'three';
+import type { ClipHandle, ClipOptions, CurvesMap } from '../../../core/types';
 import { CC4_MESHES } from '../../../presets/cc4';
 
 export type HairPhysicsConfig = {
@@ -14,6 +15,8 @@ export type HairPhysicsConfig = {
   windDirectionZ: number;
   windTurbulence: number;
   windFrequency: number;
+  idleClipDuration: number;
+  impulseClipDuration: number;
 };
 
 type HairWindIdleState = {
@@ -26,6 +29,8 @@ type HairWindIdleState = {
 export interface HairPhysicsHost {
   transitionMorph: (key: string, value: number, durationMs: number, meshNames?: string[]) => unknown;
   getMeshByName: (name: string) => Mesh | undefined;
+  buildClip?: (clipName: string, curves: CurvesMap, options?: ClipOptions) => ClipHandle | null;
+  cleanupSnippet?: (name: string) => void;
 }
 
 const clamp01 = (value: number) => (value < 0 ? 0 : value > 1 ? 1 : value);
@@ -46,6 +51,8 @@ export class HairPhysicsController {
     windDirectionZ: 0,
     windTurbulence: 0.3,
     windFrequency: 1.4,
+    idleClipDuration: 10,
+    impulseClipDuration: 1.4,
   };
   private hairWindIdleState: HairWindIdleState = {
     windTime: 0,
@@ -53,6 +60,19 @@ export class HairPhysicsController {
     smoothedWindX: 0,
     smoothedWindZ: 0,
   };
+  private readonly idleClipName = 'hair_idle';
+  private readonly impulseClipNames = {
+    left: 'hair_impulse_left',
+    right: 'hair_impulse_right',
+    front: 'hair_impulse_front',
+  };
+  private idleClipHandle: ClipHandle | null = null;
+  private idleClipDirty = true;
+  private impulseClips: { left?: ClipHandle; right?: ClipHandle; front?: ClipHandle } = {};
+  private impulseClipDirty = true;
+  private hasHeadState = false;
+  private lastHeadHorizontal = 0;
+  private lastHeadVertical = 0;
   private registeredHairObjects = new Map<string, Mesh>();
   private cachedHairMeshNames: string[] | null = null;
 
@@ -63,6 +83,10 @@ export class HairPhysicsController {
   clearRegisteredHairObjects(): void {
     this.registeredHairObjects.clear();
     this.cachedHairMeshNames = null;
+    this.stopIdleClip();
+    this.stopImpulseClips();
+    this.idleClipDirty = true;
+    this.impulseClipDirty = true;
   }
 
   registerHairObjects(objects: Object3D[]): Array<{ name: string; isMesh: boolean; isEyebrow: boolean }> {
@@ -86,12 +110,26 @@ export class HairPhysicsController {
       }
     }
 
+    this.cachedHairMeshNames = null;
+    this.idleClipDirty = true;
+    this.impulseClipDirty = true;
+    if (this.hairPhysicsEnabled) {
+      this.startIdleClip();
+      this.buildImpulseClips();
+    }
+
     return result;
   }
 
   autoRegisterHairMesh(mesh: Mesh, category: 'hair' | 'eyebrow'): void {
     this.registeredHairObjects.set(mesh.name, mesh);
     this.cachedHairMeshNames = null;
+    this.idleClipDirty = true;
+    this.impulseClipDirty = true;
+    if (this.hairPhysicsEnabled) {
+      this.startIdleClip();
+      this.buildImpulseClips();
+    }
     mesh.renderOrder = category === 'eyebrow' ? 5 : 10;
   }
 
@@ -102,6 +140,9 @@ export class HairPhysicsController {
   setHairPhysicsEnabled(enabled: boolean): void {
     this.hairPhysicsEnabled = enabled;
     if (!enabled) {
+      this.stopIdleClip();
+      this.stopImpulseClips();
+      this.hasHeadState = false;
       const duration = 200;
       const hairMeshNames = this.getHairMeshNames();
       this.host.transitionMorph('L_Hair_Left', 0, duration, hairMeshNames);
@@ -109,7 +150,16 @@ export class HairPhysicsController {
       this.host.transitionMorph('L_Hair_Front', 0, duration, hairMeshNames);
       this.host.transitionMorph('Fluffy_Right', 0, duration, hairMeshNames);
       this.host.transitionMorph('Fluffy_Bottom_ALL', 0, duration, hairMeshNames);
+      return;
     }
+    this.hairWindIdleState.windTime = 0;
+    this.hairWindIdleState.idlePhase = 0;
+    this.hairWindIdleState.smoothedWindX = 0;
+    this.hairWindIdleState.smoothedWindZ = 0;
+    this.idleClipDirty = true;
+    this.impulseClipDirty = true;
+    this.startIdleClip();
+    this.buildImpulseClips();
   }
 
   isHairPhysicsEnabled(): boolean {
@@ -118,6 +168,35 @@ export class HairPhysicsController {
 
   setHairPhysicsConfig(config: Partial<HairPhysicsConfig>): void {
     this.hairPhysicsConfig = { ...this.hairPhysicsConfig, ...config };
+
+    const idleChanged = [
+      'idleSwayAmount',
+      'idleSwaySpeed',
+      'windStrength',
+      'windDirectionX',
+      'windDirectionZ',
+      'windTurbulence',
+      'windFrequency',
+      'idleClipDuration',
+    ].some((key) => (config as Record<string, unknown>)[key] !== undefined);
+
+    const impulseChanged = [
+      'stiffness',
+      'damping',
+      'impulseClipDuration',
+    ].some((key) => (config as Record<string, unknown>)[key] !== undefined);
+
+    if (idleChanged) {
+      this.idleClipDirty = true;
+    }
+    if (impulseChanged) {
+      this.impulseClipDirty = true;
+    }
+
+    if (this.hairPhysicsEnabled) {
+      if (idleChanged) this.startIdleClip();
+      if (impulseChanged) this.buildImpulseClips();
+    }
   }
 
   getHairPhysicsConfig(): HairPhysicsConfig {
@@ -125,11 +204,19 @@ export class HairPhysicsController {
   }
 
   update(dtSeconds: number): void {
-    this.updateHairWindIdle(dtSeconds);
+    if (!this.hairPhysicsEnabled) return;
+    if (!this.supportsMixerClips()) {
+      this.updateHairWindIdle(dtSeconds);
+    }
   }
 
   onHeadRotationChanged(yaw: number, pitch: number): void {
-    this.updateHairForHeadChange(yaw, pitch);
+    if (!this.hairPhysicsEnabled) return;
+    if (!this.supportsMixerClips()) {
+      this.updateHairForHeadChange(yaw, pitch);
+      return;
+    }
+    this.triggerHeadImpulse(yaw, pitch);
   }
 
   getHairMorphTargets(meshName?: string): string[] {
@@ -229,6 +316,260 @@ export class HairPhysicsController {
     return names;
   }
 
+  private supportsMixerClips(): boolean {
+    return typeof this.host.buildClip === 'function';
+  }
+
+  private startIdleClip(): void {
+    if (!this.hairPhysicsEnabled || !this.supportsMixerClips()) return;
+
+    const cfg = this.hairPhysicsConfig;
+    const hasWind = cfg.windStrength > 0;
+    const hasIdle = cfg.idleSwayAmount > 0;
+    if (!hasWind && !hasIdle) {
+      this.stopIdleClip();
+      this.idleClipDirty = false;
+      return;
+    }
+
+    const hairMeshNames = this.getHairMeshNames();
+    if (hairMeshNames.length === 0) return;
+
+    if (!this.idleClipDirty && this.idleClipHandle) return;
+
+    this.stopIdleClip();
+
+    const duration = Math.max(0.5, cfg.idleClipDuration);
+    const curves = this.buildIdleWindCurves(duration);
+    const handle = this.host.buildClip?.(this.idleClipName, curves, {
+      loop: true,
+      loopMode: 'repeat',
+      meshNames: hairMeshNames,
+    });
+
+    if (!handle) return;
+
+    handle.setWeight?.(1);
+    this.idleClipHandle = handle;
+    this.idleClipDirty = false;
+  }
+
+  private stopIdleClip(): void {
+    if (this.idleClipHandle) {
+      const clipName = this.idleClipHandle.clipName;
+      this.idleClipHandle.stop();
+      this.host.cleanupSnippet?.(clipName);
+      this.idleClipHandle = null;
+    } else {
+      this.host.cleanupSnippet?.(this.idleClipName);
+    }
+  }
+
+  private buildImpulseClips(): void {
+    if (!this.hairPhysicsEnabled || !this.supportsMixerClips()) return;
+
+    const hairMeshNames = this.getHairMeshNames();
+    if (hairMeshNames.length === 0) return;
+
+    if (!this.impulseClipDirty && this.impulseClips.left && this.impulseClips.right && this.impulseClips.front) {
+      return;
+    }
+
+    this.stopImpulseClips();
+
+    const duration = Math.max(0.25, this.hairPhysicsConfig.impulseClipDuration);
+    const options: ClipOptions = {
+      loop: false,
+      loopMode: 'once',
+      meshNames: hairMeshNames,
+    };
+
+    const leftHandle = this.host.buildClip?.(
+      this.impulseClipNames.left,
+      this.buildImpulseCurves(duration, 1, 0),
+      options
+    );
+    const rightHandle = this.host.buildClip?.(
+      this.impulseClipNames.right,
+      this.buildImpulseCurves(duration, -1, 0),
+      options
+    );
+    const frontHandle = this.host.buildClip?.(
+      this.impulseClipNames.front,
+      this.buildImpulseCurves(duration, 0, 1),
+      options
+    );
+
+    const primeHandle = (handle: ClipHandle | null | undefined) => {
+      if (!handle) return;
+      handle.setWeight?.(0);
+      handle.pause();
+      handle.setTime?.(0);
+    };
+
+    primeHandle(leftHandle);
+    primeHandle(rightHandle);
+    primeHandle(frontHandle);
+
+    this.impulseClips = {
+      left: leftHandle ?? undefined,
+      right: rightHandle ?? undefined,
+      front: frontHandle ?? undefined,
+    };
+    this.impulseClipDirty = false;
+  }
+
+  private stopImpulseClips(): void {
+    const handles = Object.values(this.impulseClips);
+    for (const handle of handles) {
+      if (!handle) continue;
+      const clipName = handle.clipName;
+      handle.stop();
+      this.host.cleanupSnippet?.(clipName);
+    }
+    this.impulseClips = {};
+  }
+
+  private triggerHeadImpulse(headYaw: number, headPitch: number): void {
+    const cfg = this.hairPhysicsConfig;
+    const horizontal = -headYaw * cfg.inertia * cfg.responseScale;
+    const vertical = headPitch * cfg.gravity * 0.1 * cfg.responseScale;
+
+    if (!this.hasHeadState) {
+      this.hasHeadState = true;
+      this.lastHeadHorizontal = horizontal;
+      this.lastHeadVertical = vertical;
+      return;
+    }
+
+    const deltaHorizontal = horizontal - this.lastHeadHorizontal;
+    const deltaVertical = vertical - this.lastHeadVertical;
+    this.lastHeadHorizontal = horizontal;
+    this.lastHeadVertical = vertical;
+
+    const leftWeight = clamp01(deltaHorizontal > 0 ? deltaHorizontal : 0);
+    const rightWeight = clamp01(deltaHorizontal < 0 ? -deltaHorizontal : 0);
+    const frontWeight = clamp01(deltaVertical > 0 ? deltaVertical * 0.5 : 0);
+    const minTrigger = 0.01;
+
+    if (leftWeight <= minTrigger && rightWeight <= minTrigger && frontWeight <= minTrigger) return;
+
+    if (this.impulseClipDirty) {
+      this.buildImpulseClips();
+    }
+
+    if (leftWeight > minTrigger) this.playImpulseClip('left', leftWeight);
+    if (rightWeight > minTrigger) this.playImpulseClip('right', rightWeight);
+    if (frontWeight > minTrigger) this.playImpulseClip('front', frontWeight);
+  }
+
+  private playImpulseClip(slot: 'left' | 'right' | 'front', weight: number): void {
+    const handle = this.impulseClips[slot];
+    if (!handle) return;
+    handle.setWeight?.(weight);
+    handle.play();
+  }
+
+  private buildIdleWindCurves(durationSec: number): CurvesMap {
+    const cfg = this.hairPhysicsConfig;
+    const curves: CurvesMap = {};
+    const sampleCount = Math.max(16, Math.min(120, Math.round(durationSec * 12)));
+    const hasWind = cfg.windStrength > 0;
+    const hasIdle = cfg.idleSwayAmount > 0;
+    const windScale = cfg.windStrength * 0.1;
+
+    const pushPoint = (key: string, time: number, intensity: number) => {
+      if (!curves[key]) curves[key] = [];
+      curves[key].push({ time, intensity });
+    };
+
+    for (let i = 0; i <= sampleCount; i += 1) {
+      const t = (durationSec * i) / sampleCount;
+
+      const idleOffset = hasIdle
+        ? Math.sin(t * cfg.idleSwaySpeed * Math.PI * 2) * cfg.idleSwayAmount
+        : 0;
+
+      let windOffsetX = 0;
+      let windOffsetZ = 0;
+      if (hasWind) {
+        const basePhase = t * cfg.windFrequency * Math.PI * 2;
+        const primaryWave = Math.sin(basePhase);
+        const secondaryWave = Math.sin(basePhase * 1.7) * 0.3;
+        const turbulenceWave = Math.sin(basePhase * 3.3) * cfg.windTurbulence * 0.2;
+        const waveStrength = primaryWave + secondaryWave + turbulenceWave;
+        windOffsetX = cfg.windDirectionX * waveStrength * windScale;
+        windOffsetZ = cfg.windDirectionZ * waveStrength * windScale;
+      }
+
+      const combinedX = idleOffset + windOffsetX;
+      const combinedZ = windOffsetZ;
+
+      const leftValue = clamp01(combinedX > 0 ? combinedX : 0);
+      const rightValue = clamp01(combinedX < 0 ? -combinedX : 0);
+      const frontValue = clamp01(combinedZ > 0 ? combinedZ : 0);
+      const fluffyRightValue = clamp01(rightValue * 0.7);
+      const movementIntensity = Math.abs(combinedX) + Math.abs(combinedZ);
+      const fluffyBottomValue = clamp01(movementIntensity * 0.25);
+
+      pushPoint('L_Hair_Left', t, leftValue);
+      pushPoint('L_Hair_Right', t, rightValue);
+      pushPoint('L_Hair_Front', t, frontValue);
+      pushPoint('Fluffy_Right', t, fluffyRightValue);
+      pushPoint('Fluffy_Bottom_ALL', t, fluffyBottomValue);
+    }
+
+    for (const points of Object.values(curves)) {
+      if (points.length > 1) {
+        points[points.length - 1].intensity = points[0].intensity;
+      }
+    }
+
+    return curves;
+  }
+
+  private buildImpulseCurves(durationSec: number, horizontal: number, vertical: number): CurvesMap {
+    const cfg = this.hairPhysicsConfig;
+    const curves: CurvesMap = {};
+    const sampleCount = Math.max(12, Math.min(90, Math.round(durationSec * 30)));
+    const frequency = Math.max(0.5, cfg.stiffness * 0.2);
+    const decay = Math.max(0.1, cfg.damping * 4);
+    const omega = Math.PI * 2 * frequency;
+
+    const pushPoint = (key: string, time: number, intensity: number) => {
+      if (!curves[key]) curves[key] = [];
+      curves[key].push({ time, intensity });
+    };
+
+    for (let i = 0; i <= sampleCount; i += 1) {
+      const t = (durationSec * i) / sampleCount;
+      const wave = Math.cos(omega * t) * Math.exp(-decay * t);
+      const horizontalValue = horizontal * wave;
+      const verticalValue = vertical * wave;
+
+      const leftValue = clamp01(horizontalValue > 0 ? horizontalValue : 0);
+      const rightValue = clamp01(horizontalValue < 0 ? -horizontalValue : 0);
+      const frontValue = clamp01(verticalValue > 0 ? verticalValue * 0.5 : 0);
+      const fluffyRightValue = clamp01(rightValue * 0.7);
+      const movementIntensity = Math.abs(horizontalValue) + Math.abs(verticalValue);
+      const fluffyBottomValue = clamp01(movementIntensity * 0.25);
+
+      pushPoint('L_Hair_Left', t, leftValue);
+      pushPoint('L_Hair_Right', t, rightValue);
+      pushPoint('L_Hair_Front', t, frontValue);
+      pushPoint('Fluffy_Right', t, fluffyRightValue);
+      pushPoint('Fluffy_Bottom_ALL', t, fluffyBottomValue);
+    }
+
+    for (const points of Object.values(curves)) {
+      if (points.length > 0) {
+        points[points.length - 1].intensity = 0;
+      }
+    }
+
+    return curves;
+  }
+
   private updateHairWindIdle(dt: number): void {
     if (!this.hairPhysicsEnabled) return;
     if (this.registeredHairObjects.size === 0) return;
@@ -243,16 +584,21 @@ export class HairPhysicsController {
     st.idlePhase += dt * cfg.idleSwaySpeed;
     st.windTime += dt;
 
-    let windOffset = 0;
+    let windOffsetX = 0;
+    let windOffsetZ = 0;
     if (hasWind) {
       const primaryWave = Math.sin(st.windTime * cfg.windFrequency);
       const secondaryWave = Math.sin(st.windTime * cfg.windFrequency * 1.7) * 0.3;
-      const waveStrength = primaryWave + secondaryWave;
+      const turbulenceWave = Math.sin(st.windTime * cfg.windFrequency * 3.3) * cfg.windTurbulence * 0.2;
+      const waveStrength = primaryWave + secondaryWave + turbulenceWave;
 
-      const targetWind = cfg.windDirectionX * waveStrength * cfg.windStrength * 0.1;
+      const targetWindX = cfg.windDirectionX * waveStrength * cfg.windStrength * 0.1;
+      const targetWindZ = cfg.windDirectionZ * waveStrength * cfg.windStrength * 0.1;
       const smoothFactor = 1 - Math.exp(-dt * 8);
-      st.smoothedWindX += (targetWind - st.smoothedWindX) * smoothFactor;
-      windOffset = st.smoothedWindX;
+      st.smoothedWindX += (targetWindX - st.smoothedWindX) * smoothFactor;
+      st.smoothedWindZ += (targetWindZ - st.smoothedWindZ) * smoothFactor;
+      windOffsetX = st.smoothedWindX;
+      windOffsetZ = st.smoothedWindZ;
     }
 
     let idleOffset = 0;
@@ -265,15 +611,19 @@ export class HairPhysicsController {
 
     const duration = 50;
 
-    const combinedOffset = idleOffset + windOffset;
-    const leftValue = clamp01(combinedOffset > 0 ? combinedOffset : 0);
-    const rightValue = clamp01(combinedOffset < 0 ? -combinedOffset : 0);
+    const combinedX = idleOffset + windOffsetX;
+    const combinedZ = windOffsetZ;
+    const leftValue = clamp01(combinedX > 0 ? combinedX : 0);
+    const rightValue = clamp01(combinedX < 0 ? -combinedX : 0);
+    const frontValue = clamp01(combinedZ > 0 ? combinedZ : 0);
     const fluffyRightValue = clamp01(rightValue * 0.7);
-    const fluffyBottomValue = clamp01(Math.abs(combinedOffset) * 0.25);
+    const movementIntensity = Math.abs(combinedX) + Math.abs(combinedZ);
+    const fluffyBottomValue = clamp01(movementIntensity * 0.25);
 
-    if (Math.abs(combinedOffset) > 0.001) {
+    if (movementIntensity > 0.001) {
       this.host.transitionMorph('L_Hair_Left', leftValue, duration, hairMeshNames);
       this.host.transitionMorph('L_Hair_Right', rightValue, duration, hairMeshNames);
+      this.host.transitionMorph('L_Hair_Front', frontValue, duration, hairMeshNames);
       this.host.transitionMorph('Fluffy_Right', fluffyRightValue, duration, hairMeshNames);
       this.host.transitionMorph('Fluffy_Bottom_ALL', fluffyBottomValue, duration, hairMeshNames);
     }

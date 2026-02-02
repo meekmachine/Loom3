@@ -425,7 +425,7 @@ export class HairPhysicsController {
   private triggerHeadImpulse(headYaw: number, headPitch: number): void {
     const cfg = this.hairPhysicsConfig;
     const horizontal = -headYaw * cfg.inertia * cfg.responseScale;
-    const vertical = headPitch * cfg.gravity * 0.1 * cfg.responseScale;
+    const vertical = headPitch * cfg.gravity * 0.25 * cfg.responseScale;
 
     if (!this.hasHeadState) {
       this.hasHeadState = true;
@@ -441,7 +441,7 @@ export class HairPhysicsController {
 
     const leftWeight = clamp01(deltaHorizontal > 0 ? deltaHorizontal : 0);
     const rightWeight = clamp01(deltaHorizontal < 0 ? -deltaHorizontal : 0);
-    const frontWeight = clamp01(deltaVertical > 0 ? deltaVertical * 0.5 : 0);
+    const frontWeight = clamp01(deltaVertical > 0 ? deltaVertical : 0);
     const minTrigger = 0.01;
 
     if (leftWeight <= minTrigger && rightWeight <= minTrigger && frontWeight <= minTrigger) return;
@@ -577,7 +577,7 @@ export class HairPhysicsController {
 
       const leftValue = clamp01(horizontalValue > 0 ? horizontalValue : 0);
       const rightValue = clamp01(horizontalValue < 0 ? -horizontalValue : 0);
-      const frontValue = clamp01(verticalValue > 0 ? verticalValue * 0.5 : 0);
+      const frontValue = clamp01(verticalValue > 0 ? verticalValue : 0);
       const fluffyRightValue = clamp01(rightValue * 0.7);
       const movementIntensity = Math.abs(horizontalValue) + Math.abs(verticalValue);
       const fluffyBottomValue = clamp01(movementIntensity * 0.25);

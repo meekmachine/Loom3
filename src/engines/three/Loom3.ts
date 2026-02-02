@@ -1259,6 +1259,10 @@ export class Loom3 implements LoomLarge {
 
   setHairPhysicsEnabled(enabled: boolean): void {
     this.hairPhysics.setHairPhysicsEnabled(enabled);
+    if (enabled) {
+      const head = this.getHeadRotation();
+      this.hairPhysics.onHeadRotationChanged(head.yaw, head.pitch);
+    }
   }
 
   isHairPhysicsEnabled(): boolean {

@@ -352,13 +352,23 @@ export class HairPhysicsController {
     this.stopGravityClip();
 
     const curves: CurvesMap = {
+      // Head up (time=0) -> pull hair back/up a bit via hairline + length reduction
+      Hairline_High_ALL: [
+        { time: 0, intensity: 0.45 },
+        { time: 1, intensity: 0 },
+      ],
+      Length_Short: [
+        { time: 0, intensity: 0.65 },
+        { time: 1, intensity: 0 },
+      ],
+      // Head down (time=1) -> push the long section forward strongly
       L_Hair_Front: [
         { time: 0, intensity: 0 },
-        { time: 1, intensity: 1 },
+        { time: 1, intensity: 1.8 },
       ],
       Fluffy_Bottom_ALL: [
         { time: 0, intensity: 0 },
-        { time: 1, intensity: 0.6 },
+        { time: 1, intensity: 1.0 },
       ],
     };
 

@@ -20,7 +20,6 @@ export type HairPhysicsConfig = {
 };
 
 export interface HairPhysicsHost {
-  transitionMorph: (key: string, value: number, durationMs: number, meshNames?: string[]) => unknown;
   getMeshByName: (name: string) => Mesh | undefined;
   buildClip?: (clipName: string, curves: CurvesMap, options?: ClipOptions) => ClipHandle | null;
   cleanupSnippet?: (name: string) => void;
@@ -48,13 +47,16 @@ export class HairPhysicsController {
     impulseClipDuration: 1.4,
   };
   private readonly idleClipName = 'hair_idle';
+  private readonly gravityClipName = 'hair_gravity';
   private readonly impulseClipNames = {
     left: 'hair_impulse_left',
     right: 'hair_impulse_right',
     front: 'hair_impulse_front',
   };
   private idleClipHandle: ClipHandle | null = null;
+  private gravityClipHandle: ClipHandle | null = null;
   private idleClipDirty = true;
+  private gravityClipDirty = true;
   private impulseClips: { left?: ClipHandle; right?: ClipHandle; front?: ClipHandle } = {};
   private impulseClipDirty = true;
   private impulseEndTimers: Partial<Record<'left' | 'right' | 'front', ReturnType<typeof setTimeout>>> = {};
@@ -73,9 +75,11 @@ export class HairPhysicsController {
     this.registeredHairObjects.clear();
     this.cachedHairMeshNames = null;
     this.stopIdleClip();
+    this.stopGravityClip();
     this.stopImpulseClips();
     this.clearImpulseTimers();
     this.idleClipDirty = true;
+    this.gravityClipDirty = true;
     this.impulseClipDirty = true;
   }
 
@@ -102,9 +106,11 @@ export class HairPhysicsController {
 
     this.cachedHairMeshNames = null;
     this.idleClipDirty = true;
+    this.gravityClipDirty = true;
     this.impulseClipDirty = true;
     if (this.hairPhysicsEnabled) {
       this.startIdleClip();
+      this.startGravityClip();
       this.buildImpulseClips();
     }
 
@@ -115,9 +121,11 @@ export class HairPhysicsController {
     this.registeredHairObjects.set(mesh.name, mesh);
     this.cachedHairMeshNames = null;
     this.idleClipDirty = true;
+    this.gravityClipDirty = true;
     this.impulseClipDirty = true;
     if (this.hairPhysicsEnabled) {
       this.startIdleClip();
+      this.startGravityClip();
       this.buildImpulseClips();
     }
     mesh.renderOrder = category === 'eyebrow' ? 5 : 10;
@@ -131,14 +139,17 @@ export class HairPhysicsController {
     this.hairPhysicsEnabled = enabled;
     if (!enabled) {
       this.stopIdleClip();
+      this.stopGravityClip();
       this.stopImpulseClips();
       this.clearImpulseTimers();
       this.hasHeadState = false;
       return;
     }
     this.idleClipDirty = true;
+    this.gravityClipDirty = true;
     this.impulseClipDirty = true;
     this.startIdleClip();
+    this.startGravityClip();
     this.buildImpulseClips();
   }
 
@@ -191,6 +202,7 @@ export class HairPhysicsController {
   onHeadRotationChanged(yaw: number, pitch: number): void {
     if (!this.hairPhysicsEnabled) return;
     if (!this.supportsMixerClips()) return;
+    this.updateGravityFromHeadPitch(pitch);
     this.triggerHeadImpulse(yaw, pitch);
   }
 
@@ -329,6 +341,42 @@ export class HairPhysicsController {
     this.idleClipDirty = false;
   }
 
+  private startGravityClip(): void {
+    if (!this.hairPhysicsEnabled || !this.supportsMixerClips()) return;
+
+    const hairMeshNames = this.getHairMeshNames();
+    if (hairMeshNames.length === 0) return;
+
+    if (!this.gravityClipDirty && this.gravityClipHandle) return;
+
+    this.stopGravityClip();
+
+    const curves: CurvesMap = {
+      L_Hair_Front: [
+        { time: 0, intensity: 0 },
+        { time: 1, intensity: 1 },
+      ],
+      Fluffy_Bottom_ALL: [
+        { time: 0, intensity: 0 },
+        { time: 1, intensity: 0.6 },
+      ],
+    };
+
+    const handle = this.host.buildClip?.(this.gravityClipName, curves, {
+      loop: false,
+      loopMode: 'once',
+      meshNames: hairMeshNames,
+    });
+
+    if (!handle) return;
+
+    handle.setWeight?.(1);
+    handle.pause();
+    handle.setTime?.(0);
+    this.gravityClipHandle = handle;
+    this.gravityClipDirty = false;
+  }
+
   private stopIdleClip(): void {
     if (this.idleClipHandle) {
       const clipName = this.idleClipHandle.clipName;
@@ -337,6 +385,17 @@ export class HairPhysicsController {
       this.idleClipHandle = null;
     } else {
       this.host.cleanupSnippet?.(this.idleClipName);
+    }
+  }
+
+  private stopGravityClip(): void {
+    if (this.gravityClipHandle) {
+      const clipName = this.gravityClipHandle.clipName;
+      this.gravityClipHandle.stop();
+      this.host.cleanupSnippet?.(clipName);
+      this.gravityClipHandle = null;
+    } else {
+      this.host.cleanupSnippet?.(this.gravityClipName);
     }
   }
 
@@ -453,6 +512,18 @@ export class HairPhysicsController {
     if (leftWeight > minTrigger) this.playImpulseClip('left', leftWeight);
     if (rightWeight > minTrigger) this.playImpulseClip('right', rightWeight);
     if (frontWeight > minTrigger) this.playImpulseClip('front', frontWeight);
+  }
+
+  private updateGravityFromHeadPitch(headPitch: number): void {
+    if (!this.gravityClipHandle || this.gravityClipDirty) {
+      this.startGravityClip();
+    }
+    if (!this.gravityClipHandle) return;
+
+    const clampedPitch = Math.max(-1, Math.min(1, headPitch));
+    const normalized = (clampedPitch + 1) / 2;
+    const duration = this.gravityClipHandle.getDuration?.() ?? 1;
+    this.gravityClipHandle.setTime?.(normalized * duration);
   }
 
   private playImpulseClip(slot: 'left' | 'right' | 'front', weight: number): void {

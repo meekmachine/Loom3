@@ -180,7 +180,6 @@ export class Loom3 implements LoomLarge {
     this.auToCompositeMap = buildAUToCompositeMap(this.compositeRotations);
 
     this.hairPhysics = new HairPhysicsController({
-      transitionMorph: (key, value, durationMs, meshNames) => this.transitionMorph(key, value, durationMs, meshNames),
       getMeshByName: (name) => this.meshByName.get(name),
       buildClip: (clipName, curves, options) => this.buildClip(clipName, curves, options),
       cleanupSnippet: (name) => this.cleanupSnippet(name),

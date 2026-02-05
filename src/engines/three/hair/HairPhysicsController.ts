@@ -2,6 +2,24 @@ import type { Mesh, Object3D } from 'three';
 import type { ClipHandle, ClipOptions, CurvesMap } from '../../../core/types';
 import { CC4_MESHES } from '../../../presets/cc4';
 
+export type HairPhysicsDirectionConfig = {
+  // Multiplies head rotation inputs before mapping to hair motion.
+  // yawSign = -1 means hair lags opposite head yaw (inertia).
+  // pitchSign = -1 means head down (negative pitch) maps to forward hair motion.
+  yawSign: 1 | -1;
+  pitchSign: 1 | -1;
+};
+
+export type HairMorphTargets = {
+  swayLeft: string;
+  swayRight: string;
+  swayFront: string;
+  fluffRight: string;
+  fluffBottom: string;
+  headUp: Record<string, number>;
+  headDown: Record<string, number>;
+};
+
 export type HairPhysicsConfig = {
   stiffness: number;
   damping: number;
@@ -17,6 +35,13 @@ export type HairPhysicsConfig = {
   windFrequency: number;
   idleClipDuration: number;
   impulseClipDuration: number;
+  direction: HairPhysicsDirectionConfig;
+  morphTargets: HairMorphTargets;
+};
+
+export type HairPhysicsConfigUpdate = Partial<HairPhysicsConfig> & {
+  direction?: Partial<HairPhysicsDirectionConfig>;
+  morphTargets?: Partial<HairMorphTargets>;
 };
 
 export interface HairPhysicsHost {
@@ -45,6 +70,25 @@ export class HairPhysicsController {
     windFrequency: 1.4,
     idleClipDuration: 10,
     impulseClipDuration: 1.4,
+    direction: {
+      yawSign: -1,
+      pitchSign: -1,
+    },
+    morphTargets: {
+      swayLeft: 'L_Hair_Left',
+      swayRight: 'L_Hair_Right',
+      swayFront: 'L_Hair_Front',
+      fluffRight: 'Fluffy_Right',
+      fluffBottom: 'Fluffy_Bottom_ALL',
+      headUp: {
+        Hairline_High_ALL: 0.45,
+        Length_Short: 0.65,
+      },
+      headDown: {
+        L_Hair_Front: 2.0,
+        Fluffy_Bottom_ALL: 1.0,
+      },
+    },
   };
   private readonly idleClipName = 'hair_idle';
   private readonly gravityClipName = 'hair_gravity';
@@ -66,6 +110,7 @@ export class HairPhysicsController {
   private lastHeadVertical = 0;
   private registeredHairObjects = new Map<string, Mesh>();
   private cachedHairMeshNames: string[] | null = null;
+  private warnedMissingMorphTargets = new Set<string>();
 
   constructor(host: HairPhysicsHost) {
     this.host = host;
@@ -81,6 +126,7 @@ export class HairPhysicsController {
     this.idleClipDirty = true;
     this.gravityClipDirty = true;
     this.impulseClipDirty = true;
+    this.warnedMissingMorphTargets.clear();
   }
 
   registerHairObjects(objects: Object3D[]): Array<{ name: string; isMesh: boolean; isEyebrow: boolean }> {
@@ -108,6 +154,7 @@ export class HairPhysicsController {
     this.idleClipDirty = true;
     this.gravityClipDirty = true;
     this.impulseClipDirty = true;
+    this.warnMissingHairMorphTargets();
     if (this.hairPhysicsEnabled) {
       this.startIdleClip();
       this.startGravityClip();
@@ -123,6 +170,7 @@ export class HairPhysicsController {
     this.idleClipDirty = true;
     this.gravityClipDirty = true;
     this.impulseClipDirty = true;
+    this.warnMissingHairMorphTargets();
     if (this.hairPhysicsEnabled) {
       this.startIdleClip();
       this.startGravityClip();
@@ -157,8 +205,27 @@ export class HairPhysicsController {
     return this.hairPhysicsEnabled;
   }
 
-  setHairPhysicsConfig(config: Partial<HairPhysicsConfig>): void {
-    this.hairPhysicsConfig = { ...this.hairPhysicsConfig, ...config };
+  setHairPhysicsConfig(config: HairPhysicsConfigUpdate): void {
+    const direction = config.direction
+      ? { ...this.hairPhysicsConfig.direction, ...config.direction }
+      : this.hairPhysicsConfig.direction;
+
+    const morphTargets = config.morphTargets
+      ? {
+        ...this.hairPhysicsConfig.morphTargets,
+        ...config.morphTargets,
+        headUp: {
+          ...this.hairPhysicsConfig.morphTargets.headUp,
+          ...(config.morphTargets.headUp ?? {}),
+        },
+        headDown: {
+          ...this.hairPhysicsConfig.morphTargets.headDown,
+          ...(config.morphTargets.headDown ?? {}),
+        },
+      }
+      : this.hairPhysicsConfig.morphTargets;
+
+    this.hairPhysicsConfig = { ...this.hairPhysicsConfig, ...config, direction, morphTargets };
 
     const idleChanged = [
       'idleSwayAmount',
@@ -170,28 +237,61 @@ export class HairPhysicsController {
       'windFrequency',
       'idleClipDuration',
     ].some((key) => (config as Record<string, unknown>)[key] !== undefined);
+    const morphTargetsChanged = config.morphTargets !== undefined;
+    const directionChanged = config.direction !== undefined;
 
     const impulseChanged = [
       'stiffness',
       'damping',
       'impulseClipDuration',
     ].some((key) => (config as Record<string, unknown>)[key] !== undefined);
+    const gravityChanged = morphTargetsChanged;
 
-    if (idleChanged) {
+    if (idleChanged || morphTargetsChanged) {
       this.idleClipDirty = true;
     }
-    if (impulseChanged) {
+    if (impulseChanged || morphTargetsChanged) {
       this.impulseClipDirty = true;
+    }
+    if (gravityChanged) {
+      this.gravityClipDirty = true;
+    }
+    if (directionChanged) {
+      this.hasHeadState = false;
+      this.lastHeadHorizontal = 0;
+      this.lastHeadVertical = 0;
     }
 
     if (this.hairPhysicsEnabled) {
-      if (idleChanged) this.startIdleClip();
-      if (impulseChanged) this.buildImpulseClips();
+      if (idleChanged || morphTargetsChanged) this.startIdleClip();
+      if (impulseChanged || morphTargetsChanged) this.buildImpulseClips();
+      if (gravityChanged) this.startGravityClip();
+    }
+    if (morphTargetsChanged) {
+      this.warnMissingHairMorphTargets();
     }
   }
 
   getHairPhysicsConfig(): HairPhysicsConfig {
-    return { ...this.hairPhysicsConfig };
+    return {
+      ...this.hairPhysicsConfig,
+      direction: { ...this.hairPhysicsConfig.direction },
+      morphTargets: {
+        ...this.hairPhysicsConfig.morphTargets,
+        headUp: { ...this.hairPhysicsConfig.morphTargets.headUp },
+        headDown: { ...this.hairPhysicsConfig.morphTargets.headDown },
+      },
+    };
+  }
+
+  validateHairMorphTargets(): string[] {
+    const configuredKeys = this.collectConfiguredMorphKeys();
+    if (configuredKeys.length === 0) return [];
+
+    const availableKeys = this.collectAvailableHairMorphKeys();
+    if (availableKeys.size === 0) return [];
+
+    return configuredKeys.filter((key) => !availableKeys.has(key));
   }
 
   update(dtSeconds: number): void {
@@ -227,6 +327,57 @@ export class HairPhysicsController {
     if (!dict) return [];
 
     return Object.keys(dict);
+  }
+
+  private collectConfiguredMorphKeys(): string[] {
+    const { morphTargets } = this.hairPhysicsConfig;
+    const keys = new Set<string>();
+    const addKey = (key?: string) => {
+      if (typeof key === 'string' && key.length > 0) keys.add(key);
+    };
+
+    addKey(morphTargets.swayLeft);
+    addKey(morphTargets.swayRight);
+    addKey(morphTargets.swayFront);
+    addKey(morphTargets.fluffRight);
+    addKey(morphTargets.fluffBottom);
+
+    if (morphTargets.headUp) {
+      Object.keys(morphTargets.headUp).forEach((key) => addKey(key));
+    }
+    if (morphTargets.headDown) {
+      Object.keys(morphTargets.headDown).forEach((key) => addKey(key));
+    }
+
+    return Array.from(keys);
+  }
+
+  private collectAvailableHairMorphKeys(): Set<string> {
+    const available = new Set<string>();
+    const hairMeshNames = this.getHairMeshNames();
+    if (hairMeshNames.length === 0) return available;
+
+    for (const name of hairMeshNames) {
+      const mesh = this.registeredHairObjects.get(name) || this.host.getMeshByName(name);
+      const dict = mesh?.morphTargetDictionary;
+      if (!dict) continue;
+      for (const key of Object.keys(dict)) {
+        available.add(key);
+      }
+    }
+
+    return available;
+  }
+
+  private warnMissingHairMorphTargets(): void {
+    const missing = this.validateHairMorphTargets();
+    if (missing.length === 0) return;
+
+    for (const key of missing) {
+      if (this.warnedMissingMorphTargets.has(key)) continue;
+      this.warnedMissingMorphTargets.add(key);
+      console.warn(`[Loom3] Hair physics morph "${key}" not found on registered hair meshes.`);
+    }
   }
 
   setMorphOnMeshes(meshNames: string[], morphKey: string, value: number): void {
@@ -351,30 +502,24 @@ export class HairPhysicsController {
 
     this.stopGravityClip();
 
-    const curves: CurvesMap = {
-      // Head up (time=0) -> pull hair back/up a bit via hairline + length reduction
-      Hairline_High_ALL: [
-        { time: 0, intensity: 0.45 },
+    // Head up (time=0) uses morphTargets.headUp; head down (time=1) uses morphTargets.headDown.
+    const morphTargets = this.hairPhysicsConfig.morphTargets;
+    const curves: CurvesMap = {};
+    const headUpKeys = Object.keys(morphTargets.headUp ?? {});
+    const headDownKeys = Object.keys(morphTargets.headDown ?? {});
+    const keys = new Set([...headUpKeys, ...headDownKeys]);
+
+    for (const key of keys) {
+      const up = morphTargets.headUp?.[key] ?? 0;
+      const down = morphTargets.headDown?.[key] ?? 0;
+      curves[key] = [
+        { time: 0, intensity: up },
         { time: 0.5, intensity: 0 },
-        { time: 1, intensity: 0 },
-      ],
-      Length_Short: [
-        { time: 0, intensity: 0.65 },
-        { time: 0.5, intensity: 0 },
-        { time: 1, intensity: 0 },
-      ],
-      // Head down (time=1) -> push the long section forward strongly
-      L_Hair_Front: [
-        { time: 0, intensity: 0 },
-        { time: 0.5, intensity: 0 },
-        { time: 1, intensity: 1.8 },
-      ],
-      Fluffy_Bottom_ALL: [
-        { time: 0, intensity: 0 },
-        { time: 0.5, intensity: 0 },
-        { time: 1, intensity: 1.0 },
-      ],
-    };
+        { time: 1, intensity: down },
+      ];
+    }
+
+    if (Object.keys(curves).length === 0) return;
 
     const handle = this.host.buildClip?.(this.gravityClipName, curves, {
       loop: false,
@@ -497,8 +642,10 @@ export class HairPhysicsController {
 
   private triggerHeadImpulse(headYaw: number, headPitch: number): void {
     const cfg = this.hairPhysicsConfig;
-    const horizontal = -headYaw * cfg.inertia * cfg.responseScale;
-    const vertical = headPitch * cfg.gravity * 0.25 * cfg.responseScale;
+    const signedYaw = headYaw * cfg.direction.yawSign;
+    const signedPitch = headPitch * cfg.direction.pitchSign;
+    const horizontal = signedYaw * cfg.inertia * cfg.responseScale;
+    const vertical = signedPitch * cfg.gravity * 0.25 * cfg.responseScale;
 
     if (!this.hasHeadState) {
       this.hasHeadState = true;
@@ -534,7 +681,8 @@ export class HairPhysicsController {
     }
     if (!this.gravityClipHandle) return;
 
-    const clampedPitch = Math.max(-1, Math.min(1, headPitch));
+    const signedPitch = headPitch * this.hairPhysicsConfig.direction.pitchSign;
+    const clampedPitch = Math.max(-1, Math.min(1, signedPitch));
     const normalized = (clampedPitch + 1) / 2;
     const duration = this.gravityClipHandle.getDuration?.() ?? 1;
     this.gravityClipHandle.setTime?.(normalized * duration);
@@ -585,6 +733,7 @@ export class HairPhysicsController {
 
   private buildIdleWindCurves(durationSec: number): CurvesMap {
     const cfg = this.hairPhysicsConfig;
+    const morphTargets = this.hairPhysicsConfig.morphTargets;
     const curves: CurvesMap = {};
     const sampleCount = Math.max(16, Math.min(120, Math.round(durationSec * 12)));
     const hasWind = cfg.windStrength > 0;
@@ -625,11 +774,11 @@ export class HairPhysicsController {
       const movementIntensity = Math.abs(combinedX) + Math.abs(combinedZ);
       const fluffyBottomValue = clamp01(movementIntensity * 0.25);
 
-      pushPoint('L_Hair_Left', t, leftValue);
-      pushPoint('L_Hair_Right', t, rightValue);
-      pushPoint('L_Hair_Front', t, frontValue);
-      pushPoint('Fluffy_Right', t, fluffyRightValue);
-      pushPoint('Fluffy_Bottom_ALL', t, fluffyBottomValue);
+      if (morphTargets.swayLeft) pushPoint(morphTargets.swayLeft, t, leftValue);
+      if (morphTargets.swayRight) pushPoint(morphTargets.swayRight, t, rightValue);
+      if (morphTargets.swayFront) pushPoint(morphTargets.swayFront, t, frontValue);
+      if (morphTargets.fluffRight) pushPoint(morphTargets.fluffRight, t, fluffyRightValue);
+      if (morphTargets.fluffBottom) pushPoint(morphTargets.fluffBottom, t, fluffyBottomValue);
     }
 
     for (const points of Object.values(curves)) {
@@ -643,6 +792,7 @@ export class HairPhysicsController {
 
   private buildImpulseCurves(durationSec: number, horizontal: number, vertical: number): CurvesMap {
     const cfg = this.hairPhysicsConfig;
+    const morphTargets = this.hairPhysicsConfig.morphTargets;
     const curves: CurvesMap = {};
     const sampleCount = Math.max(12, Math.min(90, Math.round(durationSec * 30)));
     const frequency = Math.max(0.5, cfg.stiffness * 0.2);
@@ -667,11 +817,11 @@ export class HairPhysicsController {
       const movementIntensity = Math.abs(horizontalValue) + Math.abs(verticalValue);
       const fluffyBottomValue = clamp01(movementIntensity * 0.25);
 
-      pushPoint('L_Hair_Left', t, leftValue);
-      pushPoint('L_Hair_Right', t, rightValue);
-      pushPoint('L_Hair_Front', t, frontValue);
-      pushPoint('Fluffy_Right', t, fluffyRightValue);
-      pushPoint('Fluffy_Bottom_ALL', t, fluffyBottomValue);
+      if (morphTargets.swayLeft) pushPoint(morphTargets.swayLeft, t, leftValue);
+      if (morphTargets.swayRight) pushPoint(morphTargets.swayRight, t, rightValue);
+      if (morphTargets.swayFront) pushPoint(morphTargets.swayFront, t, frontValue);
+      if (morphTargets.fluffRight) pushPoint(morphTargets.fluffRight, t, fluffyRightValue);
+      if (morphTargets.fluffBottom) pushPoint(morphTargets.fluffBottom, t, fluffyBottomValue);
     }
 
     for (const points of Object.values(curves)) {

@@ -938,6 +938,46 @@ export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {
 };
 
 // ============================================================================
+// HAIR PHYSICS DEFAULTS
+// ============================================================================
+
+export const CC4_HAIR_PHYSICS: Profile['hairPhysics'] = {
+  stiffness: 7.5,
+  damping: 0.18,
+  inertia: 3.5,
+  gravity: 12,
+  responseScale: 2.5,
+  idleSwayAmount: 0.12,
+  idleSwaySpeed: 1.0,
+  windStrength: 0,
+  windDirectionX: 1.0,
+  windDirectionZ: 0,
+  windTurbulence: 0.3,
+  windFrequency: 1.4,
+  idleClipDuration: 10,
+  impulseClipDuration: 1.4,
+  direction: {
+    yawSign: -1,
+    pitchSign: -1,
+  },
+  morphTargets: {
+    swayLeft: { key: 'L_Hair_Left', axis: 'yaw' },
+    swayRight: { key: 'L_Hair_Right', axis: 'yaw' },
+    swayFront: { key: 'L_Hair_Front', axis: 'pitch' },
+    fluffRight: { key: 'Fluffy_Right', axis: 'yaw' },
+    fluffBottom: { key: 'Fluffy_Bottom_ALL', axis: 'pitch' },
+    headUp: {
+      Hairline_High_ALL: { value: 0.45, axis: 'pitch' },
+      Length_Short: { value: 0.65, axis: 'pitch' },
+    },
+    headDown: {
+      L_Hair_Front: { value: 2.0, axis: 'pitch' },
+      Fluffy_Bottom_ALL: { value: 1.0, axis: 'pitch' },
+    },
+  },
+};
+
+// ============================================================================
 // CC4_PRESET - Main export for Profile
 // ============================================================================
 
@@ -958,6 +998,7 @@ export const CC4_PRESET: Profile = {
   eyeMeshNodes: CC4_EYE_MESH_NODES,
   continuumPairs: CONTINUUM_PAIRS_MAP,
   continuumLabels: CONTINUUM_LABELS,
+  hairPhysics: CC4_HAIR_PHYSICS,
   annotationRegions: [
     {
       name: 'full_body',

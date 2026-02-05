@@ -1,4 +1,4 @@
-import type { Profile, AnnotationRegion, MorphTargetsBySide } from '../mappings/types';
+import type { Profile, AnnotationRegion, MorphTargetsBySide, HairPhysicsProfileConfig } from '../mappings/types';
 import type { BoneBinding } from '../core/types';
 
 type RecordValue = string | number | boolean | object | null | undefined;
@@ -96,6 +96,46 @@ const mergeAnnotationRegions = (
   return Array.from(regionMap.values());
 };
 
+const mergeHairPhysicsConfig = (
+  base?: HairPhysicsProfileConfig,
+  override?: HairPhysicsProfileConfig
+): HairPhysicsProfileConfig | undefined => {
+  if (!base && !override) return undefined;
+  const merged: HairPhysicsProfileConfig = {
+    ...base,
+    ...override,
+  };
+
+  if (base?.direction || override?.direction) {
+    merged.direction = {
+      ...base?.direction,
+      ...override?.direction,
+    };
+  }
+
+  if (base?.morphTargets || override?.morphTargets) {
+    const nextMorphTargets = {
+      ...base?.morphTargets,
+      ...override?.morphTargets,
+    };
+    if (base?.morphTargets?.headUp || override?.morphTargets?.headUp) {
+      nextMorphTargets.headUp = mergeRecord(
+        base?.morphTargets?.headUp || {},
+        override?.morphTargets?.headUp || {}
+      );
+    }
+    if (base?.morphTargets?.headDown || override?.morphTargets?.headDown) {
+      nextMorphTargets.headDown = mergeRecord(
+        base?.morphTargets?.headDown || {},
+        override?.morphTargets?.headDown || {}
+      );
+    }
+    merged.morphTargets = nextMorphTargets;
+  }
+
+  return merged;
+};
+
 /**
  * Merge a base preset with a profile override.
  *
@@ -132,5 +172,6 @@ export function mergePreset(base: Profile, override: Partial<Profile>): Profile 
       ? mergeRecord(base.continuumLabels || {}, override.continuumLabels || {})
       : undefined,
     annotationRegions: mergeAnnotationRegions(base.annotationRegions, override.annotationRegions),
+    hairPhysics: mergeHairPhysicsConfig(base.hairPhysics, override.hairPhysics),
   };
 }

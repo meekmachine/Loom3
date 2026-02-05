@@ -12,6 +12,21 @@ export interface HairObjectRef {
   isEyebrow: boolean;
 }
 
+export interface HairPhysicsDirectionConfig {
+  yawSign: 1 | -1;
+  pitchSign: 1 | -1;
+}
+
+export interface HairMorphTargetsConfig {
+  swayLeft: string;
+  swayRight: string;
+  swayFront: string;
+  fluffRight: string;
+  fluffBottom: string;
+  headUp: Record<string, number>;
+  headDown: Record<string, number>;
+}
+
 export interface HairPhysicsRuntimeConfig {
   stiffness: number;
   damping: number;
@@ -27,7 +42,14 @@ export interface HairPhysicsRuntimeConfig {
   windFrequency: number;
   idleClipDuration: number;
   impulseClipDuration: number;
+  direction: HairPhysicsDirectionConfig;
+  morphTargets: HairMorphTargetsConfig;
 }
+
+export type HairPhysicsRuntimeConfigUpdate = Partial<HairPhysicsRuntimeConfig> & {
+  direction?: Partial<HairPhysicsDirectionConfig>;
+  morphTargets?: Partial<HairMorphTargetsConfig>;
+};
 
 export interface HairObjectState {
   color?: { baseColor: string; emissive: string; emissiveIntensity: number };
@@ -63,12 +85,18 @@ export interface Hair {
   /**
    * Update hair physics configuration.
    */
-  setHairPhysicsConfig(config: Partial<HairPhysicsRuntimeConfig>): void;
+  setHairPhysicsConfig(config: HairPhysicsRuntimeConfigUpdate): void;
 
   /**
    * Get current hair physics configuration.
    */
   getHairPhysicsConfig(): HairPhysicsRuntimeConfig;
+
+  /**
+   * Validate hair morph target mappings against registered hair meshes.
+   * Returns a list of missing morph keys (if any).
+   */
+  validateHairMorphTargets(): string[];
 
   /**
    * Get head rotation values used for hair physics (range -1 to 1).

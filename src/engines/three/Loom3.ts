@@ -18,7 +18,7 @@ import type {
   ReadyPayload,
   LoomLargeConfig,
 } from '../../interfaces/LoomLarge';
-import type { MeshInfo, MorphTargetRef } from '../../mappings/types';
+import type { MeshInfo, MorphTargetRef, Profile, HairPhysicsProfileConfig } from '../../mappings/types';
 import type {
   TransitionHandle,
   BoneKey,
@@ -32,9 +32,8 @@ import type {
   ClipHandle,
   Snippet,
 } from '../../core/types';
-import type { Profile } from '../../mappings/types';
 import { AnimationThree, BakedAnimationController } from './AnimationThree';
-import { HairPhysicsController, type HairPhysicsConfig } from './hair/HairPhysicsController';
+import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUpdate, type HairMorphTargets } from './hair/HairPhysicsController';
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import { resolvePreset } from '../../presets';
 import { mergePreset } from '../../presets/mergePreset';
@@ -196,6 +195,8 @@ export class Loom3 implements LoomLarge {
       getAUMixWeight: (auId) => this.getAUMixWeight(auId),
       isMixedAU: (auId) => this.isMixedAU(auId),
     });
+
+    this.applyHairPhysicsProfileConfig();
   }
 
   // ============================================================================
@@ -1235,12 +1236,82 @@ export class Loom3 implements LoomLarge {
   // CONFIGURATION
   // ============================================================================
 
+  private applyHairPhysicsProfileConfig(): void {
+    const hairConfig: HairPhysicsProfileConfig | undefined = this.config.hairPhysics;
+    if (!hairConfig) return;
+
+    const runtimeConfig: HairPhysicsConfigUpdate = {};
+    const numericKeys: Array<keyof HairPhysicsProfileConfig> = [
+      'stiffness',
+      'damping',
+      'inertia',
+      'gravity',
+      'responseScale',
+      'idleSwayAmount',
+      'idleSwaySpeed',
+      'windStrength',
+      'windDirectionX',
+      'windDirectionZ',
+      'windTurbulence',
+      'windFrequency',
+      'idleClipDuration',
+      'impulseClipDuration',
+    ];
+
+    for (const key of numericKeys) {
+      const value = hairConfig[key];
+      if (value !== undefined) {
+        (runtimeConfig as Record<string, unknown>)[key] = value;
+      }
+    }
+
+    if (hairConfig.direction) {
+      runtimeConfig.direction = { ...hairConfig.direction };
+    }
+
+    if (hairConfig.morphTargets) {
+      const morphTargets: Partial<HairMorphTargets> = {};
+      if (hairConfig.morphTargets.swayLeft) morphTargets.swayLeft = hairConfig.morphTargets.swayLeft.key;
+      if (hairConfig.morphTargets.swayRight) morphTargets.swayRight = hairConfig.morphTargets.swayRight.key;
+      if (hairConfig.morphTargets.swayFront) morphTargets.swayFront = hairConfig.morphTargets.swayFront.key;
+      if (hairConfig.morphTargets.fluffRight) morphTargets.fluffRight = hairConfig.morphTargets.fluffRight.key;
+      if (hairConfig.morphTargets.fluffBottom) morphTargets.fluffBottom = hairConfig.morphTargets.fluffBottom.key;
+
+      if (hairConfig.morphTargets.headUp) {
+        const headUp: Record<string, number> = {};
+        for (const [key, value] of Object.entries(hairConfig.morphTargets.headUp)) {
+          if (value && typeof value.value === 'number') {
+            headUp[key] = value.value;
+          }
+        }
+        if (Object.keys(headUp).length > 0) morphTargets.headUp = headUp;
+      }
+
+      if (hairConfig.morphTargets.headDown) {
+        const headDown: Record<string, number> = {};
+        for (const [key, value] of Object.entries(hairConfig.morphTargets.headDown)) {
+          if (value && typeof value.value === 'number') {
+            headDown[key] = value.value;
+          }
+        }
+        if (Object.keys(headDown).length > 0) morphTargets.headDown = headDown;
+      }
+
+      if (Object.keys(morphTargets).length > 0) {
+        runtimeConfig.morphTargets = morphTargets;
+      }
+    }
+
+    this.hairPhysics.setHairPhysicsConfig(runtimeConfig);
+  }
+
   setProfile(profile: Profile): void {
     this.config = profile;
     this.mixWeights = { ...profile.auMixDefaults };
     if (this.model) {
       this.rebuildMorphTargetsCache();
     }
+    this.applyHairPhysicsProfileConfig();
   }
 
   getProfile(): Profile { return this.config; }
@@ -1269,12 +1340,16 @@ export class Loom3 implements LoomLarge {
     return this.hairPhysics.isHairPhysicsEnabled();
   }
 
-  setHairPhysicsConfig(config: Partial<HairPhysicsConfig>): void {
+  setHairPhysicsConfig(config: HairPhysicsConfigUpdate): void {
     this.hairPhysics.setHairPhysicsConfig(config);
   }
 
   getHairPhysicsConfig(): HairPhysicsConfig {
     return this.hairPhysics.getHairPhysicsConfig();
+  }
+
+  validateHairMorphTargets(): string[] {
+    return this.hairPhysics.validateHairMorphTargets();
   }
 
   /** Get head rotation values for hair physics (range -1 to 1) */

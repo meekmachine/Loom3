@@ -22,6 +22,9 @@ export type { HairPhysics, HairPhysicsConfig, HairStrand, HairState } from './Ha
 export type {
   Hair,
   HairPhysicsRuntimeConfig,
+  HairPhysicsRuntimeConfigUpdate,
+  HairPhysicsDirectionConfig,
+  HairMorphTargetsConfig,
   HairObjectRef,
   HairObjectState,
 } from './Hair';

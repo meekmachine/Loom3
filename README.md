@@ -1293,83 +1293,158 @@ loom.dispose();
 
 ---
 
-## 14. Hair Physics
+## 14. Hair Physics (Mixer-Driven)
 
 > **Screenshot placeholder:** Add a GIF showing hair physics responding to head movement
 
-Loom3 includes an experimental hair physics system that simulates hair movement based on head motion.
+Loom3 includes a built-in hair physics system that drives morph targets through the AnimationMixer.
+It is **mixer-only** (no per-frame morph LERP), and it reacts to **head rotation** coming from AUs.
+
+### How it works
+
+Hair motion is decomposed into three clip families:
+
+1. **Idle/Wind loop** - continuous sway and optional wind.
+2. **Impulse clips** - short oscillations triggered by *changes* in head yaw/pitch.
+3. **Gravity clip** - a single clip that is **scrubbed** by head pitch (up/down).
+
+All clips are created with `buildClip` and applied to the mixer.  
+When you update head AUs (e.g. `setAU`, `setContinuum`, `transitionAU`), hair updates automatically.
 
 ### Basic setup
 
 ```typescript
-import { HairPhysics } from 'loom3';
+const loom = new Loom3({ presetType: 'cc4' });
 
-const hair = new HairPhysics();
+loader.load('/character.glb', (gltf) => {
+  const meshes = collectMorphMeshes(gltf.scene);
+  loom.onReady({ meshes, model: gltf.scene });
+
+  // Register hair + eyebrow meshes (filters using CC4_MESHES category tags)
+  const allObjects: Object3D[] = [];
+  gltf.scene.traverse((obj) => allObjects.push(obj));
+  loom.registerHairObjects(allObjects);
+
+  // Enable physics (starts idle + gravity + impulse clips)
+  loom.setHairPhysicsEnabled(true);
+});
 ```
 
-### Updating in animation loop
+### Configuration (profile defaults)
+
+Hair physics defaults live in the preset/profile and are applied automatically at init:
 
 ```typescript
-function animate() {
-  // Get current head state (from your tracking system or AU values)
-  const headState = {
-    yaw: 0,           // Head rotation in radians
-    pitch: 0,
-    roll: 0,
-    yawVelocity: 0.5, // Angular velocity
-    pitchVelocity: 0,
-  };
+import type { Profile } from 'loom3';
 
-  // Update hair physics
-  const hairMorphs = hair.update(deltaTime, headState);
-
-  // Apply hair morphs
-  for (const [morphName, value] of Object.entries(hairMorphs)) {
-    loom.setMorph(morphName, value);
-  }
-}
+const profile: Profile = {
+  // ...all your usual AU mappings...
+  hairPhysics: {
+    stiffness: 7.5,
+    damping: 0.18,
+    inertia: 3.5,
+    gravity: 12,
+    responseScale: 2.5,
+    idleSwayAmount: 0.12,
+    idleSwaySpeed: 1.0,
+    windStrength: 0,
+    windDirectionX: 1.0,
+    windDirectionZ: 0,
+    windTurbulence: 0.3,
+    windFrequency: 1.4,
+    idleClipDuration: 10,
+    impulseClipDuration: 1.4,
+    direction: {
+      yawSign: -1,
+      pitchSign: -1,
+    },
+    morphTargets: {
+      swayLeft: { key: 'L_Hair_Left', axis: 'yaw' },
+      swayRight: { key: 'L_Hair_Right', axis: 'yaw' },
+      swayFront: { key: 'L_Hair_Front', axis: 'pitch' },
+      fluffRight: { key: 'Fluffy_Right', axis: 'yaw' },
+      fluffBottom: { key: 'Fluffy_Bottom_ALL', axis: 'pitch' },
+      headUp: {
+        Hairline_High_ALL: { value: 0.45, axis: 'pitch' },
+        Length_Short: { value: 0.65, axis: 'pitch' },
+      },
+      headDown: {
+        L_Hair_Front: { value: 2.0, axis: 'pitch' },
+        Fluffy_Bottom_ALL: { value: 1.0, axis: 'pitch' },
+      },
+    },
+  },
+};
 ```
 
-### Output morphs
-
-The physics system outputs 6 morph values:
-
-| Morph | Description |
-|-------|-------------|
-| L_Hair_Left | Left side, swing left |
-| L_Hair_Right | Left side, swing right |
-| L_Hair_Front | Left side, swing forward |
-| R_Hair_Left | Right side, swing left |
-| R_Hair_Right | Right side, swing right |
-| R_Hair_Front | Right side, swing forward |
-
-### Physics forces
-
-The simulation models 5 forces:
-
-1. **Spring restoration** - Pulls hair back to rest position
-2. **Damping** - Air resistance prevents infinite oscillation
-3. **Gravity** - Hair swings based on head tilt
-4. **Inertia** - Hair lags behind head movement
-5. **Wind** - Optional oscillating wind force
-
-### Configuration
+### Configuration (runtime overrides)
 
 ```typescript
-const hair = new HairPhysics({
-  mass: 1.0,
-  stiffness: 50,
-  damping: 5,
-  gravity: 9.8,
-  headInfluence: 0.8,  // How much head movement affects hair
-  wind: {
-    strength: 0,
-    direction: { x: 1, y: 0, z: 0 },
-    turbulence: 0.2,
-    frequency: 1.0,
+loom.setHairPhysicsConfig({
+  stiffness: 7.5,
+  damping: 0.18,
+  inertia: 3.5,
+  gravity: 12,
+  responseScale: 2.5,
+  idleSwayAmount: 0.12,
+  idleSwaySpeed: 1.0,
+  windStrength: 0,
+  windDirectionX: 1.0,
+  windDirectionZ: 0,
+  windTurbulence: 0.3,
+  windFrequency: 1.4,
+  idleClipDuration: 10,
+  impulseClipDuration: 1.4,
+
+  // Direction mapping (signs) – adjust if hair goes the wrong way.
+  direction: {
+    yawSign: -1,   // hair lags opposite head yaw
+    pitchSign: -1, // head down drives forward hair motion
+  },
+
+  // Morph target mapping (override per character/rig)
+  morphTargets: {
+    swayLeft: 'L_Hair_Left',
+    swayRight: 'L_Hair_Right',
+    swayFront: 'L_Hair_Front',
+    fluffRight: 'Fluffy_Right',
+    fluffBottom: 'Fluffy_Bottom_ALL',
+    headUp: {
+      Hairline_High_ALL: 0.45,
+      Length_Short: 0.65,
+    },
+    headDown: {
+      L_Hair_Front: 2.0,
+      Fluffy_Bottom_ALL: 1.0,
+    },
   },
 });
 ```
+
+### Validation
+
+```typescript
+const missing = loom.validateHairMorphTargets();
+if (missing.length > 0) {
+  console.warn('Missing hair morph targets:', missing);
+}
+```
+
+Loom3 also logs a warning the first time it encounters a missing hair morph key.
+
+### Notes
+
+- **Head rotation input** comes from AUs (e.g. 51/52 yaw, 53/54 pitch).  
+  Hair updates when those AUs change.
+- **Mesh selection** comes from the preset (`CC4_MESHES` categories).  
+  Hair morph target *names* live in the preset/profile (`Profile.hairPhysics`) and can be overridden at runtime.
+- **Direction/morphs are explicit** so you can expose a clean, user-friendly API.
+
+### Troubleshooting
+
+- Hair moves the wrong direction → flip `direction.yawSign` or `direction.pitchSign`.
+- Wrong morphs are moving → override `morphTargets` with your rig’s names.
+- Need stronger response → increase `responseScale` or the `headDown/headUp` values.
 
 ---
 

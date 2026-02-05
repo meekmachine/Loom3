@@ -114,6 +114,65 @@ export interface Profile {
    * Optional: Annotation regions for camera/marker overlays.
    */
   annotationRegions?: AnnotationRegion[];
+
+  /**
+   * Optional: Hair physics defaults for this preset/profile.
+   */
+  hairPhysics?: HairPhysicsProfileConfig;
+}
+
+/**
+ * Hair physics morph mapping axis types.
+ */
+export type HairMorphAxis = 'yaw' | 'pitch' | 'roll';
+
+/**
+ * Single morph target mapping with axis metadata.
+ */
+export interface HairMorphTargetMapping {
+  key: string;
+  axis: HairMorphAxis;
+}
+
+/**
+ * Morph target mapping with axis metadata and intensity value.
+ */
+export interface HairMorphTargetValueMapping {
+  value: number;
+  axis: HairMorphAxis;
+}
+
+/**
+ * Hair physics defaults stored in presets/profiles.
+ */
+export interface HairPhysicsProfileConfig {
+  stiffness?: number;
+  damping?: number;
+  inertia?: number;
+  gravity?: number;
+  responseScale?: number;
+  idleSwayAmount?: number;
+  idleSwaySpeed?: number;
+  windStrength?: number;
+  windDirectionX?: number;
+  windDirectionZ?: number;
+  windTurbulence?: number;
+  windFrequency?: number;
+  idleClipDuration?: number;
+  impulseClipDuration?: number;
+  direction?: {
+    yawSign?: 1 | -1;
+    pitchSign?: 1 | -1;
+  };
+  morphTargets?: {
+    swayLeft?: HairMorphTargetMapping;
+    swayRight?: HairMorphTargetMapping;
+    swayFront?: HairMorphTargetMapping;
+    fluffRight?: HairMorphTargetMapping;
+    fluffBottom?: HairMorphTargetMapping;
+    headUp?: Record<string, HairMorphTargetValueMapping>;
+    headDown?: Record<string, HairMorphTargetValueMapping>;
+  };
 }
 
 

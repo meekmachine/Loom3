@@ -63,6 +63,9 @@ export type {
 export type {
   Hair,
   HairPhysicsRuntimeConfig,
+  HairPhysicsRuntimeConfigUpdate,
+  HairPhysicsDirectionConfig,
+  HairMorphTargetsConfig,
   HairObjectRef,
   HairObjectState,
 } from './interfaces/Hair';
@@ -99,6 +102,10 @@ export type {
 
 export type {
   Profile,
+  HairPhysicsProfileConfig,
+  HairMorphTargetMapping,
+  HairMorphTargetValueMapping,
+  HairMorphAxis,
   MorphCategory,
   MeshCategory,
   BlendingMode,

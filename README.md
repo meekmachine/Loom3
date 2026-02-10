@@ -4,6 +4,8 @@ The missing character controller for Three.js, allowing you to bring humanoid an
 
 Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units to the morph targets and bone transforms found in Character Creator 4 (CC4) characters. Instead of manually figuring out which blend shapes correspond to which facial movements, you can simply say `setAU(12, 0.8)` and the library handles the rest.
 
+> **Note:** If you previously used the `loomlarge` npm package, it has been renamed to `loom3`.
+
 > **Screenshot placeholder:** Add a hero image showing a character with facial expressions controlled by Loom3
 
 ---

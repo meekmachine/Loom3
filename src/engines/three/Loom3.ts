@@ -33,7 +33,7 @@ import type {
   Snippet,
 } from '../../core/types';
 import { AnimationThree, BakedAnimationController } from './AnimationThree';
-import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUpdate, type HairMorphTargets } from './hair/HairPhysicsController';
+import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUpdate, type HairPhysicsDirectionConfig, type HairMorphTargets } from './hair/HairPhysicsController';
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import { resolvePreset } from '../../presets';
 import { resolveProfile } from '../../mappings/resolveProfile';
@@ -1270,7 +1270,7 @@ export class Loom3 implements LoomLarge {
     }
 
     if (hairConfig.direction) {
-      runtimeConfig.direction = { ...hairConfig.direction };
+      runtimeConfig.direction = { ...hairConfig.direction } as HairPhysicsDirectionConfig;
     }
 
     if (hairConfig.morphTargets) {
@@ -1302,7 +1302,7 @@ export class Loom3 implements LoomLarge {
       }
 
       if (Object.keys(morphTargets).length > 0) {
-        runtimeConfig.morphTargets = morphTargets;
+        runtimeConfig.morphTargets = morphTargets as HairMorphTargets;
       }
     }
 

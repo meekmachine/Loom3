@@ -254,7 +254,7 @@ export interface MorphTargetsBySide {
 /**
  * Helper type for mesh categories in morphToMesh
  */
-export type MorphCategory = 'face' | 'viseme' | 'eye' | 'eyebrow' | 'eyeOcclusion' | 'tearLine' | 'tongue' | 'hair';
+export type MorphCategory = 'face' | 'viseme' | 'eye' | 'tongue' | 'hair';
 
 /**
  * Mesh category types for character mesh classification

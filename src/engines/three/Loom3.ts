@@ -809,27 +809,15 @@ export class Loom3 implements LoomLarge {
     // Resolve and cache
     const targets: { infl: number[]; idx: number }[] = [];
 
-    if (targetMeshes.length) {
-      for (const name of targetMeshes) {
-        const mesh = this.meshByName.get(name);
-        if (!mesh) continue;
-        const dict = mesh.morphTargetDictionary;
-        const infl = mesh.morphTargetInfluences;
-        if (!dict || !infl) continue;
-        const idx = dict[key];
-        if (idx !== undefined) {
-          targets.push({ infl, idx });
-        }
-      }
-    } else {
-      for (const mesh of this.meshes) {
-        const dict = mesh.morphTargetDictionary;
-        const infl = mesh.morphTargetInfluences;
-        if (!dict || !infl) continue;
-        const idx = dict[key];
-        if (idx !== undefined) {
-          targets.push({ infl, idx });
-        }
+    for (const name of targetMeshes) {
+      const mesh = this.meshByName.get(name);
+      if (!mesh) continue;
+      const dict = mesh.morphTargetDictionary;
+      const infl = mesh.morphTargetInfluences;
+      if (!dict || !infl) continue;
+      const idx = dict[key];
+      if (idx !== undefined) {
+        targets.push({ infl, idx });
       }
     }
 
@@ -850,20 +838,12 @@ export class Loom3 implements LoomLarge {
 
     const targets: { infl: number[]; idx: number }[] = [];
 
-    if (targetMeshes.length) {
-      for (const name of targetMeshes) {
-        const mesh = this.meshByName.get(name);
-        if (!mesh) continue;
-        const infl = mesh.morphTargetInfluences;
-        if (!infl || idx >= infl.length) continue;
-        targets.push({ infl, idx });
-      }
-    } else {
-      for (const mesh of this.meshes) {
-        const infl = mesh.morphTargetInfluences;
-        if (!infl || idx >= infl.length) continue;
-        targets.push({ infl, idx });
-      }
+    for (const name of targetMeshes) {
+      const mesh = this.meshByName.get(name);
+      if (!mesh) continue;
+      const infl = mesh.morphTargetInfluences;
+      if (!infl || idx >= infl.length) continue;
+      targets.push({ infl, idx });
     }
 
     if (targets.length > 0) {
@@ -1322,9 +1302,7 @@ export class Loom3 implements LoomLarge {
 
   /**
    * Get the mesh names that should receive morph influences for a given AU.
-   * Routes by facePart: face AUs → face + eyebrow + occlusion + tearLine meshes,
-   * Tongue → tongue, Eye → eye, etc. This ensures auxiliary meshes (eyebrows,
-   * occlusion, tear lines) also receive morph influences from face AUs.
+   * Routes by facePart: Tongue → tongue, Eye → eye, everything else → face.
    */
   getMeshNamesForAU(auId: number): string[] {
     const m = this.config.morphToMesh;
@@ -1333,15 +1311,7 @@ export class Loom3 implements LoomLarge {
     switch (info.facePart) {
       case 'Tongue': return m?.tongue || [];
       case 'Eye': return m?.eye || [];
-      default: {
-        // Face AUs target the body mesh plus all auxiliary face meshes
-        // (eyebrows, occlusion, tear lines) that share morph target names.
-        const face = m?.face || [];
-        const eyebrow = m?.eyebrow || [];
-        const eyeOcclusion = m?.eyeOcclusion || [];
-        const tearLine = m?.tearLine || [];
-        return [...face, ...eyebrow, ...eyeOcclusion, ...tearLine];
-      }
+      default: return m?.face || [];
     }
   }
 

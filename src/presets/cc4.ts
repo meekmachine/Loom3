@@ -910,12 +910,9 @@ export const CC4_MESHES: Record<string, MeshInfo> = {
 export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {
   // Face/AU morphs target the main body mesh only.
   // Include both CC4 naming variants (with and without _1/_2 suffixes).
-  face: ['CC_Base_Body', 'CC_Base_Body_1'],
+  face: ['CC_Base_Body'],
   viseme: ['CC_Base_Body', 'CC_Base_Body_1'],
-  eyebrow: ['Male_Bushy', 'Male_Bushy_1', 'Male_Bushy_2'],
   eye: ['CC_Base_EyeOcclusion', 'CC_Base_EyeOcclusion_1', 'CC_Base_EyeOcclusion_2'],
-  eyeOcclusion: ['CC_Base_EyeOcclusion', 'CC_Base_EyeOcclusion_1', 'CC_Base_EyeOcclusion_2'],
-  tearLine: ['CC_Base_TearLine', 'CC_Base_TearLine_1', 'CC_Base_TearLine_2'],
   tongue: ['CC_Base_Tongue', 'CC_Base_Tongue_1'],
   hair: ['Side_part_wavy', 'Side_part_wavy_1', 'Side_part_wavy_2'],
 };

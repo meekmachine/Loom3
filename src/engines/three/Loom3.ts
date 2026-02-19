@@ -1320,19 +1320,6 @@ export class Loom3 implements LoomLarge {
 
   getProfile(): Profile { return this.config; }
 
-  /** Get the morphToMesh category → mesh names mapping from the resolved profile. */
-  getMorphToMesh(): Record<string, string[]> { return this.config.morphToMesh ?? {}; }
-
-  /**
-   * Update which meshes a morph category targets and rebuild the morph cache.
-   * Call this when the user toggles meshes in the mapping editor.
-   */
-  setMorphToMesh(category: string, meshNames: string[]): void {
-    if (!this.config.morphToMesh) this.config.morphToMesh = {} as any;
-    this.config.morphToMesh[category] = meshNames;
-    this.rebuildMorphTargetsCache();
-  }
-
   /**
    * Get the mesh names that should receive morph influences for a given AU.
    * Routes by facePart: face AUs → face + eyebrow + occlusion + tearLine meshes,

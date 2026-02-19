@@ -1325,16 +1325,26 @@ export class Loom3 implements LoomLarge {
 
   /**
    * Get the mesh names that should receive morph influences for a given AU.
-   * Matches the internal routing: Tongue → tongue meshes, Eye → eye meshes,
-   * everything else → face meshes.
+   * Routes by facePart: face AUs → face + eyebrow + occlusion + tearLine meshes,
+   * Tongue → tongue, Eye → eye, etc. This ensures auxiliary meshes (eyebrows,
+   * occlusion, tear lines) also receive morph influences from face AUs.
    */
   getMeshNamesForAU(auId: number): string[] {
+    const m = this.config.morphToMesh;
     const info = this.config.auInfo?.[String(auId)];
-    if (!info?.facePart) return this.config.morphToMesh?.face || [];
+    if (!info?.facePart) return m?.face || [];
     switch (info.facePart) {
-      case 'Tongue': return this.config.morphToMesh?.tongue || [];
-      case 'Eye': return this.config.morphToMesh?.eye || [];
-      default: return this.config.morphToMesh?.face || [];
+      case 'Tongue': return m?.tongue || [];
+      case 'Eye': return m?.eye || [];
+      default: {
+        // Face AUs target the body mesh plus all auxiliary face meshes
+        // (eyebrows, occlusion, tear lines) that share morph target names.
+        const face = m?.face || [];
+        const eyebrow = m?.eyebrow || [];
+        const eyeOcclusion = m?.eyeOcclusion || [];
+        const tearLine = m?.tearLine || [];
+        return [...face, ...eyebrow, ...eyeOcclusion, ...tearLine];
+      }
     }
   }
 

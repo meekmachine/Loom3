@@ -247,21 +247,25 @@ export class Loom3 implements LoomLarge {
       ? this.meshByName.get(this.resolvedFaceMeshes[0]) || null
       : null;
 
-    // Make sure all morph-capable meshes are considered face targets (includes brows/hair pieces with morphs)
-    const morphMeshNames = this.meshes
-      .filter((m) => {
-        const infl = m.morphTargetInfluences;
-        const dict = m.morphTargetDictionary;
-        return (Array.isArray(infl) && infl.length > 0) || (dict && Object.keys(dict).length > 0);
-      })
-      .map((m) => m.name)
-      .filter(Boolean);
+    // Auto-detect face morph meshes only if preset/profile doesn't define them.
+    // When morphToMesh.face is already configured (e.g., CC4 preset specifies
+    // body + eyebrows + occlusion + tear lines), trust that configuration.
+    if (!this.config.morphToMesh?.face || this.config.morphToMesh.face.length === 0) {
+      const morphMeshNames = this.meshes
+        .filter((m) => {
+          const infl = m.morphTargetInfluences;
+          const dict = m.morphTargetDictionary;
+          return (Array.isArray(infl) && infl.length > 0) || (dict && Object.keys(dict).length > 0);
+        })
+        .map((m) => m.name)
+        .filter(Boolean);
 
-    if (morphMeshNames.length > 0) {
-      this.config.morphToMesh = {
-        ...this.config.morphToMesh,
-        face: Array.from(new Set(morphMeshNames)),
-      };
+      if (morphMeshNames.length > 0) {
+        this.config.morphToMesh = {
+          ...this.config.morphToMesh,
+          face: Array.from(new Set(morphMeshNames)),
+        };
+      }
     }
 
     this.rebuildMorphTargetsCache();
@@ -1316,6 +1320,24 @@ export class Loom3 implements LoomLarge {
 
   getProfile(): Profile { return this.config; }
 
+  /** Get the morphToMesh category-to-mesh-names mapping from the resolved profile. */
+  getMorphToMesh(): Record<string, string[]> { return this.config.morphToMesh ?? {}; }
+
+  /**
+   * Get the mesh names that should receive morph influences for a given AU.
+   * Routes by facePart: Tongue -> tongue meshes, Eye -> eye meshes,
+   * everything else -> face meshes.
+   */
+  getMeshNamesForAU(auId: number): string[] {
+    const info = this.config.auInfo?.[String(auId)];
+    if (!info?.facePart) return this.config.morphToMesh?.face || [];
+    switch (info.facePart) {
+      case 'Tongue': return this.config.morphToMesh?.tongue || [];
+      case 'Eye': return this.config.morphToMesh?.eye || [];
+      default: return this.config.morphToMesh?.face || [];
+    }
+  }
+
   // ============================================================================
   // HAIR PHYSICS
   // ============================================================================
@@ -1393,16 +1415,6 @@ export class Loom3 implements LoomLarge {
     if (b === 0) return { left: base, right: base };
     if (b < 0) return { left: base, right: base * (1 + b) };
     return { left: base * (1 - b), right: base };
-  }
-
-  private getMeshNamesForAU(auId: number): string[] {
-    const info = this.config.auInfo?.[String(auId)];
-    if (!info?.facePart) return this.config.morphToMesh?.face || [];
-    switch (info.facePart) {
-      case 'Tongue': return this.config.morphToMesh?.tongue || [];
-      case 'Eye': return this.config.morphToMesh?.eye || [];
-      default: return this.config.morphToMesh?.face || [];
-    }
   }
 
   private getAUMorphsBySide(

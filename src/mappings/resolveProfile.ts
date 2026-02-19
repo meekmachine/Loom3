@@ -1,4 +1,4 @@
-import type { Profile, AnnotationRegion, MorphTargetsBySide, HairPhysicsProfileConfig } from '../mappings/types';
+import type { Profile, AnnotationRegion, MorphTargetsBySide, HairPhysicsProfileConfig } from './types';
 import type { BoneBinding } from '../core/types';
 
 type RecordValue = string | number | boolean | object | null | undefined;
@@ -145,7 +145,7 @@ const mergeHairPhysicsConfig = (
  * - Arrays: replaced when override is provided (except annotationRegions).
  * - annotationRegions: merged by region name, shallow field merge (override wins).
  */
-export function mergePreset(base: Profile, override: Partial<Profile>): Profile {
+export function resolveProfile(base: Profile, override: Partial<Profile>): Profile {
   return {
     ...base,
     ...override,

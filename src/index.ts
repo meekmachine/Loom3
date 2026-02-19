@@ -102,6 +102,8 @@ export type {
 
 export type {
   Profile,
+  MorphTargetsBySide,
+  MorphTargetRef,
   HairPhysicsProfileConfig,
   HairMorphTargetMapping,
   HairMorphTargetValueMapping,
@@ -151,7 +153,7 @@ export {
 // ============================================================================
 
 export { CC4_PRESET } from './presets/cc4';
-export { mergePreset } from './presets/mergePreset';
+export { resolveProfile } from './mappings/resolveProfile';
 
 // Individual CC4 preset components (for apps that need direct access)
 export {

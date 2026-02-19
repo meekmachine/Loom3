@@ -8,10 +8,10 @@
 // CC4 preset (default for humanoid characters)
 export { CC4_PRESET, default } from './cc4';
 export * from './cc4';
-export { mergePreset } from './mergePreset';
+export { resolveProfile } from '../mappings/resolveProfile';
 
 import type { Profile } from '../mappings/types';
-import { mergePreset } from './mergePreset';
+import { resolveProfile } from '../mappings/resolveProfile';
 
 // Betta fish preset (skeletal animation, no morphs)
 import { AU_MAPPING_CONFIG } from './bettaFish';
@@ -57,5 +57,5 @@ export function resolvePresetWithOverrides(
   overrides?: Partial<Profile>
 ): Profile {
   const base = resolvePreset(presetType);
-  return overrides ? mergePreset(base, overrides) : base;
+  return overrides ? resolveProfile(base, overrides) : base;
 }

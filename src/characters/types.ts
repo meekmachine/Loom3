@@ -178,6 +178,8 @@ export interface CharacterConfig {
   boneSuffix?: string;
   /** Semantic bone name mapping (e.g., 'HEAD' → '001') */
   boneNodes?: Record<string, string>;
+  /** Regex pattern for fuzzy bone/mesh name matching (e.g., '_\\d+$|\\.\\d+$') */
+  suffixPattern?: string;
 
   // === MARKER CUSTOMIZATION ===
   /** Marker groups for fallback behavior */

@@ -23,8 +23,8 @@ export interface ReadyPayload {
  * Configuration options for the Loom3 engine
  */
 export interface LoomLargeConfig {
-  /** AU to morph target mappings (fully resolved). */
-  profile?: Profile;
+  /** AU to morph target mappings (partial overrides merged via resolveProfile). */
+  profile?: Partial<Profile>;
   /** Preset type to resolve if profile is not provided. */
   presetType?: PresetType | string;
 }

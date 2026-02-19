@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { Profile } from '../../mappings/types';
-import { mergePreset } from '../mergePreset';
+import type { Profile } from './types';
+import { resolveProfile } from './resolveProfile';
 
 const basePreset: Profile = {
   name: 'base',
@@ -18,9 +18,9 @@ const basePreset: Profile = {
   ],
 };
 
-describe('mergePreset', () => {
+describe('resolveProfile', () => {
   it('merges maps and overrides scalars', () => {
-    const result = mergePreset(basePreset, {
+    const result = resolveProfile(basePreset, {
       name: 'override',
       auToMorphs: { 2: { left: [], right: [], center: ['B'] } },
       boneNodes: { HEAD: 'CC_Base_Head' },
@@ -33,7 +33,7 @@ describe('mergePreset', () => {
   });
 
   it('merges annotation regions by name', () => {
-    const result = mergePreset(basePreset, {
+    const result = resolveProfile(basePreset, {
       annotationRegions: [
         { name: 'face', meshes: ['FaceMesh2'], paddingFactor: 1.5 },
         { name: 'mouth', bones: ['Jaw'] },
@@ -50,7 +50,7 @@ describe('mergePreset', () => {
   });
 
   it('does not mutate the base preset', () => {
-    mergePreset(basePreset, {
+    resolveProfile(basePreset, {
       annotationRegions: [{ name: 'face', meshes: ['FaceMesh2'] }],
     });
 

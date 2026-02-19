@@ -64,6 +64,20 @@ export interface Profile {
    */
   suffixPattern?: string;
 
+  /**
+   * Optional: Suffixes that indicate left-side morph targets.
+   * Used for auto-detecting laterality in the mapping editor.
+   * Default: ['_L', ' L']
+   */
+  leftMorphSuffixes?: string[];
+
+  /**
+   * Optional: Suffixes that indicate right-side morph targets.
+   * Used for auto-detecting laterality in the mapping editor.
+   * Default: ['_R', ' R']
+   */
+  rightMorphSuffixes?: string[];
+
   /** Morph category to mesh names (e.g., 'face' → ['CC_Base_Body_1']) */
   morphToMesh: Record<string, string[]>;
 

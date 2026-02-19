@@ -36,7 +36,7 @@ import { AnimationThree, BakedAnimationController } from './AnimationThree';
 import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUpdate, type HairMorphTargets } from './hair/HairPhysicsController';
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import { resolvePreset } from '../../presets';
-import { mergePreset } from '../../presets/mergePreset';
+import { resolveProfile } from '../../mappings/resolveProfile';
 import type { CompositeRotation, BoneBinding } from '../../core/types';
 import type { NodeBase, ResolvedBones } from './types';
 
@@ -170,7 +170,7 @@ export class Loom3 implements LoomLarge {
     }
   ) {
     const basePreset = config.presetType ? resolvePreset(config.presetType) : CC4_PRESET;
-    this.config = config.profile ? mergePreset(basePreset, config.profile) : basePreset;
+    this.config = config.profile ? resolveProfile(basePreset, config.profile) : basePreset;
     this.mixWeights = { ...this.config.auMixDefaults };
     this.animation = animation || new AnimationThree();
 
@@ -1320,13 +1320,13 @@ export class Loom3 implements LoomLarge {
 
   getProfile(): Profile { return this.config; }
 
-  /** Get the morphToMesh category-to-mesh-names mapping from the resolved profile. */
+  /** Get the morphToMesh category → mesh names mapping from the resolved profile. */
   getMorphToMesh(): Record<string, string[]> { return this.config.morphToMesh ?? {}; }
 
   /**
    * Get the mesh names that should receive morph influences for a given AU.
-   * Routes by facePart: Tongue -> tongue meshes, Eye -> eye meshes,
-   * everything else -> face meshes.
+   * Matches the internal routing: Tongue → tongue meshes, Eye → eye meshes,
+   * everything else → face meshes.
    */
   getMeshNamesForAU(auId: number): string[] {
     const info = this.config.auInfo?.[String(auId)];

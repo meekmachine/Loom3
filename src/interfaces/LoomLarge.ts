@@ -107,6 +107,16 @@ export interface LoomLarge extends Animation, Hair {
    * Get current AU mappings configuration
    */
   getProfile(): Profile;
+
+  /**
+   * Get the morphToMesh category → mesh names mapping
+   */
+  getMorphToMesh(): Record<string, string[]>;
+
+  /**
+   * Update which meshes a morph category targets (rebuilds morph cache)
+   */
+  setMorphToMesh(category: string, meshNames: string[]): void;
 }
 
 // Backward-compatible aliases (deprecated).

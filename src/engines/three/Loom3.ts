@@ -1740,9 +1740,12 @@ export class Loom3 implements LoomLarge {
     root.traverse((obj: any) => {
       if (!obj.isMesh || !obj.name) return;
 
-      // Try config.meshes first, then fall back to CC4_MESHES for backwards compatibility.
-      // No name-based inference here; presets should provide any fallback mapping.
-      const meshInfo = this.config.meshes?.[obj.name] ?? CC4_MESHES[obj.name];
+      // Merge config.meshes (user overrides) with CC4_MESHES (preset defaults).
+      // User overrides may only contain material settings, so always merge with
+      // the preset to preserve category and other fields needed for registration.
+      const configMesh = this.config.meshes?.[obj.name];
+      const presetMesh = CC4_MESHES[obj.name];
+      const meshInfo = configMesh && presetMesh ? { ...presetMesh, ...configMesh } : configMesh ?? presetMesh;
       const category = meshInfo?.category;
 
       // Auto-register hair and eyebrow meshes for hair physics

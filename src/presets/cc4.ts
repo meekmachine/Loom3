@@ -70,13 +70,13 @@ export const AU_TO_MORPHS: Record<number, MorphTargetsBySide> = {
     center: [],
   },
   13: {
-    left: ['Mouth_Dimple_L'],
-    right: ['Mouth_Dimple_R'],
+    left: ['Mouth_Smile_L', 'Mouth_Up_Upper_L'],
+    right: ['Mouth_Smile_R', 'Mouth_Up_Upper_R'],
     center: [],
   },
   14: {
-    left: ['Mouth_Press_L'],
-    right: ['Mouth_Press_R'],
+    left: ['Mouth_Dimple_L'],
+    right: ['Mouth_Dimple_R'],
     center: [],
   },
   15: {

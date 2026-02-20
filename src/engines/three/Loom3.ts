@@ -1075,25 +1075,17 @@ export class Loom3 implements LoomLarge {
     });
   }
 
-  /** Store original emissive state for highlight reset */
+  /** Store original emissive colors for highlight reset */
   private originalEmissive = new Map<string, { color: number; intensity: number }>();
-  private highlightTransitions: TransitionHandle[] = [];
 
   /**
-   * Highlight a mesh with an animated emissive glow that fades in/out.
-   * Only affects emissive — no opacity or transparency changes.
+   * Highlight a mesh with an emissive glow effect
    * @param meshName - Name of the mesh to highlight (null to clear all highlights)
-   * @param color - Highlight color (default: soft teal 0x4ac8c8)
-   * @param intensity - Emissive intensity (default: 0.6)
+   * @param color - Highlight color (default: cyan 0x00ffff)
+   * @param intensity - Emissive intensity (default: 0.5)
    */
-  highlightMesh(meshName: string | null, color: number = 0x4ac8c8, intensity: number = 0.6): void {
+  highlightMesh(meshName: string | null, color: number = 0x00ffff, intensity: number = 0.5): void {
     if (!this.model) return;
-
-    // Cancel any in-flight highlight transitions
-    for (const t of this.highlightTransitions) t.cancel();
-    this.highlightTransitions = [];
-
-    const fadeDurationMs = 180;
 
     this.model.traverse((obj: any) => {
       if (!obj.isMesh) return;
@@ -1103,36 +1095,24 @@ export class Loom3 implements LoomLarge {
       for (const mat of materials) {
         if (!mat || !('emissive' in mat)) continue;
 
-        // Store original emissive on first encounter
-        if (!this.originalEmissive.has(obj.name)) {
-          this.originalEmissive.set(obj.name, {
-            color: mat.emissive.getHex(),
-            intensity: mat.emissiveIntensity || 0,
-          });
-        }
-
-        const original = this.originalEmissive.get(obj.name)!;
-
         if (meshName === null || obj.name !== meshName) {
-          // Fade emissive back to original
-          mat.emissive.setHex(original.color);
-          const from = mat.emissiveIntensity || 0;
-          if (from !== original.intensity) {
-            this.highlightTransitions.push(
-              this.animation.addTransition(`highlight_${obj.name}`, from, original.intensity, fadeDurationMs, (v) => {
-                mat.emissiveIntensity = v;
-              }),
-            );
+          // Reset to original emissive
+          const original = this.originalEmissive.get(obj.name);
+          if (original) {
+            mat.emissive.setHex(original.color);
+            mat.emissiveIntensity = original.intensity;
           }
-        } else {
-          // Fade in highlight glow
+        } else if (obj.name === meshName) {
+          // Store original if not already stored
+          if (!this.originalEmissive.has(obj.name)) {
+            this.originalEmissive.set(obj.name, {
+              color: mat.emissive.getHex(),
+              intensity: mat.emissiveIntensity || 0,
+            });
+          }
+          // Apply highlight
           mat.emissive.setHex(color);
-          const from = mat.emissiveIntensity || 0;
-          this.highlightTransitions.push(
-            this.animation.addTransition(`highlight_${obj.name}`, from, intensity, fadeDurationMs, (v) => {
-              mat.emissiveIntensity = v;
-            }),
-          );
+          mat.emissiveIntensity = intensity;
         }
       }
     });

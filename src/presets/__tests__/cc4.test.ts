@@ -51,8 +51,8 @@ describe('CC4 Preset', () => {
       const bilateralAUs = [1, 2, 4, 5, 6, 7, 12, 15, 43];
       for (const auId of bilateralAUs) {
         const morphs = AU_TO_MORPHS[auId];
-        const hasLeft = morphs.left.some(m => /_L$|Left$/i.test(m));
-        const hasRight = morphs.right.some(m => /_R$|Right$/i.test(m));
+        const hasLeft = morphs.left.some(m => typeof m === 'string' && /_L$|Left$/i.test(m));
+        const hasRight = morphs.right.some(m => typeof m === 'string' && /_R$|Right$/i.test(m));
         expect(hasLeft, `AU ${auId} should have left morph`).toBe(true);
         expect(hasRight, `AU ${auId} should have right morph`).toBe(true);
       }

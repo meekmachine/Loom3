@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { Loom3, collectMorphMeshes, CC4_PRESET } from 'loom3';
+ * import { Loom3, collectMorphMeshes, CC4_PRESET } from '@lovelace_lol/loom3';
  * import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
  *
  * const loom = new Loom3({ presetType: 'cc4' });

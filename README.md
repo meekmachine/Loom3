@@ -4,7 +4,7 @@ The missing character controller for Three.js, allowing you to bring humanoid an
 
 Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units to the morph targets and bone transforms found in Character Creator 4 (CC4) characters. Instead of manually figuring out which blend shapes correspond to which facial movements, you can simply say `setAU(12, 0.8)` and the library handles the rest.
 
-> **Note:** If you previously used the `loomlarge` npm package, it has been renamed to `loom3`.
+> **Note:** If you previously used the `loomlarge` npm package, it has been renamed to `@lovelace_lol/loom3`.
 
 > **Screenshot placeholder:** Add a hero image showing a character with facial expressions controlled by Loom3
 
@@ -37,7 +37,7 @@ Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https:
 ### Install the package
 
 ```bash
-npm install loom3
+npm install @lovelace_lol/loom3
 ```
 
 ### Peer dependency
@@ -53,7 +53,7 @@ npm install three
 ```typescript
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { Loom3, collectMorphMeshes, CC4_PRESET } from 'loom3';
+import { Loom3, collectMorphMeshes, CC4_PRESET } from '@lovelace_lol/loom3';
 
 // 1. Create the Loom3 controller with a preset
 const loom = new Loom3({ profile: CC4_PRESET });
@@ -81,7 +81,7 @@ loader.load('/character.glb', (gltf) => {
 // This drives all transitions and animations
 ```
 
-If you’re implementing a custom renderer, target the `LoomLarge` interface exported from `loom3`.
+If you’re implementing a custom renderer, target the `LoomLarge` interface exported from `@lovelace_lol/loom3`.
 
 ### Quick start examples
 
@@ -123,7 +123,7 @@ await loom.transitionAU(12, 0, 300).promise;
 This utility function traverses a Three.js scene and returns all meshes that have `morphTargetInfluences` (i.e., blend shapes). It's the recommended way to gather meshes for Loom3:
 
 ```typescript
-import { collectMorphMeshes } from 'loom3';
+import { collectMorphMeshes } from '@lovelace_lol/loom3';
 
 const meshes = collectMorphMeshes(gltf.scene);
 // Returns: Array of THREE.Mesh objects with morph targets
@@ -142,7 +142,7 @@ Presets define how FACS Action Units map to your character's morph targets and b
 ### What's in a preset?
 
 ```typescript
-import { CC4_PRESET } from 'loom3';
+import { CC4_PRESET } from '@lovelace_lol/loom3';
 
 // CC4_PRESET contains:
 {
@@ -206,7 +206,7 @@ import { CC4_PRESET } from 'loom3';
 ### Passing a preset to Loom3
 
 ```typescript
-import { Loom3, CC4_PRESET } from 'loom3';
+import { Loom3, CC4_PRESET } from '@lovelace_lol/loom3';
 
 const loom = new Loom3({ profile: CC4_PRESET });
 ```
@@ -214,7 +214,7 @@ const loom = new Loom3({ profile: CC4_PRESET });
 You can also resolve presets by name and apply overrides without cloning the full preset:
 
 ```typescript
-import { Loom3 } from 'loom3';
+import { Loom3 } from '@lovelace_lol/loom3';
 
 const loom = new Loom3({
   presetType: 'cc4',
@@ -231,8 +231,8 @@ const loom = new Loom3({
 A **profile** is a partial override object that extends a base preset. Use it to customize a single character without copying the full preset:
 
 ```typescript
-import type { Profile } from 'loom3';
-import { Loom3 } from 'loom3';
+import type { Profile } from '@lovelace_lol/loom3';
+import { Loom3 } from '@lovelace_lol/loom3';
 
 const DAISY_PROFILE: Profile = {
   morphToMesh: { face: ['Object_9'] },
@@ -324,7 +324,7 @@ import {
   validateMappings,
   generateMappingCorrections,
   resolvePreset,
-} from 'loom3';
+} from '@lovelace_lol/loom3';
 
 const preset = resolvePreset('cc4');
 const modelData = extractModelData({ model, meshes, animations });
@@ -394,7 +394,7 @@ This is especially useful for:
 Use `mergePreset` to override specific mappings while keeping the rest:
 
 ```typescript
-import { CC4_PRESET, mergePreset } from 'loom3';
+import { CC4_PRESET, mergePreset } from '@lovelace_lol/loom3';
 
 const MY_PRESET = mergePreset(CC4_PRESET, {
 
@@ -420,7 +420,7 @@ const loom = new Loom3({ profile: MY_PRESET });
 ### Creating a preset from scratch
 
 ```typescript
-import { Profile } from 'loom3';
+import { Profile } from '@lovelace_lol/loom3';
 
 const CUSTOM_PRESET: Profile = {
   auToMorphs: {
@@ -480,7 +480,7 @@ Some models (like fish) rely entirely on bone rotations for animation:
 Here's a complete example of a preset for a betta fish:
 
 ```typescript
-import type { BoneBinding, AUInfo, CompositeRotation } from 'loom3';
+import type { BoneBinding, AUInfo, CompositeRotation } from '@lovelace_lol/loom3';
 
 // Define semantic bone mappings
 export const FISH_BONE_NODES = {
@@ -685,7 +685,7 @@ export const FISH_AU_MAPPING_CONFIG = {
 ### Using the fish preset
 
 ```typescript
-import { Loom3 } from 'loom3';
+import { Loom3 } from '@lovelace_lol/loom3';
 import { FISH_AU_MAPPING_CONFIG, FishAction } from './presets/bettaFish';
 
 const fishController = new Loom3({
@@ -857,7 +857,7 @@ Only AUs that have both `auToMorphs` AND `auToBones` entries support mixing. Com
 - AU61-64 (Eye movements)
 
 ```typescript
-import { isMixedAU } from 'loom3';
+import { isMixedAU } from '@lovelace_lol/loom3';
 
 if (isMixedAU(26)) {
   console.log('AU26 supports morph/bone mixing');
@@ -1018,7 +1018,7 @@ loom.setAU(52, 0.7);
 You can access pair information programmatically:
 
 ```typescript
-import { CONTINUUM_PAIRS_MAP } from 'loom3';
+import { CONTINUUM_PAIRS_MAP } from '@lovelace_lol/loom3';
 
 const pair = CONTINUUM_PAIRS_MAP[51];
 // { pairId: 52, isNegative: true, axis: 'yaw', node: 'HEAD' }
@@ -1337,7 +1337,7 @@ loader.load('/character.glb', (gltf) => {
 Hair physics defaults live in the preset/profile and are applied automatically at init:
 
 ```typescript
-import type { Profile } from 'loom3';
+import type { Profile } from '@lovelace_lol/loom3';
 
 const profile: Profile = {
   // ...all your usual AU mappings...

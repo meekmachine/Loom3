@@ -13,5 +13,5 @@
 - Head yaw/pitch/roll max degrees increased for wider head turns.
 
 ## Naming + exports
-- README updated to `Loom3` terminology and `loom3` package usage.
+- README updated to `Loom3` terminology and `@lovelace_lol/loom3` package usage.
 - `Loom3` is now the primary Three.js implementation name; legacy aliases remain for compatibility.

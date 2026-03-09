@@ -1,5 +1,5 @@
 {
-  "name": "loom_three",
+  "name": "@lovelace_lol/loom3",
   "version": "1.0.0",
   "description": "Lightweight 3D character animation engine for facial AUs, visemes, and bone-driven motion",
   "type": "module",
@@ -18,6 +18,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

@@ -42,6 +42,17 @@ jobs:
       - name: Run typecheck
         run: npm run typecheck
 
+      - name: Verify NPM auth
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "NPM_KEY is not configured for this workflow environment."
+            exit 1
+          fi
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+          npm whoami
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_KEY }}
+
       - name: Bump version
         if: github.event.inputs.version != 'skip' && github.event.inputs.version != ''
         run: |
@@ -52,7 +63,6 @@ jobs:
 
       - name: Publish to NPM
         run: |
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_KEY }}

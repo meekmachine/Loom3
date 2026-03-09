@@ -1,5 +1,5 @@
 {
-  "name": "loom3",
+  "name": "loom_three",
   "version": "1.0.0",
   "description": "Lightweight 3D character animation engine for facial AUs, visemes, and bone-driven motion",
   "type": "module",

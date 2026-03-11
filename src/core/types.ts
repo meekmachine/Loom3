@@ -210,6 +210,12 @@ export interface ClipOptions {
   mixerWeight?: number;
   /** Left/right balance for bilateral AUs (-1 to 1, default: 0) */
   balance?: number;
+  /**
+   * Per-curve left/right balance overrides keyed by curve id (typically AU ids as strings).
+   * Example: { "43": 1, "12": 0.7 }.
+   * Falls back to `balance` when a curve id is not present.
+   */
+  balanceMap?: Record<string, number>;
   /** Jaw scale for viseme playback (default: 1.0) */
   jawScale?: number;
   /** Intensity scale multiplier (default: 1.0) */

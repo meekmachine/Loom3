@@ -32,6 +32,7 @@ import type {
 } from '../../core/types';
 import type { Profile } from '../../mappings/types';
 import type { ResolvedBones } from './types';
+import { resolveCurveBalance } from './balanceUtils';
 
 type Transition = {
   key: string;
@@ -481,7 +482,8 @@ export class BakedAnimationController {
 
     const tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack> = [];
     const intensityScale = options?.intensityScale ?? 1.0;
-    const balance = options?.balance ?? 0;
+    const globalBalance = options?.balance ?? 0;
+    const balanceMap = options?.balanceMap;
     const meshNames = options?.meshNames;
     let maxTime = 0;
 
@@ -547,9 +549,11 @@ export class BakedAnimationController {
           const rightKeys = morphsBySide?.right ?? [];
           const centerKeys = morphsBySide?.center ?? [];
 
+          const curveBalance = resolveCurveBalance(curveId, globalBalance, balanceMap);
+
           for (const morphKey of leftKeys) {
             let effectiveScale = intensityScale * mixWeight;
-            if (balance > 0) effectiveScale *= (1 - balance);
+            if (curveBalance > 0) effectiveScale *= (1 - curveBalance);
             if (typeof morphKey === 'number') {
               this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
             } else {
@@ -558,7 +562,7 @@ export class BakedAnimationController {
           }
           for (const morphKey of rightKeys) {
             let effectiveScale = intensityScale * mixWeight;
-            if (balance < 0) effectiveScale *= (1 + balance);
+            if (curveBalance < 0) effectiveScale *= (1 + curveBalance);
             if (typeof morphKey === 'number') {
               this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
             } else {

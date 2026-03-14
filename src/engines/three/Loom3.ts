@@ -188,6 +188,7 @@ export class Loom3 implements LoomLarge {
       getModel: () => this.model,
       getMeshes: () => this.meshes,
       getMeshByName: (name) => this.meshByName.get(name),
+      getMeshNamesForAU: (auId) => this.getMeshNamesForAU(auId),
       getBones: () => this.bones,
       getConfig: () => this.config,
       getCompositeRotations: () => this.compositeRotations,

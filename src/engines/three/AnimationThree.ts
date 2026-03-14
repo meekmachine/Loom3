@@ -174,6 +174,7 @@ export interface BakedAnimationHost {
   getModel: () => Object3D | null;
   getMeshes: () => Mesh[];
   getMeshByName: (name: string) => Mesh | undefined;
+  getMeshNamesForAU?: (auId: number) => string[];
   getBones: () => ResolvedBones;
   getConfig: () => Profile;
   getCompositeRotations: () => CompositeRotation[];
@@ -202,6 +203,21 @@ export class BakedAnimationController {
 
   constructor(host: BakedAnimationHost) {
     this.host = host;
+  }
+
+  private getMeshNamesForAU(auId: number, config: Profile, explicitMeshNames?: string[]): string[] {
+    if (explicitMeshNames && explicitMeshNames.length > 0) {
+      return explicitMeshNames;
+    }
+
+    if (typeof this.host.getMeshNamesForAU === 'function') {
+      return this.host.getMeshNamesForAU(auId) || [];
+    }
+
+    const facePart = config.auInfo?.[String(auId)]?.facePart;
+    if (facePart === 'Tongue') return config.morphToMesh?.tongue || [];
+    if (facePart === 'Eye') return config.morphToMesh?.eye || [];
+    return config.morphToMesh?.face || [];
   }
 
   update(dtSeconds: number): void {
@@ -542,6 +558,7 @@ export class BakedAnimationController {
             this.addMorphTracks(tracks, visemeKey, keyframes, intensityScale, meshNames);
           }
         } else {
+          const auMeshNames = this.getMeshNamesForAU(auId, config, meshNames);
           const morphsBySide = config.auToMorphs[auId];
           const mixWeight = this.host.isMixedAU(auId) ? this.host.getAUMixWeight(auId) : 1.0;
 
@@ -555,26 +572,26 @@ export class BakedAnimationController {
             let effectiveScale = intensityScale * mixWeight;
             if (curveBalance > 0) effectiveScale *= (1 - curveBalance);
             if (typeof morphKey === 'number') {
-              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
+              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, auMeshNames);
             } else {
-              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
+              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale, auMeshNames);
             }
           }
           for (const morphKey of rightKeys) {
             let effectiveScale = intensityScale * mixWeight;
             if (curveBalance < 0) effectiveScale *= (1 + curveBalance);
             if (typeof morphKey === 'number') {
-              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
+              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, auMeshNames);
             } else {
-              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
+              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale, auMeshNames);
             }
           }
           for (const morphKey of centerKeys) {
             const effectiveScale = intensityScale * mixWeight;
             if (typeof morphKey === 'number') {
-              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
+              this.addMorphIndexTracks(tracks, morphKey, keyframes, effectiveScale, auMeshNames);
             } else {
-              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale, meshNames);
+              this.addMorphTracks(tracks, morphKey, keyframes, effectiveScale, auMeshNames);
             }
           }
         }
@@ -1067,13 +1084,11 @@ export class BakedAnimationController {
     meshNames?: string[]
   ): void {
     const config = this.host.getConfig();
-    const meshes = this.host.getMeshes();
     const hasExplicitMeshes = !!(meshNames && meshNames.length > 0);
     const targetMeshNames = hasExplicitMeshes ? meshNames : (config.morphToMesh?.face || []);
     const targetMeshes = targetMeshNames.length
       ? targetMeshNames.map((name) => this.host.getMeshByName(name)).filter(Boolean) as Mesh[]
-      : meshes;
-    let added = false;
+      : [];
 
     const addTrackForMesh = (mesh: Mesh) => {
       const dict = mesh.morphTargetDictionary;
@@ -1093,17 +1108,10 @@ export class BakedAnimationController {
       const track = new NumberKeyframeTrack(trackName, times, values);
 
       tracks.push(track);
-      added = true;
     };
 
     for (const mesh of targetMeshes) {
       addTrackForMesh(mesh);
-    }
-
-    if (!added && !hasExplicitMeshes && targetMeshes !== meshes) {
-      for (const mesh of meshes) {
-        addTrackForMesh(mesh);
-      }
     }
   }
 
@@ -1116,13 +1124,11 @@ export class BakedAnimationController {
   ): void {
     if (!Number.isInteger(morphIndex) || morphIndex < 0) return;
     const config = this.host.getConfig();
-    const meshes = this.host.getMeshes();
     const hasExplicitMeshes = !!(meshNames && meshNames.length > 0);
     const targetMeshNames = hasExplicitMeshes ? meshNames : (config.morphToMesh?.face || []);
     const targetMeshes = targetMeshNames.length
       ? targetMeshNames.map((name) => this.host.getMeshByName(name)).filter(Boolean) as Mesh[]
-      : meshes;
-    let added = false;
+      : [];
 
     const addTrackForMesh = (mesh: Mesh) => {
       const infl = mesh.morphTargetInfluences;
@@ -1140,17 +1146,10 @@ export class BakedAnimationController {
       const track = new NumberKeyframeTrack(trackName, times, values);
 
       tracks.push(track);
-      added = true;
     };
 
     for (const mesh of targetMeshes) {
       addTrackForMesh(mesh);
-    }
-
-    if (!added && !hasExplicitMeshes && targetMeshes !== meshes) {
-      for (const mesh of meshes) {
-        addTrackForMesh(mesh);
-      }
     }
   }
 

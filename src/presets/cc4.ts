@@ -917,6 +917,14 @@ export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {
   hair: ['Side_part_wavy', 'Side_part_wavy_1', 'Side_part_wavy_2'],
 };
 
+/** Map AU facePart labels to morphToMesh categories for configurable AU mesh routing. */
+export const AU_FACEPART_TO_MESH_CATEGORY: Record<string, MorphCategory> = {
+  Eye: 'eye',
+  Eyes: 'eye',
+  Eyelids: 'eye',
+  Tongue: 'tongue',
+};
+
 // ============================================================================
 // HAIR PHYSICS DEFAULTS
 // ============================================================================
@@ -971,7 +979,9 @@ export const CC4_PRESET: Profile = {
   bonePrefix: CC4_BONE_PREFIX,
   suffixPattern: CC4_SUFFIX_PATTERN,
   morphToMesh: MORPH_TO_MESH,
+  auFacePartToMeshCategory: AU_FACEPART_TO_MESH_CATEGORY,
   visemeKeys: VISEME_KEYS,
+  visemeMeshCategory: 'viseme',
   visemeJawAmounts: VISEME_JAW_AMOUNTS,
   auMixDefaults: AU_MIX_DEFAULTS,
   auInfo: AU_INFO,

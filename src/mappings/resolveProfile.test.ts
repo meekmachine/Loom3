@@ -8,7 +8,9 @@ const basePreset: Profile = {
   auToBones: { 51: [{ node: 'HEAD', channel: 'ry', scale: 1, maxDegrees: 30 }] },
   boneNodes: { HEAD: 'Head' },
   morphToMesh: { face: ['FaceMesh'] },
+  auFacePartToMeshCategory: { Eye: 'eye' },
   visemeKeys: ['viseme_aa'],
+  visemeMeshCategory: 'viseme',
   annotationRegions: [
     {
       name: 'face',
@@ -55,5 +57,16 @@ describe('resolveProfile', () => {
     });
 
     expect(basePreset.annotationRegions?.[0].meshes).toBeUndefined();
+  });
+
+  it('merges auFacePartToMeshCategory mappings', () => {
+    const result = resolveProfile(basePreset, {
+      auFacePartToMeshCategory: { Tongue: 'tongue' },
+    });
+
+    expect(result.auFacePartToMeshCategory).toEqual({
+      Eye: 'eye',
+      Tongue: 'tongue',
+    });
   });
 });

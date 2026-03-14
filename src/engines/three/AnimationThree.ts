@@ -175,6 +175,7 @@ export interface BakedAnimationHost {
   getMeshes: () => Mesh[];
   getMeshByName: (name: string) => Mesh | undefined;
   getMeshNamesForAU?: (auId: number) => string[];
+  getMeshNamesForViseme?: () => string[];
   getBones: () => ResolvedBones;
   getConfig: () => Profile;
   getCompositeRotations: () => CompositeRotation[];
@@ -215,8 +216,25 @@ export class BakedAnimationController {
     }
 
     const facePart = config.auInfo?.[String(auId)]?.facePart;
-    if (facePart === 'Tongue') return config.morphToMesh?.tongue || [];
-    if (facePart === 'Eye') return config.morphToMesh?.eye || [];
+    if (facePart) {
+      const category = config.auFacePartToMeshCategory?.[facePart];
+      if (category) return config.morphToMesh?.[category] || [];
+    }
+    return config.morphToMesh?.face || [];
+  }
+
+  private getMeshNamesForViseme(config: Profile, explicitMeshNames?: string[]): string[] {
+    if (explicitMeshNames && explicitMeshNames.length > 0) {
+      return explicitMeshNames;
+    }
+
+    if (typeof this.host.getMeshNamesForViseme === 'function') {
+      return this.host.getMeshNamesForViseme() || [];
+    }
+
+    const category = config.visemeMeshCategory || (config.morphToMesh?.viseme ? 'viseme' : 'face');
+    const visemeMeshes = config.morphToMesh?.[category];
+    if (visemeMeshes && visemeMeshes.length > 0) return visemeMeshes;
     return config.morphToMesh?.face || [];
   }
 
@@ -551,11 +569,12 @@ export class BakedAnimationController {
         const auId = Number(curveId);
 
         if (isVisemeIndex(curveId)) {
+          const visemeMeshNames = this.getMeshNamesForViseme(config, meshNames);
           const visemeKey = config.visemeKeys[auId];
           if (typeof visemeKey === 'number') {
-            this.addMorphIndexTracks(tracks, visemeKey, keyframes, intensityScale, meshNames);
+            this.addMorphIndexTracks(tracks, visemeKey, keyframes, intensityScale, visemeMeshNames);
           } else if (visemeKey) {
-            this.addMorphTracks(tracks, visemeKey, keyframes, intensityScale, meshNames);
+            this.addMorphTracks(tracks, visemeKey, keyframes, intensityScale, visemeMeshNames);
           }
         } else {
           const auMeshNames = this.getMeshNamesForAU(auId, config, meshNames);

@@ -58,4 +58,33 @@ describe('Loom3 face mesh fallback selection', () => {
     expect(face.morphTargetInfluences?.[faceIndex as number]).toBe(1);
     expect(hair.morphTargetInfluences?.[hairIndex as number]).toBe(0);
   });
+
+  it('routes AU meshes using configurable auFacePartToMeshCategory', () => {
+    const face = makeMorphMesh('FaceMesh', ['Eye_Blink_L']);
+    const eye = makeMorphMesh('EyeMesh', ['Eye_Blink_L']);
+
+    const model = new Object3D();
+    model.add(face, eye);
+
+    const engine = new Loom3({
+      presetType: 'cc4',
+      profile: {
+        morphToMesh: { face: ['FaceMesh'], eye: ['EyeMesh'] },
+        auToMorphs: { 43: { left: ['Eye_Blink_L'], right: [], center: [] } },
+        auInfo: { '43': { id: '43', name: 'Blink', facePart: 'Eyelids' } },
+        auFacePartToMeshCategory: { Eyelids: 'eye' },
+      },
+    });
+
+    engine.onReady({ model, meshes: [face, eye] });
+    engine.setAU(43, 1);
+
+    const faceIndex = face.morphTargetDictionary?.['Eye_Blink_L'];
+    const eyeIndex = eye.morphTargetDictionary?.['Eye_Blink_L'];
+    expect(faceIndex).toBeTypeOf('number');
+    expect(eyeIndex).toBeTypeOf('number');
+
+    expect(face.morphTargetInfluences?.[faceIndex as number]).toBe(0);
+    expect(eye.morphTargetInfluences?.[eyeIndex as number]).toBe(1);
+  });
 });

@@ -81,8 +81,21 @@ export interface Profile {
   /** Morph category to mesh names (e.g., 'face' → ['CC_Base_Body_1']) */
   morphToMesh: Record<string, string[]>;
 
+  /**
+   * Optional map from AU `facePart` labels (from `auInfo`) to `morphToMesh` categories.
+   * This makes AU mesh routing fully preset/profile configurable.
+   * Example: { Eye: 'eye', Eyes: 'eye', Eyelids: 'eye', Tongue: 'tongue' }.
+   */
+  auFacePartToMeshCategory?: Record<string, string>;
+
   /** Viseme targets in order (typically 15 phoneme positions) */
   visemeKeys: MorphTargetRef[];
+
+  /**
+   * Optional `morphToMesh` category to use for viseme morph routing.
+   * Falls back to `morphToMesh.viseme` (if present), then `morphToMesh.face`.
+   */
+  visemeMeshCategory?: string;
 
   /** Optional: Jaw opening amounts per viseme index (0-1). Used for auto-generating jaw rotation in clips. */
   visemeJawAmounts?: number[];

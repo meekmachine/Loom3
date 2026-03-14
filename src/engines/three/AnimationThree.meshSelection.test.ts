@@ -14,12 +14,19 @@ function makeMorphMesh(name: string, dictionary: Record<string, number>): Mesh {
 
 function getMeshNamesForAU(profile: Profile, auId: number): string[] {
   const info = profile.auInfo?.[String(auId)];
-  if (!info?.facePart) return profile.morphToMesh?.face || [];
-  switch (info.facePart) {
-    case 'Tongue': return profile.morphToMesh?.tongue || [];
-    case 'Eye': return profile.morphToMesh?.eye || [];
-    default: return profile.morphToMesh?.face || [];
+  const facePart = info?.facePart;
+  if (facePart) {
+    const category = profile.auFacePartToMeshCategory?.[facePart];
+    if (category) return profile.morphToMesh?.[category] || [];
   }
+  return profile.morphToMesh?.face || [];
+}
+
+function getMeshNamesForViseme(profile: Profile): string[] {
+  const category = profile.visemeMeshCategory || (profile.morphToMesh?.viseme ? 'viseme' : 'face');
+  const visemeMeshes = profile.morphToMesh?.[category];
+  if (visemeMeshes && visemeMeshes.length > 0) return visemeMeshes;
+  return profile.morphToMesh?.face || [];
 }
 
 function makeHost(profile: Profile, meshes: Mesh[]): BakedAnimationHost {
@@ -29,6 +36,7 @@ function makeHost(profile: Profile, meshes: Mesh[]): BakedAnimationHost {
     getMeshes: () => meshes,
     getMeshByName: (name: string) => meshMap.get(name),
     getMeshNamesForAU: (auId: number) => getMeshNamesForAU(profile, auId),
+    getMeshNamesForViseme: () => getMeshNamesForViseme(profile),
     getBones: () => ({} as any),
     getConfig: () => profile,
     getCompositeRotations: () => [],
@@ -51,6 +59,7 @@ describe('BakedAnimationController mesh selection', () => {
       boneNodes: {},
       morphToMesh: { face: ['FaceMesh'], eye: ['EyeMesh'] },
       visemeKeys: [],
+      auFacePartToMeshCategory: { Eye: 'eye' },
       auInfo: {
         '61': { id: '61', name: 'Eye Left', facePart: 'Eye' },
       },
@@ -91,5 +100,32 @@ describe('BakedAnimationController mesh selection', () => {
     );
 
     expect(clip).toBeNull();
+  });
+
+  it('routes viseme clip tracks using configurable viseme mesh category', () => {
+    const faceMesh = makeMorphMesh('FaceMesh', { Viseme_AA: 0 });
+    const visemeMesh = makeMorphMesh('VisemeMesh', { Viseme_AA: 0 });
+
+    const profile: Profile = {
+      auToMorphs: {},
+      auToBones: {},
+      boneNodes: {},
+      morphToMesh: { face: ['FaceMesh'], viseme: ['VisemeMesh'] },
+      visemeKeys: ['Viseme_AA'],
+      visemeMeshCategory: 'viseme',
+    };
+
+    const host = makeHost(profile, [faceMesh, visemeMesh]);
+    const controller = new BakedAnimationController(host);
+    const clip = controller.snippetToClip(
+      'viseme-routing',
+      { '0': [{ time: 0, intensity: 0 }, { time: 1, intensity: 1 }] },
+      { snippetCategory: 'visemeSnippet' }
+    );
+
+    expect(clip).toBeTruthy();
+    const trackNames = clip!.tracks.map((track) => track.name);
+    expect(trackNames.some((name) => name.includes((visemeMesh as any).uuid))).toBe(true);
+    expect(trackNames.some((name) => name.includes((faceMesh as any).uuid))).toBe(false);
   });
 });

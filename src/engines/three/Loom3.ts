@@ -189,6 +189,7 @@ export class Loom3 implements LoomLarge {
       getMeshes: () => this.meshes,
       getMeshByName: (name) => this.meshByName.get(name),
       getMeshNamesForAU: (auId) => this.getMeshNamesForAU(auId),
+      getMeshNamesForViseme: () => this.getMeshNamesForViseme(),
       getBones: () => this.bones,
       getConfig: () => this.config,
       getCompositeRotations: () => this.compositeRotations,
@@ -321,9 +322,10 @@ export class Loom3 implements LoomLarge {
 
     for (let i = 0; i < (this.config.visemeKeys || []).length; i += 1) {
       const key = this.config.visemeKeys[i];
+      const visemeMeshNames = this.getMeshNamesForViseme();
       const targets = typeof key === 'number'
-        ? this.resolveMorphTargetsByIndex(key)
-        : this.resolveMorphTargets(key);
+        ? this.resolveMorphTargetsByIndex(key, visemeMeshNames)
+        : this.resolveMorphTargets(key, visemeMeshNames);
       this.resolvedVisemeTargets[i] = targets;
     }
   }
@@ -899,10 +901,11 @@ export class Loom3 implements LoomLarge {
       this.applyMorphTargets(targets, val);
     } else {
       const morphKey = this.config.visemeKeys[visemeIndex];
+      const visemeMeshNames = this.getMeshNamesForViseme();
       if (typeof morphKey === 'number') {
-        this.setMorphInfluence(morphKey, val);
+        this.setMorphInfluence(morphKey, val, visemeMeshNames);
       } else if (typeof morphKey === 'string') {
-        this.setMorph(morphKey, val);
+        this.setMorph(morphKey, val, visemeMeshNames);
       }
     }
 
@@ -920,10 +923,11 @@ export class Loom3 implements LoomLarge {
     const morphKey = this.config.visemeKeys[visemeIndex];
     const target = clamp01(to);
     this.visemeValues[visemeIndex] = target;
+    const visemeMeshNames = this.getMeshNamesForViseme();
 
     const morphHandle = typeof morphKey === 'number'
-      ? this.transitionMorphInfluence(morphKey, target, durationMs)
-      : this.transitionMorph(morphKey, target, durationMs);
+      ? this.transitionMorphInfluence(morphKey, target, durationMs, visemeMeshNames)
+      : this.transitionMorph(morphKey, target, durationMs, visemeMeshNames);
 
     const jawAmount = Loom3.VISEME_JAW_AMOUNTS[visemeIndex] * target * jawScale;
     if (Math.abs(jawScale) <= 1e-6 || Math.abs(jawAmount) <= 1e-6) {
@@ -1300,17 +1304,25 @@ export class Loom3 implements LoomLarge {
 
   /**
    * Get the mesh names that should receive morph influences for a given AU.
-   * Routes by facePart: Tongue → tongue, Eye → eye, everything else → face.
+   * Routing is driven by `auFacePartToMeshCategory` in profile config.
    */
   getMeshNamesForAU(auId: number): string[] {
     const m = this.config.morphToMesh;
     const info = this.config.auInfo?.[String(auId)];
-    if (!info?.facePart) return m?.face || [];
-    switch (info.facePart) {
-      case 'Tongue': return m?.tongue || [];
-      case 'Eye': return m?.eye || [];
-      default: return m?.face || [];
+    const facePart = info?.facePart;
+    if (facePart) {
+      const category = this.config.auFacePartToMeshCategory?.[facePart];
+      if (category) {
+        return m?.[category] || [];
+      }
     }
+    return m?.face || [];
+  }
+
+  getMeshNamesForViseme(): string[] {
+    const m = this.config.morphToMesh;
+    const category = this.config.visemeMeshCategory || (m?.viseme ? 'viseme' : 'face');
+    return m?.[category] || m?.face || [];
   }
 
   // ============================================================================

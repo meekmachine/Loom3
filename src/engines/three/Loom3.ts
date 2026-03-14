@@ -250,20 +250,17 @@ export class Loom3 implements LoomLarge {
     // Auto-detect face morph meshes only if preset/profile doesn't define them.
     // When morphToMesh.face is already configured (e.g., CC4 preset specifies
     // body + eyebrows + occlusion + tear lines), trust that configuration.
+    //
+    // Important: Use only resolved face candidates here. Using all morph-capable
+    // meshes makes AU/morph transitions spill into unrelated meshes.
     if (!this.config.morphToMesh?.face || this.config.morphToMesh.face.length === 0) {
-      const morphMeshNames = this.meshes
-        .filter((m) => {
-          const infl = m.morphTargetInfluences;
-          const dict = m.morphTargetDictionary;
-          return (Array.isArray(infl) && infl.length > 0) || (dict && Object.keys(dict).length > 0);
-        })
-        .map((m) => m.name)
-        .filter(Boolean);
+      const faceMeshNames = this.resolvedFaceMeshes
+        .filter((name) => this.meshByName.has(name));
 
-      if (morphMeshNames.length > 0) {
+      if (faceMeshNames.length > 0) {
         this.config.morphToMesh = {
           ...this.config.morphToMesh,
-          face: Array.from(new Set(morphMeshNames)),
+          face: Array.from(new Set(faceMeshNames)),
         };
       }
     }

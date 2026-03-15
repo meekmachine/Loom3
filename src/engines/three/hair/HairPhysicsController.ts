@@ -440,8 +440,8 @@ export class HairPhysicsController {
   private getHairMeshNames(): string[] {
     if (this.cachedHairMeshNames) return this.cachedHairMeshNames;
 
-    const selectedHairMeshNames = this.host.getSelectedHairMeshNames?.() || [];
-    if (selectedHairMeshNames.length > 0) {
+    if (typeof this.host.getSelectedHairMeshNames === 'function') {
+      const selectedHairMeshNames = this.host.getSelectedHairMeshNames() || [];
       const resolved = selectedHairMeshNames.filter((name) => {
         const mesh = this.registeredHairObjects.get(name) || this.host.getMeshByName(name);
         return !!mesh;
@@ -496,7 +496,11 @@ export class HairPhysicsController {
     }
 
     const hairMeshNames = this.getHairMeshNames();
-    if (hairMeshNames.length === 0) return;
+    if (hairMeshNames.length === 0) {
+      this.stopIdleClip();
+      this.idleClipDirty = false;
+      return;
+    }
 
     if (!this.idleClipDirty && this.idleClipHandle) return;
 
@@ -521,7 +525,11 @@ export class HairPhysicsController {
     if (!this.hairPhysicsEnabled || !this.supportsMixerClips()) return;
 
     const hairMeshNames = this.getHairMeshNames();
-    if (hairMeshNames.length === 0) return;
+    if (hairMeshNames.length === 0) {
+      this.stopGravityClip();
+      this.gravityClipDirty = false;
+      return;
+    }
 
     if (!this.gravityClipDirty && this.gravityClipHandle) return;
 
@@ -587,7 +595,11 @@ export class HairPhysicsController {
     if (!this.hairPhysicsEnabled || !this.supportsMixerClips()) return;
 
     const hairMeshNames = this.getHairMeshNames();
-    if (hairMeshNames.length === 0) return;
+    if (hairMeshNames.length === 0) {
+      this.stopImpulseClips();
+      this.impulseClipDirty = false;
+      return;
+    }
 
     if (!this.impulseClipDirty && this.impulseClips.left && this.impulseClips.right && this.impulseClips.front) {
       return;

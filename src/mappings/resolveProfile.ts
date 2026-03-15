@@ -153,7 +153,11 @@ export function resolveProfile(base: Profile, override: Partial<Profile>): Profi
     auToBones: mergeRecord(base.auToBones, override.auToBones) as Record<number, BoneBinding[]>,
     boneNodes: mergeRecord(base.boneNodes, override.boneNodes),
     morphToMesh: mergeRecord(base.morphToMesh, override.morphToMesh),
+    auFacePartToMeshCategory: base.auFacePartToMeshCategory || override.auFacePartToMeshCategory
+      ? mergeRecord(base.auFacePartToMeshCategory || {}, override.auFacePartToMeshCategory || {}) as Record<string, string>
+      : undefined,
     visemeKeys: override.visemeKeys ? [...override.visemeKeys] : [...base.visemeKeys],
+    visemeMeshCategory: override.visemeMeshCategory ?? base.visemeMeshCategory,
     auMixDefaults: base.auMixDefaults || override.auMixDefaults
       ? mergeRecord(base.auMixDefaults || {}, override.auMixDefaults || {})
       : undefined,

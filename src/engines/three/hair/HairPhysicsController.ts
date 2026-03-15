@@ -46,6 +46,7 @@ export type HairPhysicsConfigUpdate = Partial<HairPhysicsConfig> & {
 
 export interface HairPhysicsHost {
   getMeshByName: (name: string) => Mesh | undefined;
+  getSelectedHairMeshNames?: () => string[];
   buildClip?: (clipName: string, curves: CurvesMap, options?: ClipOptions) => ClipHandle | null;
   cleanupSnippet?: (name: string) => void;
 }
@@ -312,9 +313,10 @@ export class HairPhysicsController {
     if (meshName) {
       targetMesh = this.registeredHairObjects.get(meshName);
     } else {
-      for (const [name, mesh] of this.registeredHairObjects) {
-        const info = CC4_MESHES[name];
-        if (info?.category === 'hair') {
+      const hairMeshNames = this.getHairMeshNames();
+      for (const name of hairMeshNames) {
+        const mesh = this.registeredHairObjects.get(name) || this.host.getMeshByName(name);
+        if (mesh) {
           targetMesh = mesh;
           break;
         }
@@ -438,6 +440,16 @@ export class HairPhysicsController {
   private getHairMeshNames(): string[] {
     if (this.cachedHairMeshNames) return this.cachedHairMeshNames;
 
+    if (typeof this.host.getSelectedHairMeshNames === 'function') {
+      const selectedHairMeshNames = this.host.getSelectedHairMeshNames() || [];
+      const resolved = selectedHairMeshNames.filter((name) => {
+        const mesh = this.registeredHairObjects.get(name) || this.host.getMeshByName(name);
+        return !!mesh;
+      });
+      this.cachedHairMeshNames = Array.from(new Set(resolved));
+      return this.cachedHairMeshNames;
+    }
+
     const names: string[] = [];
     this.registeredHairObjects.forEach((mesh, name) => {
       const info = CC4_MESHES[name];
@@ -452,6 +464,19 @@ export class HairPhysicsController {
     });
     this.cachedHairMeshNames = names;
     return names;
+  }
+
+  refreshMeshSelection(): void {
+    this.cachedHairMeshNames = null;
+    this.idleClipDirty = true;
+    this.gravityClipDirty = true;
+    this.impulseClipDirty = true;
+    this.warnMissingHairMorphTargets();
+    if (this.hairPhysicsEnabled) {
+      this.startIdleClip();
+      this.startGravityClip();
+      this.buildImpulseClips();
+    }
   }
 
   private supportsMixerClips(): boolean {
@@ -471,7 +496,11 @@ export class HairPhysicsController {
     }
 
     const hairMeshNames = this.getHairMeshNames();
-    if (hairMeshNames.length === 0) return;
+    if (hairMeshNames.length === 0) {
+      this.stopIdleClip();
+      this.idleClipDirty = false;
+      return;
+    }
 
     if (!this.idleClipDirty && this.idleClipHandle) return;
 
@@ -496,7 +525,11 @@ export class HairPhysicsController {
     if (!this.hairPhysicsEnabled || !this.supportsMixerClips()) return;
 
     const hairMeshNames = this.getHairMeshNames();
-    if (hairMeshNames.length === 0) return;
+    if (hairMeshNames.length === 0) {
+      this.stopGravityClip();
+      this.gravityClipDirty = false;
+      return;
+    }
 
     if (!this.gravityClipDirty && this.gravityClipHandle) return;
 
@@ -562,7 +595,11 @@ export class HairPhysicsController {
     if (!this.hairPhysicsEnabled || !this.supportsMixerClips()) return;
 
     const hairMeshNames = this.getHairMeshNames();
-    if (hairMeshNames.length === 0) return;
+    if (hairMeshNames.length === 0) {
+      this.stopImpulseClips();
+      this.impulseClipDirty = false;
+      return;
+    }
 
     if (!this.impulseClipDirty && this.impulseClips.left && this.impulseClips.right && this.impulseClips.front) {
       return;

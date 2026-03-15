@@ -180,6 +180,7 @@ export class Loom3 implements LoomLarge {
 
     this.hairPhysics = new HairPhysicsController({
       getMeshByName: (name) => this.meshByName.get(name),
+      getSelectedHairMeshNames: () => this.config.morphToMesh?.hair || [],
       buildClip: (clipName, curves, options) => this.buildClip(clipName, curves, options),
       cleanupSnippet: (name) => this.cleanupSnippet(name),
     });
@@ -1297,6 +1298,7 @@ export class Loom3 implements LoomLarge {
     if (this.model) {
       this.rebuildMorphTargetsCache();
     }
+    this.hairPhysics.refreshMeshSelection();
     this.applyHairPhysicsProfileConfig();
   }
 

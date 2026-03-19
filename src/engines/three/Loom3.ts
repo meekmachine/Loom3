@@ -33,6 +33,7 @@ import type {
   Snippet,
 } from '../../core/types';
 import { AnimationThree, BakedAnimationController } from './AnimationThree';
+import { getSideScale } from './balanceUtils';
 import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUpdate, type HairPhysicsDirectionConfig, type HairMorphTargets } from './hair/HairPhysicsController';
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import { resolvePreset } from '../../presets';
@@ -613,13 +614,18 @@ export class Loom3 implements LoomLarge {
 
     const target = clamp01(to);
 
+    if (balance !== undefined) {
+      this.auBalances[numId] = balance;
+    }
+    const storedBalance = this.auBalances[numId] ?? 0;
+
     const { left: leftKeys, right: rightKeys, center: centerKeys } = this.getAUMorphsBySide(numId);
     const bindings = this.config.auToBones[numId] || [];
 
     const mixWeight = this.isMixedAU(numId) ? this.getAUMixWeight(numId) : 1.0;
     const base = target * mixWeight;
 
-    const { left: leftVal, right: rightVal } = this.computeSideValues(base, balance);
+    const { left: leftVal, right: rightVal } = this.computeSideValues(base, storedBalance);
 
     this.auValues[numId] = target;
 
@@ -673,6 +679,8 @@ export class Loom3 implements LoomLarge {
           axisValue = target;
         }
 
+        const side = bindings.find((binding) => binding.node === nodeKey)?.side;
+        axisValue *= getSideScale(storedBalance, side);
         handles.push(this.transitionBoneRotation(nodeKey, compositeInfo.axis, axisValue, durationMs));
       }
     }

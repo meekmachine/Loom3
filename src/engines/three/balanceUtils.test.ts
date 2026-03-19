@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampBalance, resolveCurveBalance } from './balanceUtils';
+import { clampBalance, getSideScale, resolveCurveBalance } from './balanceUtils';
 
 describe('balance utils', () => {
   it('clamps to [-1, 1]', () => {
@@ -24,5 +24,15 @@ describe('balance utils', () => {
     const balanceMap = { '43': 1 };
     expect(resolveCurveBalance('12', -0.4, balanceMap)).toBe(-0.4);
     expect(resolveCurveBalance('12', 0.2)).toBe(0.2);
+  });
+
+  it('derives left/right side scales from balance', () => {
+    expect(getSideScale(1, 'left')).toBe(0);
+    expect(getSideScale(1, 'right')).toBe(1);
+    expect(getSideScale(-1, 'left')).toBe(1);
+    expect(getSideScale(-1, 'right')).toBe(0);
+    expect(getSideScale(0.25, 'left')).toBe(0.75);
+    expect(getSideScale(-0.25, 'right')).toBe(0.75);
+    expect(getSideScale(0.4)).toBe(1);
   });
 });

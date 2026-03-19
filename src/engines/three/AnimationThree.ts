@@ -32,7 +32,7 @@ import type {
 } from '../../core/types';
 import type { Profile } from '../../mappings/types';
 import type { ResolvedBones } from './types';
-import { resolveCurveBalance } from './balanceUtils';
+import { getSideScale, resolveCurveBalance } from './balanceUtils';
 
 type Transition = {
   key: string;
@@ -712,28 +712,44 @@ export class BakedAnimationController {
         return config.auToBones[auId]?.find((b) => b.node === nodeKey) ?? null;
       };
 
+      const getAxisSampleForNode = (
+        auId: number,
+        nodeKey: BoneKey,
+        t: number
+      ) => {
+        const rawValue = sampleCurve(String(auId), t);
+        if (rawValue <= 1e-6) return 0;
+
+        const binding = config.auToBones[auId]?.find((b) => b.node === nodeKey) ?? null;
+        if (!binding?.side) return rawValue;
+
+        const curveBalance = resolveCurveBalance(String(auId), globalBalance, balanceMap);
+        return rawValue * getSideScale(curveBalance, binding.side);
+      };
+
       const getAxisValue = (
+        nodeKey: BoneKey,
         axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
         t: number
       ) => {
         if (!axisConfig) return 0;
 
         if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
-          const posValue = sampleCurve(String(axisConfig.positive), t);
-          const negValue = sampleCurve(String(axisConfig.negative), t);
+          const posValue = getAxisSampleForNode(axisConfig.positive, nodeKey, t);
+          const negValue = getAxisSampleForNode(axisConfig.negative, nodeKey, t);
           return posValue - negValue;
         }
 
         if (axisConfig.aus.length > 1) {
           let maxVal = 0;
           for (const auId of axisConfig.aus) {
-            const val = sampleCurve(String(auId), t);
+            const val = getAxisSampleForNode(auId, nodeKey, t);
             if (val > maxVal) maxVal = val;
           }
           return maxVal;
         }
 
-        return sampleCurve(String(axisConfig.aus[0]), t);
+        return getAxisSampleForNode(axisConfig.aus[0], nodeKey, t);
       };
 
       // Track if autoVisemeJaw already added a JAW track
@@ -774,7 +790,7 @@ export class BakedAnimationController {
             axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll']
           ) => {
             if (!axisConfig) return;
-            let axisValue = getAxisValue(axisConfig, t);
+            let axisValue = getAxisValue(nodeKey, axisConfig, t);
             if (Math.abs(axisValue) <= 1e-6) return;
 
             const binding = getAxisBinding(nodeKey, axisConfig, axisValue, t);

@@ -41,9 +41,27 @@ describe('CC4 Preset', () => {
 
     it('should have mappings for eye direction AUs (61-64)', () => {
       expect(AU_TO_MORPHS[61].left).toContain('Eye_L_Look_L');
-      expect(AU_TO_MORPHS[62].right).toContain('Eye_L_Look_R');
-      expect(AU_TO_MORPHS[63].center).toContain('Eye_L_Look_Up');
-      expect(AU_TO_MORPHS[64].center).toContain('Eye_L_Look_Down');
+      expect(AU_TO_MORPHS[61].right).toContain('Eye_R_Look_L');
+      expect(AU_TO_MORPHS[61].center).toEqual([]);
+      expect(AU_TO_MORPHS[62].left).toContain('Eye_L_Look_R');
+      expect(AU_TO_MORPHS[62].right).toContain('Eye_R_Look_R');
+      expect(AU_TO_MORPHS[63].left).toContain('Eye_L_Look_Up');
+      expect(AU_TO_MORPHS[63].right).toContain('Eye_R_Look_Up');
+      expect(AU_TO_MORPHS[63].center).toEqual([]);
+      expect(AU_TO_MORPHS[64].left).toContain('Eye_L_Look_Down');
+      expect(AU_TO_MORPHS[64].right).toContain('Eye_R_Look_Down');
+      expect(AU_TO_MORPHS[64].center).toEqual([]);
+    });
+
+    it('should expose independent eye movement AUs (65-72)', () => {
+      expect(AU_TO_MORPHS[65].left).toContain('Eye_L_Look_L');
+      expect(AU_TO_MORPHS[66].right).toContain('Eye_L_Look_R');
+      expect(AU_TO_MORPHS[67].center).toContain('Eye_L_Look_Up');
+      expect(AU_TO_MORPHS[68].center).toContain('Eye_L_Look_Down');
+      expect(AU_TO_MORPHS[69].left).toContain('Eye_R_Look_L');
+      expect(AU_TO_MORPHS[70].right).toContain('Eye_R_Look_R');
+      expect(AU_TO_MORPHS[71].center).toContain('Eye_R_Look_Up');
+      expect(AU_TO_MORPHS[72].center).toContain('Eye_R_Look_Down');
     });
 
     it('should have bilateral morphs (L and R) for applicable AUs', () => {

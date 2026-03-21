@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1020"/>
+      <stop offset="100%" stop-color="#111a31"/>
+    </linearGradient>
+    <linearGradient id="panelGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#17223c"/>
+      <stop offset="100%" stop-color="#10172b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#6dd3ce"/>
+    </marker>
+    <style>
+      .title { font: 700 42px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #e8edf7; }
+      .subtitle { font: 500 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #95a4c4; }
+      .label { font: 700 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #e8edf7; }
+      .body { font: 500 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #95a4c4; }
+      .mono { font: 500 20px 'SF Mono', Menlo, Monaco, Consolas, monospace; fill: #e8edf7; }
+      .mono-small { font: 500 16px 'SF Mono', Menlo, Monaco, Consolas, monospace; fill: #e8edf7; }
+      .tiny { font: 600 14px 'SF Mono', Menlo, Monaco, Consolas, monospace; fill: #95a4c4; }
+      .chip { font: 700 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #0b1020; }
+      .card { fill: url(#panelGrad); stroke: #2a395f; stroke-width: 2; rx: 24; }
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bgGrad)"/>
+  <text x="72" y="88" class="title">Composite rotations keep head motion readable across axes</text>
+  
+      <text x="72" y="122" class="subtitle">Yaw, pitch, and roll are accumulated together before Loom3 writes the final transform.</text>
+      <circle cx="800" cy="470" r="180" fill="#182947" stroke="#36537f" stroke-width="2"/>
+      <circle cx="744" cy="430" r="18" fill="#0b1020"/><circle cx="856" cy="430" r="18" fill="#0b1020"/>
+      <path d="M726 540 C770 592 830 592 874 540" stroke="#0b1020" stroke-width="14" stroke-linecap="round" fill="none"/>
+      <path d="M800 202 L800 96" stroke="#6dd3ce" stroke-width="8" marker-end="url(#arrow)"/>
+      <text x="826" y="118" class="label">Pitch</text>
+      <text x="826" y="148" class="body">AU53 / AU54</text>
+      <path d="M1038 470 C1088 470 1158 470 1210 470" stroke="#f5b971" stroke-width="8" marker-end="url(#arrow)"/>
+      <text x="1088" y="438" class="label">Yaw</text>
+      <text x="1088" y="518" class="body">AU51 / AU52</text>
+      <path d="M640 316 C560 236 516 214 470 214" stroke="#8aa7ff" stroke-width="8" marker-end="url(#arrow)"/>
+      <text x="278" y="208" class="label">Roll</text>
+      <text x="278" y="238" class="body">AU55 / AU56</text>
+      <rect x="112" y="630" width="1376" height="132" rx="24" fill="url(#panelGrad)" stroke="#2a395f" stroke-width="2"/>
+      <text x="148" y="684" class="body">Eyes and jaws use the same idea: collect every axis first, then write a single composed transform so separate AU updates do not fight each other.</text>
+    
+</svg>

@@ -6,7 +6,7 @@ Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https:
 
 > **Note:** If you previously used the `loomlarge` npm package, it has been renamed to `@lovelace_lol/loom3`.
 
-> **Screenshot placeholder:** Add a hero image showing a character with facial expressions controlled by Loom3
+![Hero image showing Loom3 controlling a facial expression](./assets/readme/hero-expressions.webp)
 
 ---
 
@@ -32,7 +32,7 @@ Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https:
 
 ## 1. Installation & Setup
 
-> **Screenshot placeholder:** Add a screenshot of a project structure with Loom3 installed
+![Project structure with Loom3 installed](./assets/readme/project-structure.svg)
 
 ### Install the package
 
@@ -129,13 +129,13 @@ const meshes = collectMorphMeshes(gltf.scene);
 // Returns: Array of THREE.Mesh objects with morph targets
 ```
 
-> **Screenshot placeholder:** Add a screenshot of a loaded character in the Three.js scene
+![Loaded character in a Three.js scene powered by Loom3](./assets/readme/loaded-character-scene.webp)
 
 ---
 
 ## 2. Using Presets
 
-> **Screenshot placeholder:** Add a diagram showing how presets connect AUs to morphs and bones
+![Diagram showing how Loom3 presets connect AUs to morphs and bones](./assets/readme/preset-au-flow.svg)
 
 Presets define how FACS Action Units map to your character's morph targets and bones. Loom3 ships with `CC4_PRESET` for Character Creator 4 characters.
 
@@ -247,13 +247,13 @@ const loom = new Loom3({
 });
 ```
 
-> **Screenshot placeholder:** Add a screenshot showing the preset being applied to a character
+![Character properties UI showing a Loom3 preset applied to a live character](./assets/readme/preset-applied-ui.webp)
 
 ---
 
 ## 3. Getting to Know Your Character
 
-> **Screenshot placeholder:** Add a screenshot of the console output showing mesh and morph target information
+![Console-style diagram showing Loom3 mesh and morph target inspection output](./assets/readme/console-mesh-output.svg)
 
 Before customizing presets or extending mappings, it's helpful to understand what's actually in your character model. Loom3 provides several methods to inspect meshes, morph targets, and bones.
 
@@ -381,13 +381,13 @@ This is especially useful for:
 - Making meshes semi-transparent for debugging
 - Adjusting blending modes for special effects
 
-> **Screenshot placeholder:** Add before/after screenshots showing render order adjustments
+![Before and after render-order adjustment diagram](./assets/readme/render-order-before-after.svg)
 
 ---
 
 ## 4. Extending & Custom Presets
 
-> **Screenshot placeholder:** Add a diagram showing preset inheritance/extension
+![Diagram showing preset inheritance and mergePreset overrides](./assets/readme/preset-inheritance.svg)
 
 ### Extending an existing preset
 
@@ -458,13 +458,13 @@ loom.setProfile(ANOTHER_PRESET);
 const current = loom.getProfile();
 ```
 
-> **Screenshot placeholder:** Add a screenshot showing custom preset in action
+![Comparison showing a custom Loom3 preset override in action](./assets/readme/custom-preset-in-action.webp)
 
 ---
 
 ## 5. Creating Skeletal Animation Presets
 
-> **Screenshot placeholder:** Add a screenshot showing the fish model with labeled bones
+![Betta fish model with bones panel visible](./assets/readme/fish-bones-ui.webp)
 
 Loom3 isn't limited to humanoid characters with morph targets. You can create presets for any 3D model that uses skeletal animation, such as fish, animals, or fantasy creatures. This section explains how to create a preset for a betta fish model that has no morph targets—only bone-driven animation.
 
@@ -739,13 +739,13 @@ async function swimCycle() {
 }
 ```
 
-> **Screenshot placeholder:** Add a GIF showing the fish swimming animation
+![Animated GIF of a Loom3-driven betta fish swimming](./assets/readme/fish-swimming.gif)
 
 ---
 
 ## 6. Action Unit Control
 
-> **Screenshot placeholder:** Add a screenshot showing a character with different AU values
+![Grid of Loom3 Action Unit examples on a character](./assets/readme/au-values-grid.webp)
 
 Action Units are the core of FACS. Each AU represents a specific muscular movement of the face.
 
@@ -821,7 +821,7 @@ loom.setAU(12, 0.8, 1);    // Right side only
 
 ## 7. Mix Weight System
 
-> **Screenshot placeholder:** Add a comparison showing morph-only vs bone-only vs mixed weights
+![Comparison of morph-only, mixed, and bone-only AU results](./assets/readme/mix-weight-comparison.webp)
 
 Some AUs can be driven by both morph targets (blend shapes) AND bone rotations. The mix weight controls the blend between them.
 
@@ -868,7 +868,7 @@ if (isMixedAU(26)) {
 
 ## 8. Composite Rotation System
 
-> **Screenshot placeholder:** Add a diagram showing the pitch/yaw/roll axes on a head
+![Diagram showing pitch, yaw, and roll axes on the head](./assets/readme/head-axes-diagram.svg)
 
 Bones like the head and eyes need multi-axis rotation (pitch, yaw, roll). The composite rotation system handles this automatically.
 
@@ -928,7 +928,7 @@ loom.setAU(64, 0.4);
 
 ## 9. Continuum Pairs
 
-> **Screenshot placeholder:** Add a screenshot showing a continuum slider UI
+![Continuum slider UI for paired Loom3 AUs](./assets/readme/continuum-slider-ui.webp)
 
 Continuum pairs are bidirectional AU pairs that represent opposite directions on the same axis. They're linked so that activating one should deactivate the other.
 
@@ -1028,7 +1028,7 @@ const pair = CONTINUUM_PAIRS_MAP[51];
 
 ## 10. Direct Morph Control
 
-> **Screenshot placeholder:** Add a screenshot of a morph target being controlled directly
+![Direct morph control screenshot with a live morph preview](./assets/readme/direct-morph-control.webp)
 
 Sometimes you need to control morph targets directly by name, bypassing the AU system.
 
@@ -1069,7 +1069,7 @@ Loom3 caches morph target lookups for performance. The first time you access a m
 
 ## 11. Viseme System
 
-> **Screenshot placeholder:** Add a grid showing all 15 viseme mouth shapes
+![Grid of all 15 Loom3 viseme mouth shapes](./assets/readme/viseme-grid.webp)
 
 Visemes are mouth shapes used for lip-sync. Loom3 includes 15 visemes with automatic jaw coupling.
 
@@ -1158,7 +1158,7 @@ speak([5, 0, 10, 4]);
 
 ## 12. Transition System
 
-> **Screenshot placeholder:** Add a diagram showing transition timeline with easing
+![Diagram showing a Loom3 transition timeline with easing and handle methods](./assets/readme/transition-timeline-easing.svg)
 
 All animated changes in Loom3 go through the transition system, which provides smooth interpolation with easing.
 
@@ -1240,7 +1240,7 @@ loom.clearTransitions();
 
 ## 13. Playback & State Control
 
-> **Screenshot placeholder:** Add a screenshot showing pause/resume controls in a UI
+![Playback controls UI showing Loom3 pause and resume controls](./assets/readme/pause-resume-controls.webp)
 
 ### Pausing and resuming
 
@@ -1297,7 +1297,7 @@ loom.dispose();
 
 ## 14. Hair Physics (Mixer-Driven)
 
-> **Screenshot placeholder:** Add a GIF showing hair physics responding to head movement
+![Animated GIF showing Loom3 hair physics reacting to head motion](./assets/readme/hair-physics.gif)
 
 Loom3 includes a built-in hair physics system that drives morph targets through the AnimationMixer.
 It is **mixer-only** (no per-frame morph LERP), and it reacts to **head rotation** coming from AUs.
@@ -1655,7 +1655,7 @@ loom.transitionAU(45, 1.0, 100);  // Blink
 
 ## Resources
 
-> **Screenshot placeholder:** Add logos or screenshots from the resources below
+![Reference cards for FACS, Paul Ekman Group, Character Creator 4, and Three.js](./assets/readme/resources-cards.svg)
 
 - [FACS on Wikipedia](https://en.wikipedia.org/wiki/Facial_Action_Coding_System)
 - [Paul Ekman Group - FACS](https://www.paulekman.com/facial-action-coding-system/)

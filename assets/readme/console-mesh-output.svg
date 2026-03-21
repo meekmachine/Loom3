@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1020"/>
+      <stop offset="100%" stop-color="#111a31"/>
+    </linearGradient>
+    <linearGradient id="panelGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#17223c"/>
+      <stop offset="100%" stop-color="#10172b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#6dd3ce"/>
+    </marker>
+    <style>
+      .title { font: 700 42px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #e8edf7; }
+      .subtitle { font: 500 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #95a4c4; }
+      .label { font: 700 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #e8edf7; }
+      .body { font: 500 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #95a4c4; }
+      .mono { font: 500 20px 'SF Mono', Menlo, Monaco, Consolas, monospace; fill: #e8edf7; }
+      .mono-small { font: 500 16px 'SF Mono', Menlo, Monaco, Consolas, monospace; fill: #e8edf7; }
+      .tiny { font: 600 14px 'SF Mono', Menlo, Monaco, Consolas, monospace; fill: #95a4c4; }
+      .chip { font: 700 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #0b1020; }
+      .card { fill: url(#panelGrad); stroke: #2a395f; stroke-width: 2; rx: 24; }
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bgGrad)"/>
+  <text x="72" y="88" class="title">Use Loom3 to inspect meshes, morphs, and bones quickly</text>
+  
+      <text x="72" y="122" class="subtitle">The mesh and morph APIs are designed to answer “what is actually in this character?” before you start editing profiles.</text>
+      <rect x="72" y="180" width="1450" height="650" rx="26" fill="#09111d" stroke="#22314f" stroke-width="2" filter="url(#shadow)"/>
+      <circle cx="112" cy="220" r="8" fill="#ff6b6b"/><circle cx="140" cy="220" r="8" fill="#ffd166"/><circle cx="168" cy="220" r="8" fill="#7bd88f"/>
+      <text x="210" y="228" class="mono-small">loom3-inspect.ts</text>
+      <text x="108" y="284" class="mono-small" fill="#6dd3ce">&gt; loom.getMeshList()</text>
+      <text x="108" y="318" class="mono-small">[</text>
+      <text x="144" y="350" class="mono-small">{ name: 'CC_Base_Body', visible: true, morphCount: 142 },</text>
+      <text x="144" y="382" class="mono-small">{ name: 'CC_Base_Tongue', visible: true, morphCount: 12 },</text>
+      <text x="144" y="414" class="mono-small">{ name: 'CC_Base_EyeOcclusion_L', visible: true, morphCount: 8 },</text>
+      <text x="144" y="446" class="mono-small">{ name: 'CC_Base_EyeOcclusion_R', visible: true, morphCount: 8 },</text>
+      <text x="108" y="478" class="mono-small">]</text>
+      <text x="108" y="540" class="mono-small" fill="#f5b971">&gt; loom.getMorphTargets()['CC_Base_Body'].slice(0, 6)</text>
+      <text x="108" y="574" class="mono-small">['Brow_Raise_Inner_L', 'Brow_Raise_Inner_R', 'Eye_Blink_L',</text>
+      <text x="108" y="606" class="mono-small"> 'Eye_Blink_R', 'Mouth_Smile_L', 'Mouth_Smile_R']</text>
+      <text x="108" y="668" class="mono-small" fill="#8aa7ff">&gt; loom.getBones()['CC_Base_Head']</text>
+      <text x="108" y="702" class="mono-small">{ position: [0.00, 1.68, 0.02], rotation: [0.0, 0.0, 0.0] }</text>
+      <text x="108" y="764" class="body">That’s enough information to validate mesh routing, find missing blend shapes, and confirm your semantic bone map.</text>
+    
+</svg>

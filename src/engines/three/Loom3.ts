@@ -31,14 +31,16 @@ import type {
   ClipOptions,
   ClipHandle,
   Snippet,
+  CompositeRotation,
+  RotationAxis,
 } from '../../core/types';
+import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import { AnimationThree, BakedAnimationController } from './AnimationThree';
 import { getSideScale } from './balanceUtils';
 import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUpdate, type HairPhysicsDirectionConfig, type HairMorphTargets } from './hair/HairPhysicsController';
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import { resolvePreset } from '../../presets';
 import { resolveProfile } from '../../mappings/resolveProfile';
-import type { BoneBinding, CompositeRotation } from '../../core/types';
 import type { NodeBase, ResolvedBones } from './types';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
@@ -74,52 +76,6 @@ function buildAUToCompositeMap(composites: CompositeRotation[]): Map<number, { n
 
 function clamp01(x: number) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
-}
-
-function asAUList(value?: number | number[]): number[] {
-  if (value === undefined) return [];
-  return Array.isArray(value) ? value : [value];
-}
-
-function getCompositeAxisValue(
-  axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
-  getValue: (auId: number) => number
-): number {
-  if (!axisConfig) return 0;
-  const negativeAUs = asAUList(axisConfig.negative);
-  const positiveAUs = asAUList(axisConfig.positive);
-
-  if (negativeAUs.length > 0 && positiveAUs.length > 0) {
-    const negativeValue = Math.max(...negativeAUs.map(getValue), 0);
-    const positiveValue = Math.max(...positiveAUs.map(getValue), 0);
-    return positiveValue - negativeValue;
-  }
-
-  if (axisConfig.aus.length > 1) {
-    return Math.max(...axisConfig.aus.map(getValue), 0);
-  }
-
-  return getValue(axisConfig.aus[0]);
-}
-
-function getCompositeAxisBinding(
-  nodeKey: string,
-  axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
-  direction: number,
-  getValue: (auId: number) => number,
-  auToBones: Record<number, BoneBinding[]>
-) {
-  if (!axisConfig) return null;
-  const directionalAUs = direction < 0 ? asAUList(axisConfig.negative) : asAUList(axisConfig.positive);
-  const candidates = directionalAUs.length > 0 ? directionalAUs : axisConfig.aus;
-
-  const ranked = [...candidates].sort((a, b) => getValue(b) - getValue(a));
-  for (const auId of ranked) {
-    const binding = auToBones[auId]?.find((candidate) => candidate.node === nodeKey);
-    if (binding) return binding;
-  }
-
-  return null;
 }
 
 type MorphTargetHandle = { infl: number[]; idx: number };
@@ -582,10 +538,6 @@ export class Loom3 implements LoomLarge {
     const compositeInfo = this.auToCompositeMap.get(id);
 
     if (compositeInfo) {
-      // Compute balance-adjusted values for bilateral bone AUs
-      const storedBalance = this.auBalances[id] ?? 0;
-      const { left: leftVal, right: rightVal } = this.computeSideValues(clamp01(v), storedBalance);
-
       // This AU affects composite bone rotations - use axis from compositeRotations
       for (const nodeKey of compositeInfo.nodes) {
         const config = this.compositeRotations.find((c: CompositeRotation) => c.node === nodeKey);
@@ -594,24 +546,7 @@ export class Loom3 implements LoomLarge {
         const axisConfig = config[compositeInfo.axis];
         if (!axisConfig) continue;
 
-        let axisValue = getCompositeAxisValue(axisConfig, (auId: number) => this.auValues[auId] ?? 0);
-
-        // Apply balance based on mapping-provided side hints, not name heuristics.
-        const auBoneBindings = this.config.auToBones[id] || [];
-        const sideByNode = new Map<string, 'left' | 'right'>();
-        for (const binding of auBoneBindings) {
-          if (binding.side === 'left' || binding.side === 'right') {
-            sideByNode.set(binding.node, binding.side);
-          }
-        }
-        const side = sideByNode.get(nodeKey);
-        if (side) {
-          const baseValue = clamp01(v);
-          const balanceValue = side === 'left' ? leftVal : rightVal;
-          const denom = baseValue > 0 ? baseValue : 1;
-          axisValue = axisValue * (balanceValue / denom);
-        }
-
+        const axisValue = this.getCompositeAxisValueForNode(nodeKey, axisConfig);
         this.updateBoneRotation(nodeKey, compositeInfo.axis, axisValue);
         this.pendingCompositeNodes.add(nodeKey);
       }
@@ -700,10 +635,7 @@ export class Loom3 implements LoomLarge {
         const axisConfig = config[compositeInfo.axis];
         if (!axisConfig) continue;
 
-        let axisValue = getCompositeAxisValue(axisConfig, (auId: number) => this.auValues[auId] ?? 0);
-
-        const side = bindings.find((binding) => binding.node === nodeKey)?.side;
-        axisValue *= getSideScale(storedBalance, side);
+        const axisValue = this.getCompositeAxisValueForNode(nodeKey, axisConfig);
         handles.push(this.transitionBoneRotation(nodeKey, compositeInfo.axis, axisValue, durationMs));
       }
     }
@@ -1506,6 +1438,37 @@ export class Loom3 implements LoomLarge {
     return !!(hasMorphs && this.config.auToBones[id]?.length);
   }
 
+  private getEffectiveBoneAUValue(auId: number, nodeKey: string): number {
+    const rawValue = clamp01(this.auValues[auId] ?? 0);
+    if (rawValue <= 1e-6) return 0;
+
+    const binding = this.config.auToBones[auId]?.find((candidate) => candidate.node === nodeKey) ?? null;
+    if (!binding?.side) return rawValue;
+
+    return rawValue * getSideScale(this.auBalances[auId] ?? 0, binding.side);
+  }
+
+  private getCompositeAxisValueForNode(
+    nodeKey: string,
+    axisConfig: RotationAxis | null | undefined
+  ): number {
+    return getCompositeAxisValue(axisConfig, (auId: number) => this.getEffectiveBoneAUValue(auId, nodeKey));
+  }
+
+  private getCompositeAxisBindingForNode(
+    nodeKey: string,
+    axisConfig: RotationAxis | null | undefined,
+    direction: number
+  ) {
+    return getCompositeAxisBinding(
+      nodeKey,
+      axisConfig,
+      direction,
+      (auId: number) => this.getEffectiveBoneAUValue(auId, nodeKey),
+      this.config.auToBones
+    );
+  }
+
   private initBoneRotations(): void {
     this.rotations = {};
     this.pendingCompositeNodes.clear();
@@ -1607,13 +1570,7 @@ export class Loom3 implements LoomLarge {
 
     // Apply yaw rotation
     if (config.yaw && rotState.yaw !== 0) {
-      const binding = getCompositeAxisBinding(
-        nodeKey,
-        config.yaw,
-        rotState.yaw,
-        (auId: number) => this.auValues[auId] ?? 0,
-        this.config.auToBones
-      );
+      const binding = this.getCompositeAxisBindingForNode(nodeKey, config.yaw, rotState.yaw);
       if (binding?.maxDegrees && binding.channel) {
         const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.yaw) * binding.scale;
         const axis = getAxis(binding.channel as 'rx' | 'ry' | 'rz');
@@ -1624,13 +1581,7 @@ export class Loom3 implements LoomLarge {
 
     // Apply pitch rotation
     if (config.pitch && rotState.pitch !== 0) {
-      const binding = getCompositeAxisBinding(
-        nodeKey,
-        config.pitch,
-        rotState.pitch,
-        (auId: number) => this.auValues[auId] ?? 0,
-        this.config.auToBones
-      );
+      const binding = this.getCompositeAxisBindingForNode(nodeKey, config.pitch, rotState.pitch);
       if (binding?.maxDegrees && binding.channel) {
         const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.pitch) * binding.scale;
         const axis = getAxis(binding.channel as 'rx' | 'ry' | 'rz');
@@ -1641,13 +1592,7 @@ export class Loom3 implements LoomLarge {
 
     // Apply roll rotation
     if (config.roll && rotState.roll !== 0) {
-      const binding = getCompositeAxisBinding(
-        nodeKey,
-        config.roll,
-        rotState.roll,
-        (auId: number) => this.auValues[auId] ?? 0,
-        this.config.auToBones
-      );
+      const binding = this.getCompositeAxisBindingForNode(nodeKey, config.roll, rotState.roll);
       if (binding?.maxDegrees && binding.channel) {
         const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.roll) * binding.scale;
         const axis = getAxis(binding.channel as 'rx' | 'ry' | 'rz');

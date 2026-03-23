@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Object3D, Quaternion } from 'three';
+import { Euler, Object3D, Quaternion } from 'three';
 import type { Profile } from '../../mappings/types';
 import { BakedAnimationController, type BakedAnimationHost } from './AnimationThree';
 
@@ -17,7 +17,7 @@ function makeEyeBoneHost(): {
     {
       node: 'EYE_L',
       pitch: null,
-      yaw: { aus: [61, 62], axis: 'rz', negative: 61, positive: 62 },
+      yaw: { aus: [61, 62, 65, 66], axis: 'rz', negative: [61, 65], positive: [62, 66] },
       roll: null,
     },
     {
@@ -38,6 +38,12 @@ function makeEyeBoneHost(): {
       62: [
         { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 25, side: 'left' },
         { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 25, side: 'right' },
+      ],
+      65: [
+        { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 25, side: 'left' },
+      ],
+      66: [
+        { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 25, side: 'left' },
       ],
     },
     boneNodes: {
@@ -91,6 +97,16 @@ function getLastQuaternionValues(clip: any, obj: Object3D): number[] {
   return Array.from(track.values.slice(-4) as ArrayLike<number>);
 }
 
+function getRotationDegrees(clip: any, obj: Object3D): [number, number, number] {
+  const [x, y, z, w] = getLastQuaternionValues(clip, obj);
+  const rotation = new Euler().setFromQuaternion(new Quaternion(x, y, z, w), 'XYZ');
+  return [
+    rotation.x * 180 / Math.PI,
+    rotation.y * 180 / Math.PI,
+    rotation.z * 180 / Math.PI,
+  ];
+}
+
 describe('BakedAnimationController eye balance', () => {
   it('applies snippet balance to bilateral eye bone tracks', () => {
     const { controller, eyeL, eyeR } = makeEyeBoneHost();
@@ -113,5 +129,32 @@ describe('BakedAnimationController eye balance', () => {
 
     expect(leftValues).not.toEqual([0, 0, 0, 1]);
     expect(rightValues).toEqual([0, 0, 0, 1]);
+  });
+
+  it('combines shared-eye balance and grouped independent eye tracks without leaking the shared AU', () => {
+    const { controller, eyeL, eyeR } = makeEyeBoneHost();
+
+    const clip = controller.snippetToClip(
+      'eye-balance-plus-independent',
+      {
+        '61': [
+          { time: 0, intensity: 0 },
+          { time: 1, intensity: 0.8 },
+        ],
+        '65': [
+          { time: 0, intensity: 0 },
+          { time: 1, intensity: 0.2 },
+        ],
+      },
+      { balanceMap: { '61': 1 } }
+    );
+
+    expect(clip).toBeTruthy();
+
+    const [, , leftZ] = getRotationDegrees(clip, eyeL);
+    const [, , rightZ] = getRotationDegrees(clip, eyeR);
+
+    expect(Math.abs(leftZ)).toBeCloseTo(5, 5);
+    expect(Math.abs(rightZ)).toBeCloseTo(20, 5);
   });
 });

@@ -5,9 +5,12 @@
  * Checks that bones, morph targets, and meshes referenced in the preset exist in the model.
  */
 
+import type { RotationAxis } from '../core/types';
+import { toAUList } from '../core/compositeAxis';
 import type { Profile, MorphTargetsBySide, MorphTargetRef } from '../mappings/types';
 import type { MappingCorrection, MappingCorrectionOptions } from './generateMappingCorrections';
 import { generateMappingCorrections } from './generateMappingCorrections';
+import type { ValidationMorphMesh as MorphMesh, ValidationSkeleton as Skeleton } from './types';
 
 /**
  * Result of validating a preset against a model
@@ -80,22 +83,6 @@ export interface ValidateMappingOptions extends MappingCorrectionOptions {
 }
 
 /**
- * Interface for mesh with morph targets (compatible with Three.js Mesh)
- */
-interface MorphMesh {
-  name: string;
-  morphTargetDictionary?: Record<string, number>;
-  morphTargetInfluences?: number[];
-}
-
-/**
- * Interface for skeleton (compatible with Three.js Skeleton)
- */
-interface Skeleton {
-  bones: Array<{ name: string }>;
-}
-
-/**
  * Check if a target name matches using fuzzy matching with suffix pattern
  */
 function fuzzyMatch(
@@ -151,17 +138,14 @@ function findMatches(
   return { found, missing };
 }
 
-function collectAxisConfigs(axisConfigs: Array<{ axis: 'pitch' | 'yaw' | 'roll'; config: any }>) {
-  return axisConfigs.filter((entry) => entry.config);
+function collectAxisConfigs(
+  axisConfigs: Array<{ axis: 'pitch' | 'yaw' | 'roll'; config: RotationAxis | null }>
+): Array<{ axis: 'pitch' | 'yaw' | 'roll'; config: RotationAxis }> {
+  return axisConfigs.filter((entry): entry is { axis: 'pitch' | 'yaw' | 'roll'; config: RotationAxis } => entry.config !== null);
 }
 
 function isEyeNodeKey(nodeKey: string) {
   return nodeKey === 'EYE_L' || nodeKey === 'EYE_R';
-}
-
-function toAUList(value?: number | number[]): number[] {
-  if (value === undefined) return [];
-  return Array.isArray(value) ? value : [value];
 }
 
 /**

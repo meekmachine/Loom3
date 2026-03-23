@@ -28,9 +28,10 @@ import type {
   ClipHandle,
   Snippet,
   BoneKey,
-  BoneBinding,
   CompositeRotation,
+  RotationAxis,
 } from '../../core/types';
+import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import type { Profile } from '../../mappings/types';
 import type { ResolvedBones } from './types';
 import { getSideScale, resolveCurveBalance } from './balanceUtils';
@@ -190,52 +191,6 @@ const makeActionId = () => `act_${Math.random().toString(36).slice(2, 8)}_${Date
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
-
-function asAUList(value?: number | number[]): number[] {
-  if (value === undefined) return [];
-  return Array.isArray(value) ? value : [value];
-}
-
-function getCompositeAxisValue(
-  axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
-  getValue: (auId: number) => number
-): number {
-  if (!axisConfig) return 0;
-  const negativeAUs = asAUList(axisConfig.negative);
-  const positiveAUs = asAUList(axisConfig.positive);
-
-  if (negativeAUs.length > 0 && positiveAUs.length > 0) {
-    const negativeValue = Math.max(...negativeAUs.map(getValue), 0);
-    const positiveValue = Math.max(...positiveAUs.map(getValue), 0);
-    return positiveValue - negativeValue;
-  }
-
-  if (axisConfig.aus.length > 1) {
-    return Math.max(...axisConfig.aus.map(getValue), 0);
-  }
-
-  return getValue(axisConfig.aus[0]);
-}
-
-function getCompositeAxisBinding(
-  nodeKey: string,
-  axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
-  direction: number,
-  getValue: (auId: number) => number,
-  auToBones: Record<number, BoneBinding[]>
-) {
-  if (!axisConfig) return null;
-  const directionalAUs = direction < 0 ? asAUList(axisConfig.negative) : asAUList(axisConfig.positive);
-  const candidates = directionalAUs.length > 0 ? directionalAUs : axisConfig.aus;
-
-  const ranked = [...candidates].sort((a, b) => getValue(b) - getValue(a));
-  for (const auId of ranked) {
-    const binding = auToBones[auId]?.find((candidate) => candidate.node === nodeKey);
-    if (binding) return binding;
-  }
-
-  return null;
-}
 
 export class BakedAnimationController {
   private host: BakedAnimationHost;
@@ -731,7 +686,7 @@ export class BakedAnimationController {
 
       const getAxisBinding = (
         nodeKey: BoneKey,
-        axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
+        axisConfig: RotationAxis | null | undefined,
         axisValue: number,
         t: number
       ) => {
@@ -761,7 +716,7 @@ export class BakedAnimationController {
 
       const getAxisValue = (
         nodeKey: BoneKey,
-        axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
+        axisConfig: RotationAxis | null | undefined,
         t: number
       ) =>
         getCompositeAxisValue(axisConfig, (auId: number) => getAxisSampleForNode(auId, nodeKey, t));
@@ -801,7 +756,7 @@ export class BakedAnimationController {
           const compositeQ = new Quaternion().copy(entry.baseQuat);
 
           const applyAxis = (
-            axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll']
+            axisConfig: RotationAxis | null | undefined
           ) => {
             if (!axisConfig) return;
             let axisValue = getAxisValue(nodeKey, axisConfig, t);

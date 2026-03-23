@@ -76,6 +76,7 @@ export type {
 
 export type {
   TransitionHandle,
+  AUSelector,
   BoneKey,
   BoneBinding,
   AUInfo,

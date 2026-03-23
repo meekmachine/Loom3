@@ -854,7 +854,7 @@ Only AUs that have both `auToMorphs` AND `auToBones` entries support mixing. Com
 - AU26 (Jaw Drop)
 - AU27 (Mouth Stretch)
 - AU51-56 (Head movements)
-- AU61-64 (Eye movements)
+- AU61-72 (Shared + independent eye movements)
 
 ```typescript
 import { isMixedAU } from '@lovelace_lol/loom3';

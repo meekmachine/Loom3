@@ -1,5 +1,9 @@
 # Recent Changes (Loom3)
 
+## Independent eye controls
+- CC4 now includes independent eye AUs 65-72 for both morph and bone mappings.
+- Grouped composite eye axes now evaluate per-node effective values consistently, so shared-eye balance no longer leaks into independent-eye controls.
+
 ## Mixer + clip handling
 - Clip stop now resolves cleanly so stopping playback does not throw a rejected promise.
 - Eye/head tracking clips remain cached (no uncache on stop) to avoid pose resets during continuous tracking.

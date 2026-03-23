@@ -36,14 +36,17 @@ export interface BoneBinding {
   side?: 'left' | 'right';
 }
 
+/** A single AU id or a grouped list of AU ids that share one semantic direction. */
+export type AUSelector = number | number[];
+
 /**
  * RotationAxis - Defines which AUs control a specific rotation axis
  */
 export interface RotationAxis {
   aus: number[];
   axis: 'rx' | 'ry' | 'rz';
-  negative?: number;
-  positive?: number;
+  negative?: AUSelector;
+  positive?: AUSelector;
 }
 
 /**

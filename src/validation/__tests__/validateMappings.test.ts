@@ -75,6 +75,31 @@ describe('validateMappingConfig', () => {
     expect(result.warnings.some((issue) => issue.code === 'CONTINUUM_COMPOSITE_MISMATCH')).toBe(true);
   });
 
+  it('accepts grouped negative/positive composite AUs when they are present in aus and match continuum pairs', () => {
+    const config: Profile = {
+      ...createBaseConfig(),
+      boneNodes: { EYE_L: 'EyeL', EYE_R: 'EyeR' },
+      compositeRotations: [
+        {
+          node: 'EYE_L',
+          pitch: null,
+          yaw: { aus: [61, 62, 65, 66], axis: 'rz', negative: [61, 65], positive: [62, 66] },
+          roll: null,
+        },
+      ],
+      continuumPairs: {
+        61: { pairId: 62, isNegative: true, axis: 'yaw', node: 'EYE_L' },
+        62: { pairId: 61, isNegative: false, axis: 'yaw', node: 'EYE_L' },
+        65: { pairId: 66, isNegative: true, axis: 'yaw', node: 'EYE_L' },
+        66: { pairId: 65, isNegative: false, axis: 'yaw', node: 'EYE_L' },
+      },
+    };
+
+    const result = validateMappingConfig(config);
+    expect(result.errors.some((issue) => issue.code === 'COMPOSITE_AU_MISSING')).toBe(false);
+    expect(result.warnings.some((issue) => issue.code === 'CONTINUUM_COMPOSITE_MISMATCH')).toBe(false);
+  });
+
   it('warns when AU info is missing for referenced AUs', () => {
     const config: Profile = {
       ...createBaseConfig(),

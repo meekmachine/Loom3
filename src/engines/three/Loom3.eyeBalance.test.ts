@@ -26,6 +26,12 @@ function makeEyeEngine(): {
         { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 25, side: 'left' },
         { node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 25, side: 'right' },
       ],
+      65: [
+        { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 25, side: 'left' },
+      ],
+      66: [
+        { node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 25, side: 'left' },
+      ],
     },
     boneNodes: {
       EYE_L: 'LeftEye',
@@ -37,7 +43,7 @@ function makeEyeEngine(): {
       {
         node: 'EYE_L',
         pitch: null,
-        yaw: { aus: [61, 62], axis: 'rz', negative: 61, positive: 62 },
+        yaw: { aus: [61, 62, 65, 66], axis: 'rz', negative: [61, 65], positive: [62, 66] },
         roll: null,
       },
       {
@@ -64,5 +70,41 @@ describe('Loom3 eye balance', () => {
 
     expect(leftEye.quaternion.toArray()).not.toEqual([0, 0, 0, 1]);
     expect(rightEye.quaternion.toArray()).toEqual([0, 0, 0, 1]);
+  });
+
+  it('keeps shared-eye balance from leaking into grouped independent eye AUs', () => {
+    const { engine } = makeEyeEngine();
+
+    engine.setAU(61, 0.8, 1);
+    engine.update(1 / 60);
+
+    const sharedOnly = engine.getBones();
+    expect(Math.abs(sharedOnly.EYE_L.rotation[2])).toBeLessThan(0.001);
+    expect(Math.abs(sharedOnly.EYE_R.rotation[2])).toBeCloseTo(20, 5);
+
+    engine.setAU(65, 0.2);
+    engine.update(1 / 60);
+
+    const withIndependent = engine.getBones();
+    expect(Math.abs(withIndependent.EYE_L.rotation[2])).toBeCloseTo(5, 5);
+    expect(Math.abs(withIndependent.EYE_R.rotation[2])).toBeCloseTo(20, 5);
+  });
+
+  it('preserves grouped eye balance during independent-eye transitions', () => {
+    const { engine } = makeEyeEngine();
+
+    engine.transitionAU(61, 0.8, 0, 1);
+    engine.update(1 / 60);
+
+    const sharedOnly = engine.getBones();
+    expect(Math.abs(sharedOnly.EYE_L.rotation[2])).toBeLessThan(0.001);
+    expect(Math.abs(sharedOnly.EYE_R.rotation[2])).toBeCloseTo(20, 5);
+
+    engine.transitionAU(65, 0.2, 0);
+    engine.update(1 / 60);
+
+    const withIndependent = engine.getBones();
+    expect(Math.abs(withIndependent.EYE_L.rotation[2])).toBeCloseTo(5, 5);
+    expect(Math.abs(withIndependent.EYE_R.rotation[2])).toBeCloseTo(20, 5);
   });
 });

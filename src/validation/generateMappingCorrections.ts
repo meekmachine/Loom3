@@ -6,16 +6,7 @@
  */
 
 import type { Profile, MorphTargetsBySide, MorphTargetRef } from '../mappings/types';
-
-interface MorphMesh {
-  name: string;
-  morphTargetDictionary?: Record<string, number>;
-  morphTargetInfluences?: number[];
-}
-
-interface Skeleton {
-  bones: Array<{ name: string }>;
-}
+import type { ValidationMorphMesh as MorphMesh, ValidationSkeleton as Skeleton } from './types';
 
 export interface MappingCorrection {
   type: 'bone' | 'morph' | 'viseme' | 'mesh';

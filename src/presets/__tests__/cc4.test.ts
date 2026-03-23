@@ -116,6 +116,33 @@ describe('CC4 Preset', () => {
       expect(BONE_AU_TO_BINDINGS[64]).toBeDefined();
     });
 
+    it('should have single-eye bone bindings for independent eye AUs (65-72)', () => {
+      expect(BONE_AU_TO_BINDINGS[65]).toEqual([
+        expect.objectContaining({ node: 'EYE_L', channel: 'rz', side: 'left' }),
+      ]);
+      expect(BONE_AU_TO_BINDINGS[66]).toEqual([
+        expect.objectContaining({ node: 'EYE_L', channel: 'rz', side: 'left' }),
+      ]);
+      expect(BONE_AU_TO_BINDINGS[67]).toEqual([
+        expect.objectContaining({ node: 'EYE_L', channel: 'rx', side: 'left' }),
+      ]);
+      expect(BONE_AU_TO_BINDINGS[68]).toEqual([
+        expect.objectContaining({ node: 'EYE_L', channel: 'rx', side: 'left' }),
+      ]);
+      expect(BONE_AU_TO_BINDINGS[69]).toEqual([
+        expect.objectContaining({ node: 'EYE_R', channel: 'rz', side: 'right' }),
+      ]);
+      expect(BONE_AU_TO_BINDINGS[70]).toEqual([
+        expect.objectContaining({ node: 'EYE_R', channel: 'rz', side: 'right' }),
+      ]);
+      expect(BONE_AU_TO_BINDINGS[71]).toEqual([
+        expect.objectContaining({ node: 'EYE_R', channel: 'rx', side: 'right' }),
+      ]);
+      expect(BONE_AU_TO_BINDINGS[72]).toEqual([
+        expect.objectContaining({ node: 'EYE_R', channel: 'rx', side: 'right' }),
+      ]);
+    });
+
     it('should have correct maxDegrees for head rotation', () => {
       // Head yaw should allow reasonable rotation range (typically 45-65 degrees)
       expect(BONE_AU_TO_BINDINGS[51][0].maxDegrees).toBeGreaterThanOrEqual(30);
@@ -184,14 +211,32 @@ describe('CC4 Preset', () => {
 
     it('should have correct AU mappings in eye composites', () => {
       const eyeL = COMPOSITE_ROTATIONS.find(c => c.node === 'EYE_L')!;
+      const eyeR = COMPOSITE_ROTATIONS.find(c => c.node === 'EYE_R')!;
 
       // Yaw: AU 61 (left) and 62 (right)
       expect(eyeL.yaw!.aus).toContain(61);
       expect(eyeL.yaw!.aus).toContain(62);
+      expect(eyeL.yaw!.aus).toContain(65);
+      expect(eyeL.yaw!.aus).toContain(66);
+      expect(eyeL.yaw!.negative).toEqual([61, 65]);
+      expect(eyeL.yaw!.positive).toEqual([62, 66]);
 
       // Pitch: AU 63 (up) and 64 (down)
       expect(eyeL.pitch!.aus).toContain(63);
       expect(eyeL.pitch!.aus).toContain(64);
+      expect(eyeL.pitch!.aus).toContain(67);
+      expect(eyeL.pitch!.aus).toContain(68);
+      expect(eyeL.pitch!.negative).toEqual([64, 68]);
+      expect(eyeL.pitch!.positive).toEqual([63, 67]);
+
+      expect(eyeR.yaw!.aus).toContain(69);
+      expect(eyeR.yaw!.aus).toContain(70);
+      expect(eyeR.yaw!.negative).toEqual([61, 69]);
+      expect(eyeR.yaw!.positive).toEqual([62, 70]);
+      expect(eyeR.pitch!.aus).toContain(71);
+      expect(eyeR.pitch!.aus).toContain(72);
+      expect(eyeR.pitch!.negative).toEqual([64, 72]);
+      expect(eyeR.pitch!.positive).toEqual([63, 71]);
     });
   });
 
@@ -202,12 +247,20 @@ describe('CC4 Preset', () => {
       expect(CONTINUUM_PAIRS_MAP[61].pairId).toBe(62);
       expect(CONTINUUM_PAIRS_MAP[62]).toBeDefined();
       expect(CONTINUUM_PAIRS_MAP[62].pairId).toBe(61);
+      expect(CONTINUUM_PAIRS_MAP[65].pairId).toBe(66);
+      expect(CONTINUUM_PAIRS_MAP[66].pairId).toBe(65);
+      expect(CONTINUUM_PAIRS_MAP[69].pairId).toBe(70);
+      expect(CONTINUUM_PAIRS_MAP[70].pairId).toBe(69);
 
       // Eye vertical (63 ↔ 64)
       expect(CONTINUUM_PAIRS_MAP[63]).toBeDefined();
       expect(CONTINUUM_PAIRS_MAP[63].pairId).toBe(64);
       expect(CONTINUUM_PAIRS_MAP[64]).toBeDefined();
       expect(CONTINUUM_PAIRS_MAP[64].pairId).toBe(63);
+      expect(CONTINUUM_PAIRS_MAP[67].pairId).toBe(68);
+      expect(CONTINUUM_PAIRS_MAP[68].pairId).toBe(67);
+      expect(CONTINUUM_PAIRS_MAP[71].pairId).toBe(72);
+      expect(CONTINUUM_PAIRS_MAP[72].pairId).toBe(71);
     });
 
     it('should have bidirectional mappings for head AUs', () => {
@@ -297,6 +350,17 @@ describe('CC4 Preset', () => {
         expect(hasLeftRightBones(62)).toBe(true);
         expect(hasLeftRightBones(63)).toBe(true);
         expect(hasLeftRightBones(64)).toBe(true);
+      });
+
+      it('should return false for independent eye AUs (single eye bone)', () => {
+        expect(hasLeftRightBones(65)).toBe(false);
+        expect(hasLeftRightBones(66)).toBe(false);
+        expect(hasLeftRightBones(67)).toBe(false);
+        expect(hasLeftRightBones(68)).toBe(false);
+        expect(hasLeftRightBones(69)).toBe(false);
+        expect(hasLeftRightBones(70)).toBe(false);
+        expect(hasLeftRightBones(71)).toBe(false);
+        expect(hasLeftRightBones(72)).toBe(false);
       });
 
       it('should return false for head AUs (single HEAD bone)', () => {

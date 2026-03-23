@@ -506,6 +506,14 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
     { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 20, side: 'left' },
     { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 20, side: 'right' },
   ],
+  65: [{ node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 25, side: 'left' }],
+  66: [{ node: 'EYE_L', channel: 'rz', scale: -1, maxDegrees: 25, side: 'left' }],
+  67: [{ node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 20, side: 'left' }],
+  68: [{ node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 20, side: 'left' }],
+  69: [{ node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 25, side: 'right' }],
+  70: [{ node: 'EYE_R', channel: 'rz', scale: -1, maxDegrees: 25, side: 'right' }],
+  71: [{ node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 20, side: 'right' }],
+  72: [{ node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 20, side: 'right' }],
 
   // Tongue controls (optional, for rigs that expose them)
   37: [{ node: 'TONGUE', channel: 'rz', scale: 1, maxDegrees: 20 }],
@@ -616,14 +624,14 @@ export const COMPOSITE_ROTATIONS: CompositeRotation[] = [
   },
   {
     node: 'EYE_L',
-    pitch: { aus: [64, 63], axis: 'rx', negative: 64, positive: 63 },  // Eyes down/up
-    yaw: { aus: [61, 62], axis: 'rz', negative: 61, positive: 62 },    // Eyes left/right (rz for CC4)
+    pitch: { aus: [64, 63, 68, 67], axis: 'rx', negative: [64, 68], positive: [63, 67] },  // Eyes down/up
+    yaw: { aus: [61, 62, 65, 66], axis: 'rz', negative: [61, 65], positive: [62, 66] },    // Eyes left/right (rz for CC4)
     roll: null  // Eyes don't have roll
   },
   {
     node: 'EYE_R',
-    pitch: { aus: [64, 63], axis: 'rx', negative: 64, positive: 63 },  // Eyes down/up
-    yaw: { aus: [61, 62], axis: 'rz', negative: 61, positive: 62 },    // Eyes left/right (rz for CC4)
+    pitch: { aus: [64, 63, 72, 71], axis: 'rx', negative: [64, 72], positive: [63, 71] },  // Eyes down/up
+    yaw: { aus: [61, 62, 69, 70], axis: 'rz', negative: [61, 69], positive: [62, 70] },    // Eyes left/right (rz for CC4)
     roll: null  // Eyes don't have roll
   },
   {
@@ -652,9 +660,17 @@ export const CONTINUUM_PAIRS_MAP: Record<number, {
   // Eyes horizontal - both eyes share same AUs (yaw maps to rz via COMPOSITE_ROTATIONS)
   61: { pairId: 62, isNegative: true, axis: 'yaw', node: 'EYE_L' },
   62: { pairId: 61, isNegative: false, axis: 'yaw', node: 'EYE_L' },
+  65: { pairId: 66, isNegative: true, axis: 'yaw', node: 'EYE_L' },
+  66: { pairId: 65, isNegative: false, axis: 'yaw', node: 'EYE_L' },
+  69: { pairId: 70, isNegative: true, axis: 'yaw', node: 'EYE_R' },
+  70: { pairId: 69, isNegative: false, axis: 'yaw', node: 'EYE_R' },
   // Eyes vertical (pitch)
   64: { pairId: 63, isNegative: true, axis: 'pitch', node: 'EYE_L' },
   63: { pairId: 64, isNegative: false, axis: 'pitch', node: 'EYE_L' },
+  68: { pairId: 67, isNegative: true, axis: 'pitch', node: 'EYE_L' },
+  67: { pairId: 68, isNegative: false, axis: 'pitch', node: 'EYE_L' },
+  72: { pairId: 71, isNegative: true, axis: 'pitch', node: 'EYE_R' },
+  71: { pairId: 72, isNegative: false, axis: 'pitch', node: 'EYE_R' },
   // Head yaw (turn left/right)
   51: { pairId: 52, isNegative: true, axis: 'yaw', node: 'HEAD' },
   52: { pairId: 51, isNegative: false, axis: 'yaw', node: 'HEAD' },
@@ -691,6 +707,10 @@ export const CONTINUUM_PAIRS_MAP: Record<number, {
 export const CONTINUUM_LABELS: Record<string, string> = {
   '61-62': 'Eyes — Horizontal',
   '64-63': 'Eyes — Vertical',
+  '65-66': 'Left Eye — Horizontal',
+  '68-67': 'Left Eye — Vertical',
+  '69-70': 'Right Eye — Horizontal',
+  '72-71': 'Right Eye — Vertical',
   '51-52': 'Head — Horizontal',
   '54-53': 'Head — Vertical',
   '55-56': 'Head — Tilt',

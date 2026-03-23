@@ -29,7 +29,9 @@ import type {
   Snippet,
   BoneKey,
   CompositeRotation,
+  RotationAxis,
 } from '../../core/types';
+import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import type { Profile } from '../../mappings/types';
 import type { ResolvedBones } from './types';
 import { getSideScale, resolveCurveBalance } from './balanceUtils';
@@ -684,32 +686,17 @@ export class BakedAnimationController {
 
       const getAxisBinding = (
         nodeKey: BoneKey,
-        axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
+        axisConfig: RotationAxis | null | undefined,
         axisValue: number,
         t: number
       ) => {
-        if (!axisConfig) return null;
-
-        if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
-          const auId = axisValue < 0 ? axisConfig.negative : axisConfig.positive;
-          return config.auToBones[auId]?.find((b) => b.node === nodeKey) ?? null;
-        }
-
-        if (axisConfig.aus.length > 1) {
-          let maxAU = axisConfig.aus[0];
-          let maxVal = sampleCurve(String(maxAU), t);
-          for (const auId of axisConfig.aus) {
-            const val = sampleCurve(String(auId), t);
-            if (val > maxVal) {
-              maxVal = val;
-              maxAU = auId;
-            }
-          }
-          return config.auToBones[maxAU]?.find((b) => b.node === nodeKey) ?? null;
-        }
-
-        const auId = axisConfig.aus[0];
-        return config.auToBones[auId]?.find((b) => b.node === nodeKey) ?? null;
+        return getCompositeAxisBinding(
+          nodeKey,
+          axisConfig,
+          axisValue,
+          (auId: number) => getAxisSampleForNode(auId, nodeKey, t),
+          config.auToBones
+        );
       };
 
       const getAxisSampleForNode = (
@@ -729,28 +716,10 @@ export class BakedAnimationController {
 
       const getAxisValue = (
         nodeKey: BoneKey,
-        axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
+        axisConfig: RotationAxis | null | undefined,
         t: number
-      ) => {
-        if (!axisConfig) return 0;
-
-        if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
-          const posValue = getAxisSampleForNode(axisConfig.positive, nodeKey, t);
-          const negValue = getAxisSampleForNode(axisConfig.negative, nodeKey, t);
-          return posValue - negValue;
-        }
-
-        if (axisConfig.aus.length > 1) {
-          let maxVal = 0;
-          for (const auId of axisConfig.aus) {
-            const val = getAxisSampleForNode(auId, nodeKey, t);
-            if (val > maxVal) maxVal = val;
-          }
-          return maxVal;
-        }
-
-        return getAxisSampleForNode(axisConfig.aus[0], nodeKey, t);
-      };
+      ) =>
+        getCompositeAxisValue(axisConfig, (auId: number) => getAxisSampleForNode(auId, nodeKey, t));
 
       // Track if autoVisemeJaw already added a JAW track
       const autoVisemeJawHandledJaw =
@@ -787,7 +756,7 @@ export class BakedAnimationController {
           const compositeQ = new Quaternion().copy(entry.baseQuat);
 
           const applyAxis = (
-            axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll']
+            axisConfig: RotationAxis | null | undefined
           ) => {
             if (!axisConfig) return;
             let axisValue = getAxisValue(nodeKey, axisConfig, t);

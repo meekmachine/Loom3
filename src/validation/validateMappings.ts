@@ -159,6 +159,11 @@ function isEyeNodeKey(nodeKey: string) {
   return nodeKey === 'EYE_L' || nodeKey === 'EYE_R';
 }
 
+function toAUList(value?: number | number[]): number[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
 /**
  * Validate that the mapping dictionaries are internally consistent.
  */
@@ -239,34 +244,37 @@ export function validateMappingConfig(config: Profile): MappingConsistencyResult
         continue;
       }
 
-      if (axisConfig.negative !== undefined && !axisConfig.aus.includes(axisConfig.negative)) {
-        push(
-          'error',
-          'COMPOSITE_AU_MISSING',
-          `Composite axis for "${composite.node}" is missing negative AU ${axisConfig.negative} in aus list`,
-          { node: composite.node, auId: axisConfig.negative }
-        );
+      for (const auId of toAUList(axisConfig.negative)) {
+        if (!axisConfig.aus.includes(auId)) {
+          push(
+            'error',
+            'COMPOSITE_AU_MISSING',
+            `Composite axis for "${composite.node}" is missing negative AU ${auId} in aus list`,
+            { node: composite.node, auId }
+          );
+        }
       }
 
-      if (axisConfig.positive !== undefined && !axisConfig.aus.includes(axisConfig.positive)) {
-        push(
-          'error',
-          'COMPOSITE_AU_MISSING',
-          `Composite axis for "${composite.node}" is missing positive AU ${axisConfig.positive} in aus list`,
-          { node: composite.node, auId: axisConfig.positive }
-        );
+      for (const auId of toAUList(axisConfig.positive)) {
+        if (!axisConfig.aus.includes(auId)) {
+          push(
+            'error',
+            'COMPOSITE_AU_MISSING',
+            `Composite axis for "${composite.node}" is missing positive AU ${auId} in aus list`,
+            { node: composite.node, auId }
+          );
+        }
       }
 
-      if (
-        axisConfig.negative !== undefined &&
-        axisConfig.positive !== undefined &&
-        axisConfig.negative === axisConfig.positive
-      ) {
+      const negativeAUs = toAUList(axisConfig.negative);
+      const positiveAUs = toAUList(axisConfig.positive);
+      const overlappingAUs = negativeAUs.filter((auId) => positiveAUs.includes(auId));
+      if (overlappingAUs.length > 0) {
         push(
           'error',
           'COMPOSITE_AU_DUPLICATE',
-          `Composite axis for "${composite.node}" has identical negative/positive AU ${axisConfig.negative}`,
-          { node: composite.node, auId: axisConfig.negative }
+          `Composite axis for "${composite.node}" reuses AU ${overlappingAUs[0]} in both negative and positive groups`,
+          { node: composite.node, auId: overlappingAUs[0] }
         );
       }
     }
@@ -368,11 +376,11 @@ export function validateMappingConfig(config: Profile): MappingConsistencyResult
         continue;
       }
 
-      const expectedNeg = axisConfig.negative;
-      const expectedPos = axisConfig.positive;
+      const expectedNeg = toAUList(axisConfig.negative);
+      const expectedPos = toAUList(axisConfig.positive);
       const negId = info.isNegative ? Number(auIdStr) : info.pairId;
       const posId = info.isNegative ? info.pairId : Number(auIdStr);
-      if (negId !== expectedNeg || posId !== expectedPos) {
+      if (!expectedNeg.includes(negId) || !expectedPos.includes(posId)) {
         push(
           'warning',
           'CONTINUUM_COMPOSITE_MISMATCH',

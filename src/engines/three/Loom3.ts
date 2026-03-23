@@ -38,7 +38,7 @@ import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUp
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import { resolvePreset } from '../../presets';
 import { resolveProfile } from '../../mappings/resolveProfile';
-import type { CompositeRotation, BoneBinding } from '../../core/types';
+import type { BoneBinding, CompositeRotation } from '../../core/types';
 import type { NodeBase, ResolvedBones } from './types';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
@@ -74,6 +74,52 @@ function buildAUToCompositeMap(composites: CompositeRotation[]): Map<number, { n
 
 function clamp01(x: number) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+function asAUList(value?: number | number[]): number[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function getCompositeAxisValue(
+  axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
+  getValue: (auId: number) => number
+): number {
+  if (!axisConfig) return 0;
+  const negativeAUs = asAUList(axisConfig.negative);
+  const positiveAUs = asAUList(axisConfig.positive);
+
+  if (negativeAUs.length > 0 && positiveAUs.length > 0) {
+    const negativeValue = Math.max(...negativeAUs.map(getValue), 0);
+    const positiveValue = Math.max(...positiveAUs.map(getValue), 0);
+    return positiveValue - negativeValue;
+  }
+
+  if (axisConfig.aus.length > 1) {
+    return Math.max(...axisConfig.aus.map(getValue), 0);
+  }
+
+  return getValue(axisConfig.aus[0]);
+}
+
+function getCompositeAxisBinding(
+  nodeKey: string,
+  axisConfig: CompositeRotation['pitch'] | CompositeRotation['yaw'] | CompositeRotation['roll'],
+  direction: number,
+  getValue: (auId: number) => number,
+  auToBones: Record<number, BoneBinding[]>
+) {
+  if (!axisConfig) return null;
+  const directionalAUs = direction < 0 ? asAUList(axisConfig.negative) : asAUList(axisConfig.positive);
+  const candidates = directionalAUs.length > 0 ? directionalAUs : axisConfig.aus;
+
+  const ranked = [...candidates].sort((a, b) => getValue(b) - getValue(a));
+  for (const auId of ranked) {
+    const binding = auToBones[auId]?.find((candidate) => candidate.node === nodeKey);
+    if (binding) return binding;
+  }
+
+  return null;
 }
 
 type MorphTargetHandle = { infl: number[]; idx: number };
@@ -548,20 +594,7 @@ export class Loom3 implements LoomLarge {
         const axisConfig = config[compositeInfo.axis];
         if (!axisConfig) continue;
 
-        // Calculate axis value based on whether it's a continuum pair
-        let axisValue: number;
-        if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
-          // Continuum: calculate difference between positive and negative AUs
-          const negValue = this.auValues[axisConfig.negative] ?? 0;
-          const posValue = this.auValues[axisConfig.positive] ?? 0;
-          axisValue = posValue - negValue;
-        } else if (axisConfig.aus.length > 1) {
-          // Multiple AUs affect same axis (e.g., jaw drop) - use max
-          axisValue = Math.max(...axisConfig.aus.map((auId: number) => this.auValues[auId] ?? 0));
-        } else {
-          // Single AU controls this axis
-          axisValue = v;
-        }
+        let axisValue = getCompositeAxisValue(axisConfig, (auId: number) => this.auValues[auId] ?? 0);
 
         // Apply balance based on mapping-provided side hints, not name heuristics.
         const auBoneBindings = this.config.auToBones[id] || [];
@@ -667,17 +700,7 @@ export class Loom3 implements LoomLarge {
         const axisConfig = config[compositeInfo.axis];
         if (!axisConfig) continue;
 
-        // Calculate axis value based on whether it's a continuum pair
-        let axisValue: number;
-        if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
-          const negValue = this.auValues[axisConfig.negative] ?? 0;
-          const posValue = this.auValues[axisConfig.positive] ?? 0;
-          axisValue = posValue - negValue;
-        } else if (axisConfig.aus.length > 1) {
-          axisValue = Math.max(...axisConfig.aus.map((auId: number) => this.auValues[auId] ?? 0));
-        } else {
-          axisValue = target;
-        }
+        let axisValue = getCompositeAxisValue(axisConfig, (auId: number) => this.auValues[auId] ?? 0);
 
         const side = bindings.find((binding) => binding.node === nodeKey)?.side;
         axisValue *= getSideScale(storedBalance, side);
@@ -1575,37 +1598,6 @@ export class Loom3 implements LoomLarge {
       return;
     }
 
-    // Helper to get binding from the correct AU for an axis based on direction
-    const getBindingForAxis = (
-      axisConfig: typeof config.pitch | typeof config.yaw | typeof config.roll,
-      direction: number
-    ) => {
-      if (!axisConfig) return null;
-
-      // For continuum pairs, select the AU based on direction
-      if (axisConfig.negative !== undefined && axisConfig.positive !== undefined) {
-        const auId = direction < 0 ? axisConfig.negative : axisConfig.positive;
-        return this.config.auToBones[auId]?.find((b: BoneBinding) => b.node === nodeKey);
-      }
-
-      // If multiple AUs, find which one is active (has highest value)
-      if (axisConfig.aus.length > 1) {
-        let maxAU = axisConfig.aus[0];
-        let maxValue = this.auValues[maxAU] ?? 0;
-        for (const auId of axisConfig.aus) {
-          const val = this.auValues[auId] ?? 0;
-          if (val > maxValue) {
-            maxValue = val;
-            maxAU = auId;
-          }
-        }
-        return this.config.auToBones[maxAU]?.find((b: BoneBinding) => b.node === nodeKey);
-      }
-
-      // Single AU
-      return this.config.auToBones[axisConfig.aus[0]]?.find((b: BoneBinding) => b.node === nodeKey);
-    };
-
     // Helper to get Vector3 axis from channel
     const getAxis = (channel: 'rx' | 'ry' | 'rz') =>
       channel === 'rx' ? X_AXIS : channel === 'ry' ? Y_AXIS : Z_AXIS;
@@ -1615,7 +1607,13 @@ export class Loom3 implements LoomLarge {
 
     // Apply yaw rotation
     if (config.yaw && rotState.yaw !== 0) {
-      const binding = getBindingForAxis(config.yaw, rotState.yaw);
+      const binding = getCompositeAxisBinding(
+        nodeKey,
+        config.yaw,
+        rotState.yaw,
+        (auId: number) => this.auValues[auId] ?? 0,
+        this.config.auToBones
+      );
       if (binding?.maxDegrees && binding.channel) {
         const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.yaw) * binding.scale;
         const axis = getAxis(binding.channel as 'rx' | 'ry' | 'rz');
@@ -1626,7 +1624,13 @@ export class Loom3 implements LoomLarge {
 
     // Apply pitch rotation
     if (config.pitch && rotState.pitch !== 0) {
-      const binding = getBindingForAxis(config.pitch, rotState.pitch);
+      const binding = getCompositeAxisBinding(
+        nodeKey,
+        config.pitch,
+        rotState.pitch,
+        (auId: number) => this.auValues[auId] ?? 0,
+        this.config.auToBones
+      );
       if (binding?.maxDegrees && binding.channel) {
         const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.pitch) * binding.scale;
         const axis = getAxis(binding.channel as 'rx' | 'ry' | 'rz');
@@ -1637,7 +1641,13 @@ export class Loom3 implements LoomLarge {
 
     // Apply roll rotation
     if (config.roll && rotState.roll !== 0) {
-      const binding = getBindingForAxis(config.roll, rotState.roll);
+      const binding = getCompositeAxisBinding(
+        nodeKey,
+        config.roll,
+        rotState.roll,
+        (auId: number) => this.auValues[auId] ?? 0,
+        this.config.auToBones
+      );
       if (binding?.maxDegrees && binding.channel) {
         const radians = deg2rad(binding.maxDegrees) * Math.abs(rotState.roll) * binding.scale;
         const axis = getAxis(binding.channel as 'rx' | 'ry' | 'rz');

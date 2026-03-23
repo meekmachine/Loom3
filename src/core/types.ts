@@ -42,8 +42,8 @@ export interface BoneBinding {
 export interface RotationAxis {
   aus: number[];
   axis: 'rx' | 'ry' | 'rz';
-  negative?: number;
-  positive?: number;
+  negative?: number | number[];
+  positive?: number | number[];
 }
 
 /**

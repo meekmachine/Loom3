@@ -381,7 +381,7 @@ This is especially useful for:
 - Making meshes semi-transparent for debugging
 - Adjusting blending modes for special effects
 
-![Before and after render-order adjustment diagram](./assets/readme/render-order-before-after.svg)
+![Before and after Mesh panel screenshots showing a render-order adjustment](./assets/readme/render-order-before-after.webp)
 
 ---
 

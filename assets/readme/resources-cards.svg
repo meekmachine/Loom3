@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1020"/>
+      <stop offset="100%" stop-color="#111a31"/>
+    </linearGradient>
+    <linearGradient id="panelGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#17223c"/>
+      <stop offset="100%" stop-color="#10172b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#6dd3ce"/>
+    </marker>
+    <style>
+      .title { font: 700 42px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #e8edf7; }
+      .subtitle { font: 500 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #95a4c4; }
+      .label { font: 700 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #e8edf7; }
+      .body { font: 500 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #95a4c4; }
+      .mono { font: 500 20px 'SF Mono', Menlo, Monaco, Consolas, monospace; fill: #e8edf7; }
+      .mono-small { font: 500 16px 'SF Mono', Menlo, Monaco, Consolas, monospace; fill: #e8edf7; }
+      .tiny { font: 600 14px 'SF Mono', Menlo, Monaco, Consolas, monospace; fill: #95a4c4; }
+      .chip { font: 700 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #0b1020; }
+      .card { fill: url(#panelGrad); stroke: #2a395f; stroke-width: 2; rx: 24; }
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bgGrad)"/>
+  <text x="72" y="88" class="title">Reference material that pairs well with Loom3</text>
+  
+      <text x="72" y="122" class="subtitle">These are the concepts and tools the README builds on: FACS theory, rig authoring, and rendering primitives.</text>
+      
+  <rect x="82" y="190" width="330" height="500" rx="24" fill="url(#panelGrad)" stroke="#2a395f" stroke-width="2" filter="url(#shadow)"/>
+  <text x="110" y="236" class="label">FACS</text>
+  <text x="110" y="270" class="body">Facial Action Coding System</text><text x="110" y="298" class="body">AU vocabulary and muscular basis</text><text x="110" y="326" class="body">Use it to reason about expression semantics</text>
+      
+  <rect x="442" y="190" width="330" height="500" rx="24" fill="url(#panelGrad)" stroke="#2a395f" stroke-width="2" filter="url(#shadow)"/>
+  <text x="470" y="236" class="label">Paul Ekman Group</text>
+  <text x="470" y="270" class="body">Detailed FACS training material</text><text x="470" y="298" class="body">Reference descriptions for action units</text><text x="470" y="326" class="body">Useful when refining custom AU metadata</text>
+      
+  <rect x="802" y="190" width="330" height="500" rx="24" fill="url(#panelGrad)" stroke="#2a395f" stroke-width="2" filter="url(#shadow)"/>
+  <text x="830" y="236" class="label">Character Creator 4</text>
+  <text x="830" y="270" class="body">Source of the default CC4 mappings</text><text x="830" y="298" class="body">Morph naming conventions and rig structure</text><text x="830" y="326" class="body">Great for high-definition humanoid presets</text>
+      
+  <rect x="1162" y="190" width="330" height="500" rx="24" fill="url(#panelGrad)" stroke="#2a395f" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1190" y="236" class="label">Three.js Docs</text>
+  <text x="1190" y="270" class="body">Scene graph, GLTFLoader, and materials</text><text x="1190" y="298" class="body">Renderer behavior and animation loops</text><text x="1190" y="326" class="body">Where Loom3 plugs into your runtime</text>
+      <rect x="120" y="260" width="64" height="64" rx="18" fill="#12314f"/><text x="139" y="302" class="label">AU</text>
+      <circle cx="520" cy="292" r="34" fill="#2a1b36"/><text x="496" y="302" class="label">PE</text>
+      <rect x="878" y="256" width="88" height="72" rx="18" fill="#332314"/><text x="896" y="302" class="label">CC4</text>
+      <path d="M1248 260 L1288 330 L1208 330 z" fill="#14332f"/><text x="1222" y="306" class="label">3JS</text>
+    
+</svg>

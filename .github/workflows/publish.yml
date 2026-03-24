@@ -11,7 +11,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prepare_release:
+    if: "${{ github.event_name == 'push' && github.actor != 'github-actions[bot]' && !startsWith(github.event.head_commit.message, 'build: bump npm package version') }}"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_sha: ${{ steps.bump.outputs.release_sha }}
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: "${{ github.ref_name }}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump patch version
+        id: bump
+        run: |
+          npm version patch --no-git-tag-version
+          VERSION=$(node -p 'require("./package.json").version')
+          git add package.json package-lock.json
+          git commit -m "build: bump npm package version to ${VERSION}"
+          git push origin HEAD:main
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   publish:
+    if: "${{ always() && (github.event_name == 'workflow_dispatch' || needs.prepare_release.outputs.release_sha != '') }}"
+    needs: prepare_release
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -20,6 +57,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: "${{ github.event_name == 'workflow_dispatch' && github.sha || needs.prepare_release.outputs.release_sha }}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v5

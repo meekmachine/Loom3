@@ -1,202 +1,330 @@
-# loom3 Vision and PRD
+# loom3 Vision, Thesis, and PRD
+
+## Thesis
+
+loom3 should become the **open embodiment layer for AI avatars**.
+
+Large language models gave agents language. They did not give them a body, a face, a gaze system, a timing model, a gesture vocabulary, a movement grammar, or a portable expressive identity. loom3 should provide that missing layer for Three.js-based characters and, over time, help define a standard way to represent expressive avatar behavior.
+
+If LoomLarge is the studio, loom3 is the engine and profile system that makes the studio possible.
+
+## Why loom3 Matters
+
+There is a real gap in the current stack.
+
+- Most AI systems are still disembodied.
+- Most graphics systems expose low-level rig controls, not high-level expressive semantics.
+- Most avatar pipelines are not portable, not composable, and not easy to remix.
+
+loom3 is valuable because it sits between those layers:
+
+- above raw blendshapes and bone transforms
+- below product-specific authoring UI and backend logic
+- exactly where a reusable expressive character engine should live
+
+This is not just an engineering convenience. It is a product and cultural opportunity.
+
+Research on **ECAs**, **SIAs**, **Intelligent Virtual Agents**, **CASA**, and **The Media Equation** all support the same thesis: when an interactive system has socially legible cues, users treat it differently. That means the body layer is not polish. It changes the meaning of the interaction.
+
+And culturally, if remixable AI avatars are going to matter, they need an open, reusable substrate. That is where Lessig's read/write and remix thinking is useful: the future is not just better proprietary avatars. It is a shared expressive layer that can be reused, forked, extended, and recombined.
+
+loom3 should help make that possible.
 
 ## Vision
 
-loom3 should be the reusable character-control engine that gives any Three.js character a stable expressive profile: Action Units, visemes, bones, regions, and supporting runtime behavior exposed through a clean typed API.
+loom3 should be the best open-source library for giving 3D characters **semantic expressive control**.
 
-The package should feel trustworthy in two ways:
+That means a developer should not have to think first in terms of:
 
-- technically: stable schema, reliable presets, passing tests, predictable releases
-- product-wise: clear docs, working examples, and an obvious path from install to first successful character control
+- morph target index 38
+- quaternion track wiring
+- rig-specific naming chaos
+- one-off hand-coded viseme tables
 
-## Product Position
+They should be able to think in terms of:
 
-loom3 is not the full application. It is the engine and schema layer that powers LoomLarge and can also be adopted directly by other Three.js applications.
+- smile
+- brow raise
+- eye contact
+- jaw open
+- viseme set
+- expressive preset
+- profile
+- animation clip
+- gesture library
+- later locomotion and scene behavior
 
-That boundary matters:
+The library should let developers work at the level of expressive intent while still remaining close enough to the engine to be fast, portable, and precise.
 
-- application workflows, backend orchestration, Firebase persistence, and UI-heavy authoring belong in LoomLarge
-- engine behavior, profile shape, preset resolution, and runtime APIs belong in loom3
+## Product Promise
 
-## Users
+loom3 should let a developer say:
 
-- developers integrating expressive character control into Three.js apps
-- LoomLarge as the primary downstream application
-- technical users who need a typed profile model they can persist and version
+> I can take a 3D character, attach a profile, and immediately start controlling it as a socially legible agent instead of fighting rig internals.
 
-## Problem
+That promise is powerful because it gives value to three different audiences:
 
-Three.js teams can render a character, but turning that character into a consistently controllable expressive rig is still custom, fragile, and poorly documented. loom3 exists to remove that reinvention.
+### For application developers
 
-The current package is already technically promising, but it still has a few clear product gaps:
+- faster path from model to expressive interaction
+- a cleaner abstraction over rig complexity
+- stable typed profiles instead of ad hoc per-project mapping logic
 
-- release and versioning discipline are not yet reliable enough
-- docs and examples lag the engine
-- some preset correctness work is still open
-- the profile schema is not yet complete enough to carry every important downstream asset, especially animations
+### For tools like LoomLarge
 
-## Product Goal
+- a reusable engine and schema layer
+- a common character-profile representation
+- a foundation for long-term features like saved performance libraries, movement, and multi-agent scenes
 
-The next loom3 release should establish the package as a stable dependency, not just a working codebase.
+### For the ecosystem
 
-That means:
+- an open substrate for remixable avatar behavior
+- a way to share presets, profiles, and expressive conventions
+- a path toward a broader common language for embodied agents
 
-- npm publishing is reliable and version-synced
-- the public API and profile schema are coherent
-- the CC4 preset behaves correctly for common use
-- docs and examples make the package understandable without reading source
-- LoomLarge can depend on released schema changes instead of local drift
+## Value Proposition
 
-## Non-Goals For This Release
+The core value proposition is:
 
-- absorbing LoomLarge-specific UI or backend features
-- turning loom3 into a no-code editor
-- moving screenshot automation ownership into the package
-- broad architectural audits as a substitute for shipping the package cleanly
+**loom3 turns rig controls into expressive semantics.**
 
-## Current Reality
+More concretely, it provides:
 
-loom3 is in better technical shape than LoomLarge right now:
+- AU-driven face control rather than only raw morph control
+- viseme and speech-related expression infrastructure
+- bone + morph blending
+- preset and profile resolution
+- runtime animation conversion and scheduling primitives
+- a reusable profile format for character identity
+- a foundation for future movement, gesture, and multi-agent behavior
 
-- local typecheck passes
-- local tests pass
-- the main open risks are release process, package/version drift, schema completion, and documentation
+This is how AI avatar development becomes less bespoke and more composable.
 
-There is also a real dependency-management problem today:
+## Product Principles
 
-- LoomLarge declares `@lovelace_lol/loom3 ^1.0.7`
-- the installed copy under `LoomLarge/frontend/node_modules` is `1.0.4`
-- the local `loom3` repo is at `1.0.6`
-- npm currently reports `1.0.8`
+### 1. Semantics Over Rig Chaos
 
-That mismatch is exactly why loom3 now needs product-level release discipline, not just more code.
+The library should expose expressive meaning, not just low-level implementation detail.
+
+### 2. Profiles Over Per-Project Hacks
+
+Character configuration should live in portable profiles and presets that can be persisted, shared, versioned, and remixed.
+
+### 3. Open Remixability
+
+The engine should support a world where expressive profiles, mappings, and behavior libraries can be reused and recombined across projects.
+
+### 4. Performance Matters
+
+The abstraction has to stay practical in real-time applications. This is not just an offline authoring format.
+
+### 5. The Face Is Only The Beginning
+
+loom3 should start with expressive facial and upper-body control, but it should be designed with room for locomotion, scene behavior, and social multi-agent semantics.
+
+## What loom3 Should Become
+
+### Near-Term Identity
+
+An open-source expressive character engine with:
+
+- strong AU and viseme control
+- reliable presets
+- portable typed profiles
+- runtime animation support
+- enough documentation that developers can succeed quickly
+
+### Mid-Term Identity
+
+A reusable profile and behavior layer with:
+
+- profile-embedded animation libraries
+- preset composition
+- stronger gesture and expressive state modeling
+- better interoperability with authoring tools
+
+### Long-Term Identity
+
+A broader embodiment substrate for AI agents with:
+
+- locomotion and IK-related semantics
+- scene anchors, affordances, and movement intents
+- social attention and multi-agent behavior primitives
+- reusable behavior packs and character profile ecosystems
+
+## Boundary With LoomLarge
+
+This needs to stay clear.
+
+loom3 should own:
+
+- runtime expressive control
+- profile and preset schema
+- portable animation and behavior representations
+- reusable engine abstractions
+
+LoomLarge should own:
+
+- product UI
+- profile editing workflows
+- backend orchestration
+- capture pipelines
+- Firebase and app-specific persistence
+- scene direction and authoring experiences
+
+That boundary is critical. If loom3 tries to become the whole app, it loses focus. If it is too narrow, every downstream app has to reinvent the expressive layer.
 
 ## PRD
 
-### Problem Statement
+## Product Goal
 
-Developers need a portable, documented, versioned character-profile engine for Three.js. Right now the engine mostly works, but the package story is weaker than the code story.
+Build the canonical open-source engine and schema for expressive AI avatars in Three.js, starting with face and profile semantics, then expanding toward richer movement, reusable behavior libraries, and multi-agent embodiment.
 
-### Core User Promise
+## Product Objectives
 
-"I can install loom3, apply or extend a profile, and confidently drive a character rig with a documented API and released package."
+### Objective 1: Make character embodiment programmable
 
-### Release Objective
+Developers should be able to express intent semantically rather than wiring every rig by hand.
 
-Ship loom3 as a stable public engine package with a trustworthy release pipeline, a complete enough profile schema for downstream persistence, and documentation that supports first-use success.
+Required capabilities:
 
-### Must-Have Requirements
+- AU-based control
+- viseme support
+- bone/morph blending
+- preset resolution
+- expressive animation clip generation
 
-#### 1. Reliable release pipeline
+### Objective 2: Make character identity portable
 
-- npm publishing must work every time from the supported release path.
-- package version, git tags, and GitHub releases must stay in sync.
-- release notes should clearly point users to the published package version.
+A character should not be locked inside one project-specific mapping script.
 
-Relevant work:
+Required capabilities:
 
-- `#21` fix npm deployment pipeline
-- `#22` link npm releases to GitHub releases
+- stable typed profile schema
+- profile and preset composition
+- schema support for stored animation libraries
+- clear serialization and compatibility story
 
-#### 2. Stable profile schema for downstream apps
+### Objective 3: Make the package trustworthy to adopt
 
-- The `Profile` model must be able to carry the data LoomLarge needs to persist complete character behavior.
-- Animation/snippet libraries should be supported in the schema with backwards-compatible loading behavior.
-- Public exports and docs must reflect the final schema.
+The package has to feel real, not experimental.
 
-Relevant work:
+Required capabilities:
 
-- `#36` move animation/snippet libraries into `Profile`
+- reliable npm publishing
+- version/tag/release alignment
+- docs that match the actual package
+- examples that show immediate value
 
-#### 3. Preset correctness
+### Objective 4: Prepare for a broader embodiment stack
 
-- The CC4 preset must have correct viseme mapping for expected lip-sync quality.
-- Any major preset fixes should ship with regression coverage and clear notes.
+The design should not stop at facial control.
 
-Relevant work:
+Future required capabilities:
 
-- `#35` fix CC4 viseme mapping
+- locomotion and IK-oriented semantics
+- movement intents and path-related hooks
+- gesture and posture libraries
+- scene-aware behavior anchors
 
-#### 4. Docs and first-run examples
+### Objective 5: Support future multi-agent systems
 
-- The README must describe the modern install and usage path accurately.
-- Public examples should make it easy to test features quickly.
-- Screenshots and animated examples should show the package in action.
+Even if LoomLarge implements the product surface, loom3 should be able to support the lower-level expressive primitives needed for many agents in shared scenes.
 
-Relevant work:
+Future required capabilities:
 
-- `#31`, `#32`, `#33`
+- attention targets
+- social gaze and reaction primitives
+- interoperable animation/state payloads
+- portable behavior representations
 
-### Should-Have Requirements
+## Target Users
 
-- support for preset composition
-- clearer guidance on mapping architecture and type patterns
-- documented hair-physics defaults and validation
+- developers building AI avatar apps on Three.js
+- tools like LoomLarge
+- technical artists and experimental creators who need a programmable expressive layer
 
-Relevant work:
+## Jobs To Be Done
 
-- `#20`
-- `#29`
-- `#27`
-- `#15`
+- "Help me get this model under expressive control fast."
+- "Help me persist and reuse the character's expressive identity."
+- "Help me stop rewriting mapping and preset logic in every app."
+- "Help me build toward avatars that can speak, emote, move, and later interact socially in scenes."
 
-### Explicitly Deferred
+## Core Requirements For The Next Package Milestone
 
-These should not block the next stable package milestone:
+### 1. Release reliability
 
-- broad architecture reviews (`#28`, `#29`, `#27`) unless they expose a concrete release blocker
-- application-layer screenshot and thumbnail workflows
-- large feature expansion before the release/distribution story is stable
+The publish pipeline, package versions, tags, and release notes need to be disciplined and trustworthy.
 
-## Product Boundary Decision
+### 2. Schema completeness
 
-One important clarification for the roadmap:
+The profile model needs to represent what downstream apps actually need, especially profile-embedded animation/snippet libraries.
 
-- profile schema support for thumbnails or animation metadata can live in loom3 if the data is part of the reusable character profile model
-- backend-driven tab control, screenshot orchestration, Firebase persistence, and authoring UI belong in LoomLarge
+### 3. Preset correctness
 
-That means issue `#34` should be treated as primarily a LoomLarge implementation concern, with loom3 only supplying any shared types that are genuinely reusable.
+Core presets, especially CC4-related lip-sync and viseme behavior, need to be right enough that the package feels dependable.
 
-## Definition of Done
+### 4. Developer comprehension
 
-loom3 is "finished" for the next release when all of the following are true:
+The docs and examples need to communicate the package clearly enough that new adopters can succeed without reading the codebase end to end.
 
-1. The package publishes cleanly from an agreed release workflow.
-2. Published versions, tags, and release notes agree with each other.
-3. The profile schema supports downstream profile-scoped animation data in a backward-compatible way.
-4. The CC4 viseme mapping is corrected and covered by tests.
-5. The docs and examples are good enough that a new user can install the package and drive a character without reading deep source files.
-6. LoomLarge can adopt the released package without depending on stale or ambiguous local versions.
+## Roadmap
 
-## Priority Order
+### Phase 1: Make loom3 a trustworthy package
 
-### P0: Package integrity
+- fix release pipeline and version discipline
+- align tags, npm versions, and release notes
+- tighten README and examples
+- land schema improvements for profile-scoped animation data
 
-- fix release pipeline and version-sync discipline
-- release a clean package version that downstream apps can trust
+### Phase 2: Strengthen the expressive model
 
-### P1: Schema and preset correctness
-
-- land profile-scoped animation schema support
-- fix CC4 viseme mapping
-
-### P2: Docs and examples
-
-- improve README, screenshots, and editable examples
-
-### P3: Nice-to-have extensibility
-
+- better viseme correctness
 - preset composition
-- hair physics improvements
-- broader architecture cleanup
+- richer animation/profile interoperability
+- improved type clarity and mapping ergonomics
+
+### Phase 3: Expand embodiment
+
+- locomotion-oriented schema design
+- IK-related semantics
+- movement intent hooks
+- gesture and posture expansion
+
+### Phase 4: Support social scenes
+
+- lower-level primitives for gaze, attention, and reaction
+- portable representations that can support many agents
+- foundations for scene-level expressive systems built in downstream apps
+
+### Phase 5: Become a remixable standard
+
+- shared profile ecosystems
+- reusable preset packs
+- common expressive conventions across apps
+- a stronger bridge between open-source tooling and remix culture
+
+## Non-Goals For The Next Release
+
+- becoming a full no-code application
+- absorbing app-specific backend and UI concerns
+- chasing every speculative architecture idea before the package is solid to publish and adopt
 
 ## Success Metrics
 
-- downstream apps can depend on released loom3 versions instead of unpublished local state
-- a new developer can reach a first working character faster
-- package updates have a clear, traceable release record
-- profile portability improves because the schema carries the right data
+loom3 is succeeding when:
 
-## Summary
+- downstream apps trust released versions instead of relying on unpublished local state
+- developers can get a character working faster and at a higher level of abstraction
+- profiles become portable and reusable across projects
+- the package clearly points toward a future of expressive, moving, socially legible avatars instead of only face sliders
 
-loom3 should be treated as a dependency product. The package is already technically solid enough to ship, but it needs release rigor, schema completion, and documentation clarity more than it needs another wave of speculative architecture work.
+## Research And Cultural References
+
+- Embodied Conversational Agent research
+- Socially Intelligent Agent and Intelligent Virtual Agent research traditions
+- CASA and *The Media Equation*
+- Lawrence Lessig on remix and read/write culture
+
+loom3 matters because the future of AI avatars needs an engine layer that is technically robust, semantically expressive, and culturally open to reuse. That is the role this package should grow into.

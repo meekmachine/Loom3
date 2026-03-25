@@ -761,6 +761,43 @@ export class Loom3 implements LoomLarge {
    * Resolve morph key to direct targets for ultra-fast repeated access.
    * Use this when you need to set the same morph many times (e.g., in animation loops).
    */
+  private resolveMorphTargetIndex(
+    dict: Record<string, number> | undefined,
+    key: string
+  ): number | undefined {
+    if (!dict) return undefined;
+
+    const prefix = this.config.morphPrefix || '';
+    const suffix = this.config.morphSuffix || '';
+    const fullName = prefix + key + suffix;
+
+    // Validation treats the configured full name as the source of truth, so runtime
+    // mirrors that ordering and only accepts suffix-pattern variants after an exact hit.
+    // We intentionally do not fall back to the bare key here because that would let a
+    // prefixed profile appear valid at runtime while validation still reports a miss.
+    const exactIndex = dict[fullName];
+    if (exactIndex !== undefined) {
+      return exactIndex;
+    }
+
+    const suffixRegex = this.config.suffixPattern
+      ? new RegExp(this.config.suffixPattern)
+      : null;
+    if (!suffixRegex) {
+      return undefined;
+    }
+
+    for (const [candidate, index] of Object.entries(dict)) {
+      if (!candidate.startsWith(fullName)) continue;
+      const candidateSuffix = candidate.slice(fullName.length);
+      if (candidateSuffix === '' || suffixRegex.test(candidateSuffix)) {
+        return index;
+      }
+    }
+
+    return undefined;
+  }
+
   resolveMorphTargets(key: string, meshNames?: string[]): { infl: number[]; idx: number }[] {
     // Cache key includes mesh names to avoid conflicts between face and hair morphs
     const targetMeshes = meshNames || this.config.morphToMesh?.face || [];
@@ -779,7 +816,7 @@ export class Loom3 implements LoomLarge {
       const dict = mesh.morphTargetDictionary;
       const infl = mesh.morphTargetInfluences;
       if (!dict || !infl) continue;
-      const idx = dict[key];
+      const idx = this.resolveMorphTargetIndex(dict as Record<string, number>, key);
       if (idx !== undefined) {
         targets.push({ infl, idx });
       }
@@ -1391,7 +1428,7 @@ export class Loom3 implements LoomLarge {
       const dict = this.faceMesh.morphTargetDictionary;
       const infl = this.faceMesh.morphTargetInfluences;
       if (dict && infl) {
-        const idx = dict[key];
+        const idx = this.resolveMorphTargetIndex(dict as Record<string, number>, key);
         if (idx !== undefined) return infl[idx] ?? 0;
       }
       return 0;
@@ -1400,7 +1437,7 @@ export class Loom3 implements LoomLarge {
       const dict = mesh.morphTargetDictionary;
       const infl = mesh.morphTargetInfluences;
       if (!dict || !infl) continue;
-      const idx = dict[key];
+      const idx = this.resolveMorphTargetIndex(dict as Record<string, number>, key);
       if (idx !== undefined) return infl[idx] ?? 0;
     }
     return 0;
@@ -1660,7 +1697,10 @@ export class Loom3 implements LoomLarge {
         if (found) return found;
       }
 
-      // Fallback: try without prefix (for configs that don't use prefix)
+      // Last-resort fallback: try the bare base name.
+      // This keeps older presets working when a model exposes unprefixed bones,
+      // but it is intentionally last because bare-name matches can be ambiguous
+      // if the model contains both prefixed and non-prefixed variants.
       if (prefix) {
         const noPrefix = root.getObjectByName(baseName);
         if (noPrefix) return noPrefix;

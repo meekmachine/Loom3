@@ -1851,6 +1851,10 @@ export class Loom3 implements LoomLarge {
     this.bakedAnimations.setAnimationIntensity(clipName, intensity);
   }
 
+  seekAnimation(clipName: string, time: number): void {
+    this.bakedAnimations.seekAnimation(clipName, time);
+  }
+
   setAnimationTimeScale(timeScale: number): void {
     this.bakedAnimations.setAnimationTimeScale(timeScale);
   }

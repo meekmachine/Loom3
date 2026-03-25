@@ -250,6 +250,13 @@ export interface Animation {
   setAnimationIntensity(clipName: string, intensity: number): void;
 
   /**
+   * Seek a specific animation to a time in seconds.
+   * @param clipName - Name of the animation
+   * @param time - Target time in seconds
+   */
+  seekAnimation(clipName: string, time: number): void;
+
+  /**
    * Set the global time scale for all animations.
    * @param timeScale - Global time scale multiplier
    */

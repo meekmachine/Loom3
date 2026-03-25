@@ -1,44 +1,40 @@
-import type { Profile, AnnotationRegion, MorphTargetsBySide, HairPhysicsProfileConfig } from './types';
-import type { BoneBinding } from '../core/types';
+import type { Profile, AnnotationRegion, HairPhysicsProfileConfig } from './types';
 
 type RecordValue = string | number | boolean | object | null | undefined;
 type RecordKey = string | number;
 
-const cloneArray = <T>(value: T[]): T[] => value.map((item) => {
-  if (item && typeof item === 'object') {
-    return { ...(item as Record<string, unknown>) } as T;
-  }
-  return item;
-});
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
 
-const cloneValue = <T extends RecordValue>(value: T): T => {
+const cloneValue = (value: unknown): unknown => {
   if (Array.isArray(value)) {
-    return cloneArray(value as unknown[]) as T;
+    return value.map((item) => cloneValue(item));
   }
-  if (value && typeof value === 'object') {
-    return { ...(value as Record<string, unknown>) } as T;
+  if (isPlainObject(value)) {
+    return { ...value };
   }
   return value;
 };
 
-const mergeRecord = <T extends RecordValue>(
-  base: Record<RecordKey, T>,
-  override?: Record<RecordKey, T>
-): Record<RecordKey, T> => {
-  if (!override) {
-    const next: Record<string, T> = {};
-    for (const [key, value] of Object.entries(base)) {
-      next[key] = cloneValue(value as T);
-    }
-    return next;
-  }
-  const next: Record<string, T> = {};
+const mergeRecord = <K extends RecordKey, T extends RecordValue>(
+  base: Record<K, T>,
+  override?: Partial<Record<K, T>>
+): Record<K, T> => {
+  const next = {} as Record<K, T>;
+
   for (const [key, value] of Object.entries(base)) {
-    next[key] = cloneValue(value as T);
+    next[key as K] = cloneValue(value) as T;
   }
-  for (const [key, value] of Object.entries(override)) {
-    next[key] = cloneValue(value as T);
+
+  if (override) {
+    for (const [key, value] of Object.entries(override)) {
+      if (value !== undefined) {
+        next[key as K] = cloneValue(value) as T;
+      }
+    }
   }
+
   return next;
 };
 
@@ -149,12 +145,12 @@ export function resolveProfile(base: Profile, override: Partial<Profile>): Profi
   return {
     ...base,
     ...override,
-    auToMorphs: mergeRecord(base.auToMorphs, override.auToMorphs) as Record<number, MorphTargetsBySide>,
-    auToBones: mergeRecord(base.auToBones, override.auToBones) as Record<number, BoneBinding[]>,
+    auToMorphs: mergeRecord(base.auToMorphs, override.auToMorphs),
+    auToBones: mergeRecord(base.auToBones, override.auToBones),
     boneNodes: mergeRecord(base.boneNodes, override.boneNodes),
     morphToMesh: mergeRecord(base.morphToMesh, override.morphToMesh),
     auFacePartToMeshCategory: base.auFacePartToMeshCategory || override.auFacePartToMeshCategory
-      ? mergeRecord(base.auFacePartToMeshCategory || {}, override.auFacePartToMeshCategory || {}) as Record<string, string>
+      ? mergeRecord(base.auFacePartToMeshCategory || {}, override.auFacePartToMeshCategory || {})
       : undefined,
     visemeKeys: override.visemeKeys ? [...override.visemeKeys] : [...base.visemeKeys],
     visemeMeshCategory: override.visemeMeshCategory ?? base.visemeMeshCategory,

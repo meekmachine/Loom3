@@ -208,6 +208,19 @@ export class BakedAnimationController {
     this.host = host;
   }
 
+  private getActionId(action?: AnimationAction | null): string | undefined {
+    if (!action) return undefined;
+    return this.actionIds.get(action) ?? action.__actionId;
+  }
+
+  private setActionId(action: AnimationAction, clipName: string): string {
+    const actionId = makeActionId();
+    this.actionIds.set(action, actionId);
+    this.actionIdToClip.set(actionId, clipName);
+    action.__actionId = actionId;
+    return actionId;
+  }
+
   private getMeshNamesForAU(auId: number, config: Profile, explicitMeshNames?: string[]): string[] {
     if (explicitMeshNames && explicitMeshNames.length > 0) {
       return explicitMeshNames;
@@ -670,7 +683,7 @@ export class BakedAnimationController {
           jawValues.push(jawQ.x, jawQ.y, jawQ.z, jawQ.w);
         }
 
-        const trackName = `${(jawEntry.obj as any).uuid}.quaternion`;
+        const trackName = `${jawEntry.obj.uuid}.quaternion`;
         tracks.push(new QuaternionKeyframeTrack(trackName, keyframeTimes, jawValues));
       }
     }
@@ -778,7 +791,7 @@ export class BakedAnimationController {
           values.push(compositeQ.x, compositeQ.y, compositeQ.z, compositeQ.w);
         }
 
-        const trackName = `${(entry.obj as any).uuid}.quaternion`;
+        const trackName = `${entry.obj.uuid}.quaternion`;
         tracks.push(new QuaternionKeyframeTrack(trackName, keyframeTimes, values));
       }
 
@@ -804,7 +817,7 @@ export class BakedAnimationController {
             values.push(basePos + delta);
           }
 
-          const trackName = `${(entry.obj as any).uuid}.position[${axisIndex}]`;
+          const trackName = `${entry.obj.uuid}.position[${axisIndex}]`;
           tracks.push(new NumberKeyframeTrack(trackName, keyframeTimes, values));
         }
       }
@@ -839,19 +852,13 @@ export class BakedAnimationController {
     } = options || {};
 
     let action = this.clipActions.get(clip.name);
-    let actionId = action ? (this.actionIds.get(action) || (action as any).__actionId) : undefined;
+    let actionId = this.getActionId(action);
     if (action && !actionId) {
-      actionId = makeActionId();
-      this.actionIds.set(action, actionId);
-      this.actionIdToClip.set(actionId, clip.name);
-      (action as any).__actionId = actionId;
+      actionId = this.setActionId(action, clip.name);
     }
     if (!action) {
       action = this.animationMixer.clipAction(clip);
-      actionId = makeActionId();
-      this.actionIds.set(action, actionId);
-      this.actionIdToClip.set(actionId, clip.name);
-      (action as any).__actionId = actionId;
+      actionId = this.setActionId(action, clip.name);
     }
 
     const existingClip = this.animationClips.find(c => c.name === clip.name);
@@ -1023,10 +1030,10 @@ export class BakedAnimationController {
     const debugSnapshot = () => ({
       target: name,
       params,
-      clipActions: Array.from(this.clipActions.entries()).map(([k, a]) => ({ name: k, actionId: this.actionIds.get(a) || (a as any).__actionId })),
-      animationActions: Array.from(this.animationActions.entries()).map(([k, a]) => ({ name: k, actionId: this.actionIds.get(a) || (a as any).__actionId })),
+      clipActions: Array.from(this.clipActions.entries()).map(([k, a]) => ({ name: k, actionId: this.getActionId(a) })),
+      animationActions: Array.from(this.animationActions.entries()).map(([k, a]) => ({ name: k, actionId: this.getActionId(a) })),
       clipHandles: Array.from(this.clipHandles.entries()).map(([k, h]) => ({ name: k, actionId: h.actionId })),
-      mixerActions: ((this.animationMixer as any)?._actions || []).map((a: any) => ({ name: a?.getClip?.()?.name || '', actionId: this.actionIds.get(a) || (a as any).__actionId })),
+      mixerActions: (this.animationMixer?._actions || []).map((a: AnimationAction) => ({ name: a?.getClip?.()?.name || '', actionId: this.getActionId(a) })),
     });
 
     console.log('[Loom3] updateClipParams start', debugSnapshot());
@@ -1108,7 +1115,7 @@ export class BakedAnimationController {
         values.push(Math.max(0, Math.min(2, kf.intensity * intensityScale)));
       }
 
-      const trackName = `${(mesh as any).uuid}.morphTargetInfluences[${morphIndex}]`;
+      const trackName = `${mesh.uuid}.morphTargetInfluences[${morphIndex}]`;
       const track = new NumberKeyframeTrack(trackName, times, values);
 
       tracks.push(track);
@@ -1146,7 +1153,7 @@ export class BakedAnimationController {
         values.push(Math.max(0, Math.min(2, kf.intensity * intensityScale)));
       }
 
-      const trackName = `${(mesh as any).uuid}.morphTargetInfluences[${morphIndex}]`;
+      const trackName = `${mesh.uuid}.morphTargetInfluences[${morphIndex}]`;
       const track = new NumberKeyframeTrack(trackName, times, values);
 
       tracks.push(track);
@@ -1162,7 +1169,7 @@ export class BakedAnimationController {
     if (!model) return null;
 
     if (!this.animationMixer) {
-      this.animationMixer = new AnimationMixer(model as any);
+      this.animationMixer = new AnimationMixer(model);
     }
 
     if (this.animationMixer && !this.mixerFinishedListenerAttached) {

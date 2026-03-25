@@ -61,6 +61,11 @@ jobs:
         with:
           ref: "${{ github.event_name == 'workflow_dispatch' && github.sha || needs.prepare_release.outputs.release_sha }}"
 
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:

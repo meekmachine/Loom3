@@ -6,6 +6,7 @@
  */
 
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
+import type { VisemeBindings } from './visemes';
 
 /**
  * Profile - Complete configuration for AU-to-morph/bone mappings
@@ -88,8 +89,15 @@ export interface Profile {
    */
   auFacePartToMeshCategory?: Record<string, string>;
 
-  /** Viseme targets in order (typically 15 phoneme positions) */
-  visemeKeys: MorphTargetRef[];
+  /**
+   * Canonical viseme bindings keyed by named viseme slot.
+   * When present, this is the authored source of truth. Legacy `visemeKeys`
+   * arrays are still accepted and compiled at the engine boundary.
+   */
+  visemeBindings?: VisemeBindings;
+
+  /** Legacy positional viseme targets, compiled from canonical bindings when available. */
+  visemeKeys?: Array<MorphTargetRef | undefined>;
 
   /**
    * Optional `morphToMesh` category to use for viseme morph routing.
@@ -97,7 +105,7 @@ export interface Profile {
    */
   visemeMeshCategory?: string;
 
-  /** Optional: Jaw opening amounts per viseme index (0-1). Used for auto-generating jaw rotation in clips. */
+  /** Optional: Jaw opening amounts per viseme slot (0-1). Used for auto-generating jaw rotation in clips. */
   visemeJawAmounts?: number[];
 
   /** Optional: Default mix weights for bone/morph blending (0 = morph only, 1 = bone only) */

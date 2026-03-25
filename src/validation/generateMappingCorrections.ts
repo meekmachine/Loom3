@@ -6,6 +6,13 @@
  */
 
 import type { Profile, MorphTargetsBySide, MorphTargetRef } from '../mappings/types';
+import {
+  CANONICAL_VISEME_IDS,
+  compileVisemeJawAmounts,
+  compileVisemeKeys,
+  type VisemeBindings,
+  type VisemeMorphTargetRef,
+} from '../mappings/visemes';
 import type { ValidationMorphMesh as MorphMesh, ValidationSkeleton as Skeleton } from './types';
 
 export interface MappingCorrection {
@@ -174,7 +181,9 @@ export function generateMappingCorrections(
     boneNodes: { ...config.boneNodes },
     auToMorphs: { ...config.auToMorphs },
     morphToMesh: { ...config.morphToMesh },
-    visemeKeys: [...config.visemeKeys],
+    visemeBindings: config.visemeBindings ? { ...config.visemeBindings } : undefined,
+    visemeKeys: [...(config.visemeKeys || [])],
+    visemeJawAmounts: [...(config.visemeJawAmounts || [])],
   };
 
   if (useResolvedNames) {
@@ -266,14 +275,81 @@ export function generateMappingCorrections(
     center: entry ? updateMorphList(entry.center, auId) : [],
   });
 
+  const updateVisemeBindings = (bindings?: VisemeBindings): VisemeBindings | undefined => {
+    if (!bindings) return undefined;
+    const next: VisemeBindings = {};
+    for (const [visemeId, binding] of Object.entries(bindings)) {
+      if (!binding) continue;
+      const updatedMorph = typeof binding.morph === 'string'
+        ? updateMorphList([binding.morph])[0]
+        : binding.morph;
+      next[visemeId as keyof VisemeBindings] = {
+        ...binding,
+        morph: updatedMorph,
+      };
+    }
+    return next;
+  };
+
+  const updateVisemeList = (items: VisemeMorphTargetRef[]): VisemeMorphTargetRef[] =>
+    items.slice(0, CANONICAL_VISEME_IDS.length).map((morphName) => {
+      if (typeof morphName !== 'string') {
+        return morphName;
+      }
+
+      if (modelMorphs.has(morphName)) return morphName;
+
+      const match = findBestMatch(morphName, modelMorphs, morphPrefix, morphSuffix, suffixPattern);
+      if (!match || match.confidence < minConfidence) {
+        unresolved.push({
+          type: 'morph',
+          source: morphName,
+          target: morphName,
+          confidence: match?.confidence ?? 0,
+          reason: match?.reason ?? 'no match',
+          applied: false,
+        });
+        return morphName;
+      }
+
+      const derivedBase = deriveBaseName(match.candidate, morphPrefix, morphSuffix);
+      const resolvedName = useResolvedNames || !derivedBase ? match.candidate : derivedBase;
+      const canApply = useResolvedNames || derivedBase !== null;
+
+      corrections.push({
+        type: 'morph',
+        source: morphName,
+        target: match.candidate,
+        confidence: match.confidence,
+        reason: match.reason,
+        applied: canApply && resolvedName !== morphName,
+      });
+
+      return canApply ? resolvedName : morphName;
+    }).concat(
+      Array.from({ length: Math.max(0, CANONICAL_VISEME_IDS.length - items.length) }, () => undefined)
+    );
+
   for (const [auIdStr, morphs] of Object.entries(config.auToMorphs)) {
     const auId = Number(auIdStr);
     correctedConfig.auToMorphs[auId] = updateMorphsBySide(morphs, auId);
   }
 
-  correctedConfig.visemeKeys = updateMorphList(config.visemeKeys).filter(
-    (key): key is string => typeof key === 'string'
-  );
+  correctedConfig.visemeBindings = updateVisemeBindings(config.visemeBindings);
+  correctedConfig.visemeKeys = correctedConfig.visemeBindings
+    ? compileVisemeKeys(
+        correctedConfig.visemeBindings,
+        config.visemeKeys || [],
+        config.visemeJawAmounts || []
+      )
+    : updateVisemeList(config.visemeKeys || []);
+  correctedConfig.visemeJawAmounts = correctedConfig.visemeBindings
+    ? compileVisemeJawAmounts(
+        correctedConfig.visemeBindings,
+        config.visemeKeys || [],
+        config.visemeJawAmounts || []
+      )
+    : [...(config.visemeJawAmounts || [])];
 
   // morphToMesh corrections
   for (const [category, meshList] of Object.entries(config.morphToMesh || {})) {

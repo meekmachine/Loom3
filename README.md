@@ -170,11 +170,30 @@ import { CC4_PRESET } from '@lovelace_lol/loom3';
     'TONGUE': 'CC_Base_Tongue01',
   },
 
+  visemeBindings: {
+    // Canonical 15-slot viseme bindings for lip-sync
+    EE: { morph: 'V_EE', jawAmount: 0.20 },
+    Ah: { morph: 'V_Ah', jawAmount: 0.80 },
+    Oh: { morph: 'V_Oh', jawAmount: 0.60 },
+    OO: { morph: 'V_OO', jawAmount: 0.50 },
+    I: { morph: 'V_I', jawAmount: 0.20 },
+    U: { morph: 'V_U', jawAmount: 0.50 },
+    W: { morph: 'V_W', jawAmount: 0.40 },
+    L: { morph: 'V_L', jawAmount: 0.30 },
+    F_V: { morph: 'V_F_V', jawAmount: 0.10 },
+    Th: { morph: 'V_Th', jawAmount: 0.15 },
+    S_Z: { morph: 'V_S_Z', jawAmount: 0.10 },
+    B_M_P: { morph: 'V_B_M_P', jawAmount: 0.00 },
+    K_G_H_NG: { morph: 'V_K_G_H_NG', jawAmount: 0.35 },
+    AE: { morph: 'V_AE', jawAmount: 0.75 },
+    R: { morph: 'V_R', jawAmount: 0.35 },
+  },
+
   visemeKeys: [
-    // 15 viseme morph names for lip-sync
-    'V_EE', 'V_Er', 'V_IH', 'V_Ah', 'V_Oh',
-    'V_W_OO', 'V_S_Z', 'V_Ch_J', 'V_F_V', 'V_TH',
-    'V_T_L_D_N', 'V_B_M_P', 'V_K_G_H_NG', 'V_AE', 'V_R'
+    // Legacy compiled array for indexed playback
+    'V_EE', 'V_Ah', 'V_Oh', 'V_OO', 'V_I',
+    'V_U', 'V_W', 'V_L', 'V_F_V', 'V_Th',
+    'V_S_Z', 'V_B_M_P', 'V_K_G_H_NG', 'V_AE', 'V_R'
   ],
 
   morphToMesh: {
@@ -1078,29 +1097,31 @@ Visemes are mouth shapes used for lip-sync. Loom3 includes 15 visemes with autom
 | Index | Key | Phoneme Example |
 |-------|-----|-----------------|
 | 0 | EE | "b**ee**" |
-| 1 | Er | "h**er**" |
-| 2 | IH | "s**i**t" |
-| 3 | Ah | "f**a**ther" |
-| 4 | Oh | "g**o**" |
-| 5 | W_OO | "t**oo**" |
-| 6 | S_Z | "**s**un, **z**oo" |
-| 7 | Ch_J | "**ch**ip, **j**ump" |
+| 1 | Ah | "f**a**ther" |
+| 2 | Oh | "g**o**" |
+| 3 | OO | "t**oo**" |
+| 4 | I | "s**i**t" |
+| 5 | U | "b**oo**t" |
+| 6 | W | "**w**in" |
+| 7 | L | "yo**l**k" |
 | 8 | F_V | "**f**un, **v**an" |
-| 9 | TH | "**th**ink" |
-| 10 | T_L_D_N | "**t**op, **l**ip, **d**og, **n**o" |
+| 9 | Th | "**th**ink" |
+| 10 | S_Z | "**s**un, **z**oo" |
 | 11 | B_M_P | "**b**at, **m**an, **p**op" |
 | 12 | K_G_H_NG | "**k**ite, **g**o, **h**at, si**ng**" |
 | 13 | AE | "c**a**t" |
 | 14 | R | "**r**ed" |
 
+`visemeBindings` is the authored contract. `visemeKeys` is the compiled runtime array and should preserve these slots in order.
+
 ### Setting a viseme
 
 ```typescript
-// Set viseme 3 (Ah) to full intensity
-loom.setViseme(3, 1.0);
+// Set viseme 1 (Ah) to full intensity
+loom.setViseme(1, 1.0);
 
 // With jaw scale (0-1, default 1)
-loom.setViseme(3, 1.0, 0.5);  // Half jaw opening
+loom.setViseme(1, 1.0, 0.5);  // Half jaw opening
 ```
 
 ### Transitioning visemes
@@ -1109,10 +1130,10 @@ Viseme transitions default to 80ms and use the standard `easeInOutQuad` easing w
 
 ```typescript
 // Animate to a viseme using the default 80ms duration
-const handle = loom.transitionViseme(3, 1.0);
+const handle = loom.transitionViseme(1, 1.0);
 
 // Disable jaw coupling (duration can be omitted to use the 80ms default)
-loom.transitionViseme(3, 1.0, 80, 0);
+loom.transitionViseme(1, 1.0, 80, 0);
 ```
 
 ### Automatic jaw coupling
@@ -1121,10 +1142,21 @@ Each viseme has a predefined jaw opening amount. When you set a viseme, the jaw 
 
 | Viseme | Jaw Amount |
 |--------|------------|
-| EE | 0.15 |
-| Ah | 0.70 |
-| Oh | 0.50 |
-| B_M_P | 0.20 |
+| EE | 0.20 |
+| Ah | 0.80 |
+| Oh | 0.60 |
+| OO | 0.50 |
+| I | 0.20 |
+| U | 0.50 |
+| W | 0.40 |
+| L | 0.30 |
+| F_V | 0.10 |
+| Th | 0.15 |
+| S_Z | 0.10 |
+| B_M_P | 0.00 |
+| K_G_H_NG | 0.35 |
+| AE | 0.75 |
+| R | 0.35 |
 
 The `jawScale` parameter multiplies this amount:
 - `jawScale = 1.0`: Normal jaw opening

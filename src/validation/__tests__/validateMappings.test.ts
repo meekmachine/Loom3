@@ -112,6 +112,42 @@ describe('validateMappingConfig', () => {
     const result = validateMappingConfig(config);
     expect(result.warnings.some((issue) => issue.code === 'AU_INFO_MISSING')).toBe(true);
   });
+
+  it('does not warn on intentionally shared viseme morphs when explicitly annotated', () => {
+    const config: Profile = {
+      ...createBaseConfig(),
+      visemeBindings: {
+        EE: { morph: 'SharedSmile', sharedWith: ['Ah'] },
+        Ah: { morph: 'SharedSmile', sharedWith: ['EE'] },
+      },
+    };
+
+    const result = validateMappingConfig(config);
+    expect(result.warnings.some((issue) => issue.code === 'VISEME_SHARED_MORPH')).toBe(false);
+    expect(result.warnings.some((issue) => issue.code === 'VISEME_DUPLICATE')).toBe(false);
+  });
+
+  it('still warns when legacy viseme arrays duplicate a morph without explicit reuse metadata', () => {
+    const config: Profile = {
+      ...createBaseConfig(),
+      visemeKeys: ['SharedSmile', 'SharedSmile'],
+    };
+
+    const result = validateMappingConfig(config);
+    expect(result.warnings.some((issue) => issue.code === 'VISEME_DUPLICATE')).toBe(true);
+  });
+
+  it('accepts numeric morph refs in explicit viseme bindings', () => {
+    const config: Profile = {
+      ...createBaseConfig(),
+      visemeBindings: {
+        EE: { morph: 12 },
+      },
+    };
+
+    const result = validateMappingConfig(config);
+    expect(result.warnings.some((issue) => issue.code === 'VISEME_EMPTY')).toBe(false);
+  });
 });
 
 describe('validateMappings', () => {

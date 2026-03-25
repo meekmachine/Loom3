@@ -8,6 +8,11 @@
 
 import type { Profile, MeshCategory, BlendingMode, MeshMaterialSettings, MeshInfo, MorphCategory, MorphTargetsBySide } from '../mappings/types';
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
+import {
+  CANONICAL_VISEME_IDS,
+  CANONICAL_VISEME_JAW_AMOUNTS,
+  createVisemeBindingsFromKeys,
+} from '../mappings/visemes';
 
 // ============================================================================
 // AU TO MORPHS - Maps AU IDs to morph target names
@@ -525,49 +530,19 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
 };
 
 // ============================================================================
-// VISEME KEYS - CC4 viseme morph targets (15)
+// VISEME KEYS - Canonical 15-slot CC4 viseme order
 // ============================================================================
 
-export const VISEME_KEYS: string[] = [
-  'EE',
-  'Ah',
-  'Oh',
-  'OO',
-  'I',
-  'U',
-  'W',
-  'L',
-  'F_V',
-  'Th',
-  'S_Z',
-  'B_M_P',
-  'K_G_H_NG',
-  'AE',
-  'R',
-];
+export const VISEME_KEYS: string[] = [...CANONICAL_VISEME_IDS];
 
 /**
- * Jaw opening amounts for each viseme index (0-14).
+ * Jaw opening amounts for each canonical viseme slot (0-14).
  * Values are 0-1 representing how much the jaw should open.
  * Used by snippetToClip when autoVisemeJaw is enabled.
  */
-export const VISEME_JAW_AMOUNTS: number[] = [
-  0.20, // 0: EE
-  0.80, // 1: Ah
-  0.60, // 2: Oh
-  0.50, // 3: OO
-  0.20, // 4: I
-  0.50, // 5: U
-  0.40, // 6: W
-  0.30, // 7: L
-  0.10, // 8: F_V
-  0.15, // 9: Th
-  0.10, // 10: S_Z
-  0.00, // 11: B_M_P
-  0.35, // 12: K_G_H_NG
-  0.75, // 13: AE
-  0.35, // 14: R
-];
+export const VISEME_JAW_AMOUNTS: number[] = [...CANONICAL_VISEME_JAW_AMOUNTS];
+
+export const VISEME_BINDINGS = createVisemeBindingsFromKeys(VISEME_KEYS, VISEME_JAW_AMOUNTS);
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -1000,6 +975,7 @@ export const CC4_PRESET: Profile = {
   suffixPattern: CC4_SUFFIX_PATTERN,
   morphToMesh: MORPH_TO_MESH,
   auFacePartToMeshCategory: AU_FACEPART_TO_MESH_CATEGORY,
+  visemeBindings: VISEME_BINDINGS,
   visemeKeys: VISEME_KEYS,
   visemeMeshCategory: 'viseme',
   visemeJawAmounts: VISEME_JAW_AMOUNTS,

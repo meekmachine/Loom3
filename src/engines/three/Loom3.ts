@@ -41,6 +41,7 @@ import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUp
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import { resolvePreset } from '../../presets';
 import { resolveProfile } from '../../mappings/resolveProfile';
+import { CANONICAL_VISEME_JAW_AMOUNTS, compileVisemeJawAmounts, compileVisemeKeys } from '../../mappings/visemes';
 import type { NodeBase, ResolvedBones } from './types';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
@@ -133,20 +134,15 @@ export class Loom3 implements LoomLarge {
   private morphIndexCache = new Map<string, MorphTargetHandle[]>();
   private resolvedAUMorphTargets = new Map<number, ResolvedMorphTargetsBySide>();
   private resolvedVisemeTargets: MorphTargetHandle[][] = [];
+  private visemeKeys: Array<MorphTargetRef | undefined> = [];
+  private visemeJawAmounts: number[] = [];
 
   // Bones
   private bones: ResolvedBones = {};
   private mixWeights: Record<number, number> = {};
 
   // Viseme state
-  private visemeValues: number[] = new Array(15).fill(0);
-
-
-  // Viseme jaw amounts
-  private static readonly VISEME_JAW_AMOUNTS: number[] = [
-    0.15, 0.35, 0.25, 0.70, 0.55, 0.30, 0.10, 0.20, 0.08,
-    0.12, 0.18, 0.02, 0.25, 0.60, 0.40,
-  ];
+  private visemeValues: number[] = [];
 
   private bakedAnimations: BakedAnimationController;
   private hairPhysics: HairPhysicsController;
@@ -174,6 +170,17 @@ export class Loom3 implements LoomLarge {
   ) {
     const basePreset = config.presetType ? resolvePreset(config.presetType) : CC4_PRESET;
     this.config = config.profile ? resolveProfile(basePreset, config.profile) : basePreset;
+    this.visemeKeys = compileVisemeKeys(
+      this.config.visemeBindings,
+      this.config.visemeKeys || [],
+      this.config.visemeJawAmounts || []
+    );
+    this.visemeJawAmounts = compileVisemeJawAmounts(
+      this.config.visemeBindings,
+      this.config.visemeKeys || [],
+      this.config.visemeJawAmounts || []
+    );
+    this.visemeValues = new Array(this.visemeKeys.length).fill(0);
     this.mixWeights = { ...this.config.auMixDefaults };
     this.animation = animation || new AnimationThree();
 
@@ -324,12 +331,14 @@ export class Loom3 implements LoomLarge {
       this.resolvedAUMorphTargets.set(auId, resolved);
     }
 
-    for (let i = 0; i < (this.config.visemeKeys || []).length; i += 1) {
-      const key = this.config.visemeKeys[i];
+    for (let i = 0; i < this.visemeKeys.length; i += 1) {
+      const key = this.visemeKeys[i];
       const visemeMeshNames = this.getMeshNamesForViseme();
       const targets = typeof key === 'number'
         ? this.resolveMorphTargetsByIndex(key, visemeMeshNames)
-        : this.resolveMorphTargets(key, visemeMeshNames);
+        : typeof key === 'string'
+          ? this.resolveMorphTargets(key, visemeMeshNames)
+          : [];
       this.resolvedVisemeTargets[i] = targets;
     }
   }
@@ -855,7 +864,7 @@ export class Loom3 implements LoomLarge {
   // ============================================================================
 
   setViseme(visemeIndex: number, value: number, jawScale = 1.0): void {
-    if (visemeIndex < 0 || visemeIndex >= this.config.visemeKeys.length) return;
+    if (visemeIndex < 0 || visemeIndex >= this.visemeKeys.length) return;
 
     const val = clamp01(value);
     this.visemeValues[visemeIndex] = val;
@@ -864,7 +873,7 @@ export class Loom3 implements LoomLarge {
     if (targets && targets.length > 0) {
       this.applyMorphTargets(targets, val);
     } else {
-      const morphKey = this.config.visemeKeys[visemeIndex];
+      const morphKey = this.visemeKeys[visemeIndex];
       const visemeMeshNames = this.getMeshNamesForViseme();
       if (typeof morphKey === 'number') {
         this.setMorphInfluence(morphKey, val, visemeMeshNames);
@@ -873,33 +882,36 @@ export class Loom3 implements LoomLarge {
       }
     }
 
-    const jawAmount = Loom3.VISEME_JAW_AMOUNTS[visemeIndex] * val * jawScale;
+    const jawAmount = (this.visemeJawAmounts[visemeIndex] ?? CANONICAL_VISEME_JAW_AMOUNTS[visemeIndex] ?? 0) * val * jawScale;
     if (Math.abs(jawScale) > 1e-6 && Math.abs(jawAmount) > 1e-6) {
       this.updateBoneRotation('JAW', 'pitch', jawAmount);
     }
   }
 
   transitionViseme(visemeIndex: number, to: number, durationMs = 80, jawScale = 1.0): TransitionHandle {
-    if (visemeIndex < 0 || visemeIndex >= this.config.visemeKeys.length) {
+    if (visemeIndex < 0 || visemeIndex >= this.visemeKeys.length) {
       return { promise: Promise.resolve(), pause: () => {}, resume: () => {}, cancel: () => {} };
     }
 
-    const morphKey = this.config.visemeKeys[visemeIndex];
+    const morphKey = this.visemeKeys[visemeIndex];
     const target = clamp01(to);
     this.visemeValues[visemeIndex] = target;
     const visemeMeshNames = this.getMeshNamesForViseme();
+    const handles: TransitionHandle[] = [];
+    if (typeof morphKey === 'number') {
+      handles.push(this.transitionMorphInfluence(morphKey, target, durationMs, visemeMeshNames));
+    } else if (typeof morphKey === 'string') {
+      handles.push(this.transitionMorph(morphKey, target, durationMs, visemeMeshNames));
+    }
 
-    const morphHandle = typeof morphKey === 'number'
-      ? this.transitionMorphInfluence(morphKey, target, durationMs, visemeMeshNames)
-      : this.transitionMorph(morphKey, target, durationMs, visemeMeshNames);
-
-    const jawAmount = Loom3.VISEME_JAW_AMOUNTS[visemeIndex] * target * jawScale;
+    const jawAmount = (this.visemeJawAmounts[visemeIndex] ?? CANONICAL_VISEME_JAW_AMOUNTS[visemeIndex] ?? 0) * target * jawScale;
     if (Math.abs(jawScale) <= 1e-6 || Math.abs(jawAmount) <= 1e-6) {
-      return morphHandle;
+      return this.combineHandles(handles);
     }
 
     const jawHandle = this.transitionBoneRotation('JAW', 'pitch', jawAmount, durationMs);
-    return this.combineHandles([morphHandle, jawHandle]);
+    handles.push(jawHandle);
+    return this.combineHandles(handles);
   }
 
   // ============================================================================

@@ -166,6 +166,7 @@ export {
   CC4_SUFFIX_PATTERN,
   CC4_EYE_MESH_NODES,
   CC4_MESHES,
+  VISEME_BINDINGS,
   VISEME_KEYS,
   VISEME_JAW_AMOUNTS,
   MORPH_TO_MESH,
@@ -176,6 +177,23 @@ export {
   isMixedAU,
   hasLeftRightMorphs,
 } from './presets/cc4';
+export {
+  CANONICAL_VISEME_IDS,
+  CANONICAL_VISEME_INDEX_BY_ID,
+  CANONICAL_VISEME_JAW_AMOUNTS,
+  compileVisemeJawAmounts,
+  compileVisemeKeys,
+  createVisemeBindingsFromKeys,
+  getCanonicalVisemeId,
+  getCanonicalVisemeIndex,
+  isCanonicalVisemeId,
+  resolveVisemeBindings,
+} from './mappings/visemes';
+export type {
+  CanonicalVisemeId,
+  VisemeBinding,
+  VisemeBindings,
+} from './mappings/visemes';
 
 // Fish/skeletal preset
 export { BETTA_FISH_PRESET, AU_MAPPING_CONFIG as FISH_AU_MAPPING_CONFIG } from './presets/bettaFish';

@@ -69,4 +69,21 @@ describe('resolveProfile', () => {
       Tongue: 'tongue',
     });
   });
+
+  it('compiles legacy viseme arrays from explicit viseme bindings while preserving canonical slots', () => {
+    const result = resolveProfile(basePreset, {
+      visemeBindings: {
+        EE: { morph: 'viseme_ee', jawAmount: 0.2 },
+        Ah: { morph: 'viseme_ah', jawAmount: 0.8 },
+      },
+    });
+
+    expect(result.visemeBindings?.EE?.morph).toBe('viseme_ee');
+    expect(result.visemeKeys).toHaveLength(15);
+    expect(result.visemeKeys?.[0]).toBe('viseme_ee');
+    expect(result.visemeKeys?.[1]).toBe('viseme_ah');
+    expect(result.visemeKeys?.[2]).toBeUndefined();
+    expect(result.visemeJawAmounts?.[0]).toBeCloseTo(0.2, 2);
+    expect(result.visemeJawAmounts?.[1]).toBeCloseTo(0.8, 2);
+  });
 });

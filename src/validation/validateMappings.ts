@@ -8,6 +8,7 @@
 import type { RotationAxis } from '../core/types';
 import { toAUList } from '../core/compositeAxis';
 import type { Profile, MorphTargetsBySide, MorphTargetRef } from '../mappings/types';
+import { resolveVisemeBindings, type VisemeBinding, type CanonicalVisemeId } from '../mappings/visemes';
 import type { MappingCorrection, MappingCorrectionOptions } from './generateMappingCorrections';
 import { generateMappingCorrections } from './generateMappingCorrections';
 import type { ValidationMorphMesh as MorphMesh, ValidationSkeleton as Skeleton } from './types';
@@ -400,18 +401,55 @@ export function validateMappingConfig(config: Profile): MappingConsistencyResult
     }
   }
 
-  // Validate viseme keys (duplicates or blanks)
-  const visemeSeen = new Set<string>();
-  for (const key of config.visemeKeys || []) {
-    if (typeof key !== 'string') continue;
-    if (!key) {
-      push('warning', 'VISEME_EMPTY', 'Viseme key is empty');
-      continue;
+  if (config.visemeBindings) {
+    const morphToIds = new Map<string, CanonicalVisemeId[]>();
+    const bindingsById = config.visemeBindings;
+
+    for (const [id, binding] of Object.entries(bindingsById) as Array<[CanonicalVisemeId, VisemeBinding]>) {
+      if (!binding || binding.morph === undefined || binding.morph === null || binding.morph === '') {
+        push('warning', 'VISEME_EMPTY', `Viseme binding "${id}" is missing a morph target`, { id });
+        continue;
+      }
+
+      if (typeof binding.morph !== 'string') {
+        continue;
+      }
+
+      const ids = morphToIds.get(binding.morph) || [];
+      ids.push(id);
+      morphToIds.set(binding.morph, ids);
     }
-    if (visemeSeen.has(key)) {
-      push('warning', 'VISEME_DUPLICATE', `Viseme key "${key}" is duplicated`, { key });
+
+    for (const [morph, ids] of morphToIds.entries()) {
+      if (ids.length < 2) continue;
+
+      const sharedPairExists = ids.some((id) => {
+        const sharedWith = bindingsById[id]?.sharedWith || [];
+        return sharedWith.some((otherId) => ids.includes(otherId));
+      });
+
+      if (!sharedPairExists) {
+        push(
+          'warning',
+          'VISEME_SHARED_MORPH',
+          `Viseme morph "${morph}" is reused by ${ids.join(', ')} without sharedWith metadata`,
+          { morph, visemeIds: ids }
+        );
+      }
     }
-    visemeSeen.add(key);
+  } else {
+    const visemeSeen = new Set<string>();
+    for (const key of config.visemeKeys || []) {
+      if (typeof key !== 'string') continue;
+      if (!key) {
+        push('warning', 'VISEME_EMPTY', 'Viseme key is empty');
+        continue;
+      }
+      if (visemeSeen.has(key)) {
+        push('warning', 'VISEME_DUPLICATE', `Viseme key "${key}" is duplicated`, { key });
+      }
+      visemeSeen.add(key);
+    }
   }
 
   // Validate auMixDefaults
@@ -506,9 +544,13 @@ export function validateMappings(
       presetMorphs.add(morph);
     }
   }
-  for (const viseme of config.visemeKeys) {
-    if (typeof viseme === 'string') {
-      presetMorphs.add(viseme);
+  for (const viseme of resolveVisemeBindings(
+    config.visemeBindings,
+    config.visemeKeys || [],
+    config.visemeJawAmounts || []
+  )) {
+    if (typeof viseme.morph === 'string') {
+      presetMorphs.add(viseme.morph);
     }
   }
 

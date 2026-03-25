@@ -1,5 +1,10 @@
 import type { Profile, AnnotationRegion, MorphTargetsBySide, HairPhysicsProfileConfig } from './types';
 import type { BoneBinding } from '../core/types';
+import {
+  compileVisemeJawAmounts,
+  compileVisemeKeys,
+  type VisemeBindings,
+} from './visemes';
 
 type RecordValue = string | number | boolean | object | null | undefined;
 type RecordKey = string | number;
@@ -136,6 +141,14 @@ const mergeHairPhysicsConfig = (
   return merged;
 };
 
+const mergeVisemeBindings = (
+  base?: VisemeBindings,
+  override?: VisemeBindings
+): VisemeBindings | undefined => {
+  if (!base && !override) return undefined;
+  return mergeRecord(base || {}, override || {}) as VisemeBindings;
+};
+
 /**
  * Merge a base preset with a profile override.
  *
@@ -146,6 +159,18 @@ const mergeHairPhysicsConfig = (
  * - annotationRegions: merged by region name, shallow field merge (override wins).
  */
 export function resolveProfile(base: Profile, override: Partial<Profile>): Profile {
+  const visemeBindings = mergeVisemeBindings(base.visemeBindings, override.visemeBindings);
+  const visemeKeys = override.visemeKeys
+    ? [...override.visemeKeys]
+    : visemeBindings
+      ? compileVisemeKeys(visemeBindings, base.visemeKeys || [], override.visemeJawAmounts || base.visemeJawAmounts || [])
+      : [...(base.visemeKeys || [])];
+  const visemeJawAmounts = override.visemeJawAmounts
+    ? [...override.visemeJawAmounts]
+    : visemeBindings
+      ? compileVisemeJawAmounts(visemeBindings, base.visemeKeys || [], base.visemeJawAmounts || [])
+      : [...(base.visemeJawAmounts || [])];
+
   return {
     ...base,
     ...override,
@@ -156,8 +181,10 @@ export function resolveProfile(base: Profile, override: Partial<Profile>): Profi
     auFacePartToMeshCategory: base.auFacePartToMeshCategory || override.auFacePartToMeshCategory
       ? mergeRecord(base.auFacePartToMeshCategory || {}, override.auFacePartToMeshCategory || {}) as Record<string, string>
       : undefined,
-    visemeKeys: override.visemeKeys ? [...override.visemeKeys] : [...base.visemeKeys],
+    visemeBindings,
+    visemeKeys,
     visemeMeshCategory: override.visemeMeshCategory ?? base.visemeMeshCategory,
+    visemeJawAmounts,
     auMixDefaults: base.auMixDefaults || override.auMixDefaults
       ? mergeRecord(base.auMixDefaults || {}, override.auMixDefaults || {})
       : undefined,

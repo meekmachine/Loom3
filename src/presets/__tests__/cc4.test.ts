@@ -4,6 +4,7 @@ import {
   BONE_AU_TO_BINDINGS,
   COMPOSITE_ROTATIONS,
   CONTINUUM_PAIRS_MAP,
+  VISEME_BINDINGS,
   VISEME_KEYS,
   isMixedAU,
   hasLeftRightMorphs,
@@ -292,8 +293,28 @@ describe('CC4 Preset', () => {
   });
 
   describe('VISEME_KEYS', () => {
-    it('should have 15 viseme keys (ARKit standard)', () => {
+    it('should have 15 viseme keys (canonical CC4 order)', () => {
       expect(VISEME_KEYS.length).toBe(15);
+    });
+
+    it('should keep the canonical CC4 slot order', () => {
+      expect(VISEME_KEYS).toEqual([
+        'EE',
+        'Ah',
+        'Oh',
+        'OO',
+        'I',
+        'U',
+        'W',
+        'L',
+        'F_V',
+        'Th',
+        'S_Z',
+        'B_M_P',
+        'K_G_H_NG',
+        'AE',
+        'R',
+      ]);
     });
 
     it('should include common visemes', () => {
@@ -302,6 +323,14 @@ describe('CC4 Preset', () => {
       expect(VISEME_KEYS).toContain('Oh');
       expect(VISEME_KEYS).toContain('B_M_P');
       expect(VISEME_KEYS).toContain('F_V');
+    });
+  });
+
+  describe('VISEME_BINDINGS', () => {
+    it('should expose explicit canonical bindings for the preset', () => {
+      expect(VISEME_BINDINGS.EE?.morph).toBe('EE');
+      expect(VISEME_BINDINGS.Ah?.jawAmount).toBeCloseTo(0.8, 2);
+      expect(VISEME_BINDINGS.B_M_P?.jawAmount).toBeCloseTo(0, 2);
     });
   });
 

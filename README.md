@@ -32,6 +32,8 @@ Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https:
 
 ## 1. Installation & Setup
 
+Production demo: [Open LoomLarge](https://loomlarge.web.app/?drawer=open&tab=animation)
+
 ![Project structure with Loom3 installed](./assets/readme/project-structure.svg)
 
 ### Install the package
@@ -134,6 +136,8 @@ const meshes = collectMorphMeshes(gltf.scene);
 ---
 
 ## 2. Using Presets
+
+Production demos: [Properties](https://loomlarge.web.app/?drawer=open&tab=properties) | [Mappings](https://loomlarge.web.app/?drawer=open&tab=mappings)
 
 ![Diagram showing how Loom3 presets connect AUs to morphs and bones](./assets/readme/preset-au-flow.svg)
 
@@ -252,6 +256,8 @@ const loom = new Loom3({
 ---
 
 ## 3. Getting to Know Your Character
+
+Production demos: [Meshes](https://loomlarge.web.app/?drawer=open&tab=meshes) | [Bones](https://loomlarge.web.app/?drawer=open&tab=bones) | [Mappings](https://loomlarge.web.app/?drawer=open&tab=mappings)
 
 ![Console-style diagram showing Loom3 mesh and morph target inspection output](./assets/readme/console-mesh-output.svg)
 
@@ -387,6 +393,8 @@ This is especially useful for:
 
 ## 4. Extending & Custom Presets
 
+Production demos: [Properties](https://loomlarge.web.app/?drawer=open&tab=properties) | [Mappings](https://loomlarge.web.app/?drawer=open&tab=mappings)
+
 ![Diagram showing preset inheritance and mergePreset overrides](./assets/readme/preset-inheritance.svg)
 
 ### Extending an existing preset
@@ -463,6 +471,8 @@ const current = loom.getProfile();
 ---
 
 ## 5. Creating Skeletal Animation Presets
+
+Production demos: [Bones](https://loomlarge.web.app/?drawer=open&tab=bones) | [Action Units](https://loomlarge.web.app/?drawer=open&tab=action-units) | [Animation](https://loomlarge.web.app/?drawer=open&tab=animation)
 
 ![Betta fish model with bones panel visible](./assets/readme/fish-bones-ui.webp)
 
@@ -745,6 +755,8 @@ async function swimCycle() {
 
 ## 6. Action Unit Control
 
+Production demo: [Action Units](https://loomlarge.web.app/?drawer=open&tab=action-units)
+
 ![Grid of Loom3 Action Unit examples on a character](./assets/readme/au-values-grid.webp)
 
 Action Units are the core of FACS. Each AU represents a specific muscular movement of the face.
@@ -821,6 +833,8 @@ loom.setAU(12, 0.8, 1);    // Right side only
 
 ## 7. Mix Weight System
 
+Production demo: [Action Units](https://loomlarge.web.app/?drawer=open&tab=action-units)
+
 ![Comparison of morph-only, mixed, and bone-only AU results](./assets/readme/mix-weight-comparison.webp)
 
 Some AUs can be driven by both morph targets (blend shapes) AND bone rotations. The mix weight controls the blend between them.
@@ -867,6 +881,8 @@ if (isMixedAU(26)) {
 ---
 
 ## 8. Composite Rotation System
+
+Production demos: [Action Units](https://loomlarge.web.app/?drawer=open&tab=action-units) | [Bones](https://loomlarge.web.app/?drawer=open&tab=bones)
 
 ![Diagram showing pitch, yaw, and roll axes on the head](./assets/readme/head-axes-diagram.svg)
 
@@ -927,6 +943,8 @@ loom.setAU(64, 0.4);
 ---
 
 ## 9. Continuum Pairs
+
+Production demo: [Action Units](https://loomlarge.web.app/?drawer=open&tab=action-units)
 
 ![Continuum slider UI for paired Loom3 AUs](./assets/readme/continuum-slider-ui.webp)
 
@@ -1028,6 +1046,8 @@ const pair = CONTINUUM_PAIRS_MAP[51];
 
 ## 10. Direct Morph Control
 
+Production demos: [Meshes](https://loomlarge.web.app/?drawer=open&tab=meshes) | [Mappings](https://loomlarge.web.app/?drawer=open&tab=mappings)
+
 ![Direct morph control screenshot with a live morph preview](./assets/readme/direct-morph-control.webp)
 
 Sometimes you need to control morph targets directly by name, bypassing the AU system.
@@ -1068,6 +1088,8 @@ Loom3 caches morph target lookups for performance. The first time you access a m
 ---
 
 ## 11. Viseme System
+
+Production demos: [Visemes](https://loomlarge.web.app/?drawer=open&tab=visemes) | [Speech](https://loomlarge.web.app/?drawer=open&tab=speech)
 
 ![Grid of all 15 Loom3 viseme mouth shapes](./assets/readme/viseme-grid.webp)
 
@@ -1158,6 +1180,8 @@ speak([5, 0, 10, 4]);
 
 ## 12. Transition System
 
+Production demo: [Animation](https://loomlarge.web.app/?drawer=open&tab=animation)
+
 ![Diagram showing a Loom3 transition timeline with easing and handle methods](./assets/readme/transition-timeline-easing.svg)
 
 All animated changes in Loom3 go through the transition system, which provides smooth interpolation with easing.
@@ -1240,6 +1264,8 @@ loom.clearTransitions();
 
 ## 13. Playback & State Control
 
+Production demo: [Animation](https://loomlarge.web.app/?drawer=open&tab=animation)
+
 ![Playback controls UI showing Loom3 pause and resume controls](./assets/readme/pause-resume-controls.webp)
 
 ### Pausing and resuming
@@ -1296,6 +1322,8 @@ loom.dispose();
 ---
 
 ## 14. Hair Physics (Mixer-Driven)
+
+Production demo: [Hair](https://loomlarge.web.app/?drawer=open&tab=hair)
 
 ![Animated GIF showing Loom3 hair physics reacting to head motion](./assets/readme/hair-physics.gif)
 
@@ -1451,6 +1479,8 @@ Loom3 also logs a warning the first time it encounters a missing hair morph key.
 ---
 
 ## 15. Baked Animations
+
+Production demo: [Animation](https://loomlarge.web.app/?drawer=open&tab=animation)
 
 Loom3 can play baked skeletal animations from your GLB/GLTF files using Three.js AnimationMixer. This allows you to combine pre-made animations (idle, walk, gestures) with real-time facial control.
 

@@ -138,6 +138,13 @@ export type {
   CharacterRegistry,
 } from './characters/types';
 
+export type {
+  CameraRelativeGazeOffset,
+  CameraRelativeGazeOptions,
+} from './characters/cameraRelativeGaze';
+
+export { computeCameraRelativeGazeOffset } from './characters/cameraRelativeGaze';
+
 // ========================================================================
 // REGION MAPPING HELPERS
 // ========================================================================

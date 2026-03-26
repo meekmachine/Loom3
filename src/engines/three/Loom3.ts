@@ -182,13 +182,6 @@ export class Loom3 implements LoomLarge {
     this.compositeRotations = this.config.compositeRotations || CC4_COMPOSITE_ROTATIONS;
     this.auToCompositeMap = buildAUToCompositeMap(this.compositeRotations);
 
-    this.hairPhysics = new HairPhysicsController({
-      getMeshByName: (name) => this.meshByName.get(name),
-      getSelectedHairMeshNames: () => this.config.morphToMesh?.hair || [],
-      buildClip: (clipName, curves, options) => this.buildClip(clipName, curves, options),
-      cleanupSnippet: (name) => this.cleanupSnippet(name),
-    });
-
     this.bakedAnimations = new BakedAnimationController({
       getModel: () => this.model,
       getMeshes: () => this.meshes,
@@ -201,6 +194,14 @@ export class Loom3 implements LoomLarge {
       computeSideValues: (base, balance) => this.computeSideValues(base, balance),
       getAUMixWeight: (auId) => this.getAUMixWeight(auId),
       isMixedAU: (auId) => this.isMixedAU(auId),
+    });
+
+    this.hairPhysics = new HairPhysicsController({
+      getMeshByName: (name) => this.meshByName.get(name),
+      getSelectedHairMeshNames: () => this.config.morphToMesh?.hair || [],
+      // Hair physics needs clip construction, but mixer ownership still lives in BakedAnimationController.
+      buildClip: (clipName, curves, options) => this.bakedAnimations.buildClip(clipName, curves, options),
+      cleanupSnippet: (name) => this.bakedAnimations.cleanupSnippet(name),
     });
 
     this.applyHairPhysicsProfileConfig();
@@ -1804,8 +1805,8 @@ export class Loom3 implements LoomLarge {
 
   }
 
-  // ===========wha=================================================================
-  // BAKED ANIMATION CONTROL (Three.js AnimationMixer)
+  // ============================================================================
+  // MIXER / CLIP CONTROL
   // ============================================================================
 
   loadAnimationClips(clips: unknown[]): void {

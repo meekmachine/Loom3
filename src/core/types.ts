@@ -258,6 +258,8 @@ export interface ClipOptions {
   speed?: number;
   /** Play clip backwards when true (implemented via negative time scale) */
   reverse?: boolean;
+  /** Start time offset in seconds (default: clip start, or clip end for reverse once playback) */
+  startTime?: number;
   /** Mixer weight/intensity (default: 1.0) */
   mixerWeight?: number;
   /** Alias for mixerWeight/intensity so clip-backed animations can share one UI contract. */

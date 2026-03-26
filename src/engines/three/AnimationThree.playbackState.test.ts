@@ -110,4 +110,55 @@ describe('BakedAnimationController playback state normalization', () => {
       loopMode: 'once',
     });
   });
+
+  it('respects baked startTime and replays after stop without losing the action', () => {
+    const { controller, model } = makeHost();
+    controller.loadAnimationClips([makeClip(model, 'Idle')]);
+
+    const firstHandle = controller.playAnimation('Idle', { startTime: 0.7 });
+    expect(firstHandle).toBeTruthy();
+    expect(controller.getAnimationState('Idle')?.time).toBeCloseTo(0.7, 5);
+
+    controller.stopAnimation('Idle');
+    expect(controller.getAnimationState('Idle')).toMatchObject({
+      name: 'Idle',
+      isPlaying: false,
+      time: 0,
+    });
+
+    const replayHandle = controller.playAnimation('Idle');
+    expect(replayHandle).toBeTruthy();
+    expect(controller.getAnimationState('Idle')?.time).toBeCloseTo(0, 5);
+  });
+
+  it('starts reverse once playback from the clip end for baked and clip-backed actions', () => {
+    const { controller, model } = makeHost();
+    const clip = makeClip(model, 'Wave');
+    controller.loadAnimationClips([makeClip(model, 'Idle')]);
+
+    controller.playAnimation('Idle', {
+      loopMode: 'once',
+      reverse: true,
+    });
+    expect(controller.getAnimationState('Idle')).toMatchObject({
+      loopMode: 'once',
+      reverse: true,
+      time: 1,
+    });
+
+    const handle = controller.playClip(clip, {
+      source: 'snippet',
+      loopMode: 'once',
+      reverse: true,
+    });
+    expect(handle).toBeTruthy();
+    expect(controller.getAnimationState('Wave')).toMatchObject({
+      loopMode: 'once',
+      reverse: true,
+      time: 1,
+    });
+
+    handle?.play();
+    expect(controller.getAnimationState('Wave')?.time).toBeCloseTo(1, 5);
+  });
 });

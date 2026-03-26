@@ -32,8 +32,9 @@ import type {
   ClipHandle,
   Snippet,
   CompositeRotation,
-  RotationAxis,
-} from '../../core/types';
+    RotationAxis,
+    AnimationBlendMode,
+  } from '../../core/types';
 import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import { AnimationThree, BakedAnimationController } from './AnimationThree';
 import { getSideScale } from './balanceUtils';
@@ -1849,6 +1850,22 @@ export class Loom3 implements LoomLarge {
 
   setAnimationIntensity(clipName: string, intensity: number): void {
     this.bakedAnimations.setAnimationIntensity(clipName, intensity);
+  }
+
+  setAnimationLoopMode(clipName: string, loopMode: 'repeat' | 'once' | 'pingpong'): void {
+    this.bakedAnimations.setAnimationLoopMode(clipName, loopMode);
+  }
+
+  setAnimationRepeatCount(clipName: string, repeatCount?: number): void {
+    this.bakedAnimations.setAnimationRepeatCount(clipName, repeatCount);
+  }
+
+  setAnimationReverse(clipName: string, reverse: boolean): void {
+    this.bakedAnimations.setAnimationReverse(clipName, reverse);
+  }
+
+  setAnimationBlendMode(clipName: string, blendMode: AnimationBlendMode): void {
+    this.bakedAnimations.setAnimationBlendMode(clipName, blendMode);
   }
 
   seekAnimation(clipName: string, time: number): void {

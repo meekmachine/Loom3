@@ -148,6 +148,13 @@ export {
   mergeRegionsByName as mergeCharacterRegionsByName,
 } from './characters/extendCharacterConfigWithPreset';
 
+export type {
+  CameraRelativeGazeOffset,
+  CameraRelativeGazeOptions,
+} from './characters/cameraRelativeGaze';
+
+export { computeCameraRelativeGazeOffset } from './characters/cameraRelativeGaze';
+
 // ========================================================================
 // REGION MAPPING HELPERS
 // ========================================================================

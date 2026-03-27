@@ -1033,13 +1033,13 @@ export const CC4_PRESET: Profile = {
     {
       name: 'left_eye',
       bones: ['CC_Base_L_Eye'],
-      paddingFactor: 1.2,
+      paddingFactor: 0.9,
       parent: 'head',
     },
     {
       name: 'right_eye',
       bones: ['CC_Base_R_Eye'],
-      paddingFactor: 1.2,
+      paddingFactor: 0.9,
       parent: 'head',
     },
     {

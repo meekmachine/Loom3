@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   AU_TO_MORPHS,
   BONE_AU_TO_BINDINGS,
+  CC4_PRESET,
   COMPOSITE_ROTATIONS,
   CONTINUUM_PAIRS_MAP,
   VISEME_JAW_AMOUNTS,
@@ -390,6 +391,16 @@ describe('CC4 Preset', () => {
         expect(hasLeftRightBones(51)).toBe(false);
         expect(hasLeftRightBones(52)).toBe(false);
       });
+    });
+  });
+
+  describe('annotationRegions', () => {
+    it('uses tighter default camera framing for eye close-ups', () => {
+      const leftEye = CC4_PRESET.annotationRegions?.find((region) => region.name === 'left_eye');
+      const rightEye = CC4_PRESET.annotationRegions?.find((region) => region.name === 'right_eye');
+
+      expect(leftEye?.paddingFactor).toBe(0.9);
+      expect(rightEye?.paddingFactor).toBe(0.9);
     });
   });
 });

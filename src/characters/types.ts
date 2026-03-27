@@ -96,7 +96,10 @@ export interface Region {
   meshes?: string[];
   /** Any object names (bones or meshes). Use ['*'] for all objects */
   objects?: string[];
-  /** Override default padding factor for this annotation */
+  /**
+   * Camera framing multiplier for this annotation.
+   * Smaller values zoom in tighter; larger values leave more space around the target.
+   */
   paddingFactor?: number;
   /**
    * Camera angle in degrees around the Y axis (horizontal orbit).

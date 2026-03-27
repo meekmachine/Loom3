@@ -229,8 +229,13 @@ Other `Profile` fields that are easy to miss:
 - `auMixDefaults` sets the default morph/bone blend weight per AU.
 - `compositeRotations` defines the per-node pitch/yaw/roll axis layout used by the composite rotation system.
 - `continuumPairs` and `continuumLabels` describe bidirectional AU pairs and their UI labels.
-- `annotationRegions` defines the regions used by the marker and camera tooling.
+- `annotationRegions` defines the regions used by the marker and camera tooling, including per-region framing via `paddingFactor`.
 - `hairPhysics` stores the mixer-driven hair defaults, including direction signs and morph target mappings.
+
+For `annotationRegions`, `paddingFactor` is the camera framing multiplier for that region:
+- values below `1` zoom in tighter
+- values above `1` pull back to show more surrounding context
+- profile overrides can replace it per region by name without copying the whole preset
 
 ### Passing a preset to Loom3
 
@@ -267,6 +272,8 @@ const DAISY_PROFILE: Profile = {
   morphToMesh: { face: ['Object_9'] },
   annotationRegions: [
     { name: 'face', bones: ['CC_Base_Head'] },
+    { name: 'left_eye', paddingFactor: 0.9 },
+    { name: 'right_eye', paddingFactor: 0.9 },
   ],
 };
 

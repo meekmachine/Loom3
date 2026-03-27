@@ -211,6 +211,10 @@ export interface AnnotationRegion {
   bones?: string[];
   meshes?: string[];
   objects?: string[];
+  /**
+   * Camera framing multiplier for this annotation.
+   * Smaller values zoom in tighter; larger values leave more space around the target.
+   */
   paddingFactor?: number;
   cameraAngle?: number;
   cameraOffset?: {

@@ -1,48 +1,18 @@
-import type { Mesh, Object3D } from 'three';
+import { Mesh } from 'three';
+import type { Object3D } from 'three';
 import type { ClipHandle, ClipOptions, CurvesMap } from '../../../core/types';
+import type {
+  HairPhysicsDirectionConfig as SharedHairPhysicsDirectionConfig,
+  HairMorphTargetsConfig as SharedHairMorphTargetsConfig,
+  HairPhysicsRuntimeConfig as SharedHairPhysicsConfig,
+  HairPhysicsRuntimeConfigUpdate as SharedHairPhysicsConfigUpdate,
+} from '../../../interfaces/Hair';
 import { CC4_MESHES } from '../../../presets/cc4';
 
-export type HairPhysicsDirectionConfig = {
-  // Multiplies head rotation inputs before mapping to hair motion.
-  // yawSign = -1 means hair lags opposite head yaw (inertia).
-  // pitchSign = -1 means head down (negative pitch) maps to forward hair motion.
-  yawSign: 1 | -1;
-  pitchSign: 1 | -1;
-};
-
-export type HairMorphTargets = {
-  swayLeft: string;
-  swayRight: string;
-  swayFront: string;
-  fluffRight: string;
-  fluffBottom: string;
-  headUp: Record<string, number>;
-  headDown: Record<string, number>;
-};
-
-export type HairPhysicsConfig = {
-  stiffness: number;
-  damping: number;
-  inertia: number;
-  gravity: number;
-  responseScale: number;
-  idleSwayAmount: number;
-  idleSwaySpeed: number;
-  windStrength: number;
-  windDirectionX: number;
-  windDirectionZ: number;
-  windTurbulence: number;
-  windFrequency: number;
-  idleClipDuration: number;
-  impulseClipDuration: number;
-  direction: HairPhysicsDirectionConfig;
-  morphTargets: HairMorphTargets;
-};
-
-export type HairPhysicsConfigUpdate = Partial<HairPhysicsConfig> & {
-  direction?: Partial<HairPhysicsDirectionConfig>;
-  morphTargets?: Partial<HairMorphTargets>;
-};
+export type HairPhysicsDirectionConfig = SharedHairPhysicsDirectionConfig;
+export type HairMorphTargets = SharedHairMorphTargetsConfig;
+export type HairPhysicsConfig = SharedHairPhysicsConfig;
+export type HairPhysicsConfigUpdate = SharedHairPhysicsConfigUpdate;
 
 export interface HairPhysicsHost {
   getMeshByName: (name: string) => Mesh | undefined;
@@ -136,8 +106,8 @@ export class HairPhysicsController {
     const result: Array<{ name: string; isMesh: boolean; isEyebrow: boolean }> = [];
 
     for (const obj of objects) {
-      if ((obj as any).isMesh) {
-        const mesh = obj as unknown as Mesh;
+      if (obj instanceof Mesh) {
+        const mesh = obj;
         this.registeredHairObjects.set(mesh.name, mesh);
 
         const meshInfo = CC4_MESHES[mesh.name];
@@ -228,7 +198,7 @@ export class HairPhysicsController {
 
     this.hairPhysicsConfig = { ...this.hairPhysicsConfig, ...config, direction, morphTargets };
 
-    const idleChanged = [
+    const idleKeys: Array<keyof HairPhysicsConfigUpdate> = [
       'idleSwayAmount',
       'idleSwaySpeed',
       'windStrength',
@@ -237,15 +207,17 @@ export class HairPhysicsController {
       'windTurbulence',
       'windFrequency',
       'idleClipDuration',
-    ].some((key) => (config as Record<string, unknown>)[key] !== undefined);
+    ];
+    const idleChanged = idleKeys.some((key) => config[key] !== undefined);
     const morphTargetsChanged = config.morphTargets !== undefined;
     const directionChanged = config.direction !== undefined;
 
-    const impulseChanged = [
+    const impulseKeys: Array<keyof HairPhysicsConfigUpdate> = [
       'stiffness',
       'damping',
       'impulseClipDuration',
-    ].some((key) => (config as Record<string, unknown>)[key] !== undefined);
+    ];
+    const impulseChanged = impulseKeys.some((key) => config[key] !== undefined);
     const gravityChanged = morphTargetsChanged;
 
     if (idleChanged || morphTargetsChanged) {
@@ -410,7 +382,7 @@ export class HairPhysicsController {
     const mesh = this.registeredHairObjects.get(objectName);
     if (!mesh) return;
 
-    const obj = mesh as any;
+    const obj = mesh;
 
     if (state.visible !== undefined) {
       obj.visible = state.visible;
@@ -424,8 +396,12 @@ export class HairPhysicsController {
       obj.position.set(state.position.x, state.position.y, state.position.z);
     }
 
-    if (state.color && obj.material) {
-      const mat = obj.material;
+    if (state.color && obj.material && !Array.isArray(obj.material)) {
+      const mat = obj.material as typeof obj.material & {
+        color?: { set(value: string): void };
+        emissive?: { set(value: string): void };
+        emissiveIntensity?: number;
+      };
       if (mat.color) {
         mat.color.set(state.color.baseColor);
       }

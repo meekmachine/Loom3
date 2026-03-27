@@ -27,6 +27,7 @@ Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https:
 13. [Playback & State Control](#13-playback--state-control)
 14. [Hair Physics](#14-hair-physics)
 15. [Baked Animations](#15-baked-animations)
+16. [API Reference](#16-api-reference)
 
 ---
 
@@ -83,7 +84,7 @@ loader.load('/character.glb', (gltf) => {
 // This drives all transitions and animations
 ```
 
-If you’re implementing a custom renderer, target the `LoomLarge` interface exported from `@lovelace_lol/loom3`.
+If you’re implementing a custom renderer, target the `Loom3` interface exported from `@lovelace_lol/loom3` (legacy alias: `LoomLarge`).
 
 ### Quick start examples
 
@@ -166,26 +167,31 @@ import { CC4_PRESET } from '@lovelace_lol/loom3';
   },
 
   boneNodes: {
-    // Logical bone name → actual node name in skeleton
-    'HEAD': 'CC_Base_Head',
-    'JAW': 'CC_Base_JawRoot',
-    'EYE_L': 'CC_Base_L_Eye',
-    'EYE_R': 'CC_Base_R_Eye',
-    'TONGUE': 'CC_Base_Tongue01',
+    // Logical bone name → base node name used with bonePrefix
+    'HEAD': 'Head',
+    'JAW': 'JawRoot',
+    'EYE_L': 'L_Eye',
+    'EYE_R': 'R_Eye',
+    'TONGUE': 'Tongue01',
   },
+
+  bonePrefix: 'CC_Base_',
+  suffixPattern: '_\\d+$|\\.\\d+$',
 
   visemeKeys: [
     // 15 viseme morph names for lip-sync
-    'V_EE', 'V_Er', 'V_IH', 'V_Ah', 'V_Oh',
-    'V_W_OO', 'V_S_Z', 'V_Ch_J', 'V_F_V', 'V_TH',
-    'V_T_L_D_N', 'V_B_M_P', 'V_K_G_H_NG', 'V_AE', 'V_R'
+    'EE', 'Ah', 'Oh', 'OO', 'I',
+    'U', 'W', 'L', 'F_V', 'Th',
+    'S_Z', 'B_M_P', 'K_G_H_NG', 'AE', 'R'
   ],
 
   morphToMesh: {
     // Routes morph categories to specific meshes
     'face': ['CC_Base_Body'],
+    'viseme': ['CC_Base_Body', 'CC_Base_Body_1'],
     'tongue': ['CC_Base_Tongue'],
-    'eye': ['CC_Base_EyeOcclusion_L', 'CC_Base_EyeOcclusion_R'],
+    'eye': ['CC_Base_EyeOcclusion_1', 'CC_Base_EyeOcclusion_2'],
+    'hair': ['Side_part_wavy_1', 'Side_part_wavy_2'],
   },
 
   auMixDefaults: {
@@ -206,6 +212,25 @@ import { CC4_PRESET } from '@lovelace_lol/loom3';
   }
 }
 ```
+
+### Name resolution and profile fields
+
+The runtime resolves bone nodes by composing `bonePrefix + boneNodes[key] + boneSuffix`, then falling back to suffix-pattern matching when a model uses numbered exports such as `_01` or `.001`. The same prefix/suffix rules are used by validation and correction helpers, which is why `CC4_PRESET` can keep base bone names like `Head` and `JawRoot` instead of repeating the full node names everywhere.
+
+For region and marker configs, `resolveBoneName()` treats any mapped bone name that already contains `_` or `.` as a fully qualified name and skips prefix/suffix composition.
+
+Two caveats are worth calling out:
+- `morphPrefix` and `morphSuffix` are part of `Profile`, but morph playback still resolves exact morph keys on the targeted meshes today. They are already used by validation and correction helpers.
+- `leftMorphSuffixes` and `rightMorphSuffixes` are profile metadata for laterality detection in tooling, not core runtime behavior.
+
+Other `Profile` fields that are easy to miss:
+- `morphToMesh` routes categories such as `face`, `viseme`, `eye`, `tongue`, and `hair` to specific mesh names.
+- `eyeMeshNodes` provides fallback eye nodes when a rig uses meshes instead of bones for eye control.
+- `auMixDefaults` sets the default morph/bone blend weight per AU.
+- `compositeRotations` defines the per-node pitch/yaw/roll axis layout used by the composite rotation system.
+- `continuumPairs` and `continuumLabels` describe bidirectional AU pairs and their UI labels.
+- `annotationRegions` defines the regions used by the marker and camera tooling.
+- `hairPhysics` stores the mixer-driven hair defaults, including direction signs and morph target mappings.
 
 ### Passing a preset to Loom3
 
@@ -325,6 +350,7 @@ Loom3 includes validation and analysis helpers so you can verify presets against
 
 ```typescript
 import {
+  extractFromGLTF,
   extractModelData,
   analyzeModel,
   validateMappings,
@@ -333,16 +359,41 @@ import {
 } from '@lovelace_lol/loom3';
 
 const preset = resolvePreset('cc4');
-const modelData = extractModelData({ model, meshes, animations });
-const analysis = analyzeModel(modelData, { preset });
-const validation = validateMappings(modelData, preset);
-const corrections = generateMappingCorrections(modelData, preset);
+const modelData = extractModelData(model, meshes, animations);
+const gltfData = extractFromGLTF(gltf); // Same ModelData shape, one-step GLTF wrapper
+
+const analysis = await analyzeModel({
+  source: { type: 'gltf', gltf },
+  preset,
+  suggestCorrections: true,
+});
+
+// Validate against lower-level mesh + skeleton inputs when you already have them
+const validation = validateMappings(meshes, skeleton, preset, { suggestCorrections: true });
+const corrections = generateMappingCorrections(meshes, skeleton, preset, { useResolvedNames: true });
 ```
 
+If you already have a `ModelData` bundle, `analyzeModel()` is the higher-level path; `validateMappings()` and `generateMappingCorrections()` are intentionally lower-level mesh/skeleton helpers.
+
 Use these helpers to:
-- Find missing morphs/bones and mesh mismatches
-- Score preset compatibility
-- Suggest corrections before you ship a profile
+- Extract raw model facts with `extractModelData(model, meshes?, animations?)` or `extractFromGLTF(gltf)`
+- Validate a preset against mesh/skeleton data with `validateMappings(meshes, skeleton, preset, options)`
+- Generate best-effort fixes with `generateMappingCorrections(meshes, skeleton, preset, options)`
+- Run a single end-to-end pass with `analyzeModel({ source, preset, suggestCorrections })`
+
+`validateMappings()` returns a `ValidationResult` with:
+- `valid` and `score`
+- `missingMorphs`, `missingBones`, `foundMorphs`, `foundBones`
+- `missingMeshes`, `foundMeshes`, `unmappedMorphs`, `unmappedBones`, `unmappedMeshes`
+- `warnings`
+- optional `suggestedConfig`, `corrections`, and `unresolved` when suggestion mode is enabled
+
+`generateMappingCorrections()` returns:
+- `correctedConfig`
+- `corrections`
+- `unresolved`
+
+`analyzeModel()` returns a `ModelAnalysisReport` containing the extracted model data, optional validation results, animation summary, `overallScore`, and a plain-language `summary`.
 
 ### Controlling mesh visibility
 
@@ -396,15 +447,16 @@ This is especially useful for:
 Production demos: [Properties](https://loomlarge.web.app/?drawer=open&tab=properties) | [Mappings](https://loomlarge.web.app/?drawer=open&tab=mappings)
 
 ![Diagram showing preset inheritance and mergePreset overrides](./assets/readme/preset-inheritance.svg)
+![Diagram showing preset inheritance and profile override merging](./assets/readme/preset-inheritance.svg)
 
 ### Extending an existing preset
 
-Use `mergePreset` to override specific mappings while keeping the rest:
+Use `resolveProfile` to override specific mappings while keeping the rest:
 
 ```typescript
-import { CC4_PRESET, mergePreset } from '@lovelace_lol/loom3';
+import { CC4_PRESET, resolveProfile } from '@lovelace_lol/loom3';
 
-const MY_PRESET = mergePreset(CC4_PRESET, {
+const MY_PRESET = resolveProfile(CC4_PRESET, {
 
   // Override AU12 (smile) with custom morph names
   auToMorphs: {
@@ -428,7 +480,7 @@ const loom = new Loom3({ profile: MY_PRESET });
 ### Creating a preset from scratch
 
 ```typescript
-import { Profile } from '@lovelace_lol/loom3';
+import type { Profile } from '@lovelace_lol/loom3';
 
 const CUSTOM_PRESET: Profile = {
   auToMorphs: {
@@ -1097,19 +1149,21 @@ Visemes are mouth shapes used for lip-sync. Loom3 includes 15 visemes with autom
 
 ### The 15 visemes
 
+The `VISEME_KEYS` export uses unprefixed keys in this order.
+
 | Index | Key | Phoneme Example |
 |-------|-----|-----------------|
 | 0 | EE | "b**ee**" |
-| 1 | Er | "h**er**" |
-| 2 | IH | "s**i**t" |
-| 3 | Ah | "f**a**ther" |
-| 4 | Oh | "g**o**" |
-| 5 | W_OO | "t**oo**" |
-| 6 | S_Z | "**s**un, **z**oo" |
-| 7 | Ch_J | "**ch**ip, **j**ump" |
+| 1 | Ah | "f**a**ther" |
+| 2 | Oh | "g**o**" |
+| 3 | OO | "t**oo**" |
+| 4 | I | "s**i**t" |
+| 5 | U | "fl**u**te" |
+| 6 | W | "**w**e" |
+| 7 | L | "**l**ip" |
 | 8 | F_V | "**f**un, **v**an" |
-| 9 | TH | "**th**ink" |
-| 10 | T_L_D_N | "**t**op, **l**ip, **d**og, **n**o" |
+| 9 | Th | "**th**ink" |
+| 10 | S_Z | "**s**un, **z**oo" |
 | 11 | B_M_P | "**b**at, **m**an, **p**op" |
 | 12 | K_G_H_NG | "**k**ite, **g**o, **h**at, si**ng**" |
 | 13 | AE | "c**a**t" |
@@ -1139,16 +1193,7 @@ loom.transitionViseme(3, 1.0, 80, 0);
 
 ### Automatic jaw coupling
 
-Each viseme has a predefined jaw opening amount. When you set a viseme, the jaw automatically opens proportionally:
-
-| Viseme | Jaw Amount |
-|--------|------------|
-| EE | 0.15 |
-| Ah | 0.70 |
-| Oh | 0.50 |
-| B_M_P | 0.20 |
-
-The `jawScale` parameter multiplies this amount:
+Each viseme has a predefined jaw opening amount in the preset. When you set a viseme, the jaw automatically opens proportionally, and the `jawScale` parameter multiplies that amount:
 - `jawScale = 1.0`: Normal jaw opening
 - `jawScale = 0.5`: Half jaw opening
 - `jawScale = 0`: No jaw movement (viseme only)
@@ -1680,6 +1725,33 @@ loom.transitionAU(45, 1.0, 100);  // Blink
 | `crossfadeDuration` | number | 0 | Fade in duration (seconds) |
 | `clampWhenFinished` | boolean | true | Hold last frame when done |
 | `startTime` | number | 0 | Initial playback position |
+
+---
+
+## 16. API Reference
+
+This is a compact reference for the public surface exported by `@lovelace_lol/loom3`.
+
+### Engine surface
+
+`Loom3` (legacy alias: `LoomLarge`) covers:
+- Initialization and lifecycle: `onReady()`, `update()`, `start()`, `stop()`, `dispose()`
+- AU, morph, viseme, and continuum control: `setAU()`, `transitionAU()`, `setMorph()`, `transitionMorph()`, `setViseme()`, `transitionViseme()`, `setContinuum()`, `transitionContinuum()`
+- Preset state: `setProfile()`, `getProfile()`
+- Validation and analysis helpers: `validateMappings()`, `generateMappingCorrections()`, `extractModelData()`, `extractFromGLTF()`, `analyzeModel()`
+- Mixer and baked animation helpers: `loadAnimationClips()`, `getAnimationClips()`, `playAnimation()`, `playClip()`, `playSnippet()`, `snippetToClip()`
+- Hair physics helpers: `setHairPhysicsEnabled()`, `setHairPhysicsConfig()`, `validateHairMorphTargets()`
+
+### Core types and helpers
+
+- `Profile` groups the mapping tables, name-resolution fields, `morphToMesh`, `visemeKeys`, `auMixDefaults`, `compositeRotations`, `continuumPairs`, `continuumLabels`, `eyeMeshNodes`, `annotationRegions`, and `hairPhysics`.
+- `TransitionHandle` exposes `promise`, `pause()`, `resume()`, and `cancel()`.
+- `ClipHandle` exposes `clipName`, `play()`, `stop()`, `pause()`, `resume()`, optional live-update setters, `getTime()`, `getDuration()`, and `finished`.
+- `collectMorphMeshes()` gathers meshes that already have morph targets.
+- `resolvePreset()` picks a built-in preset by name.
+- `resolvePresetWithOverrides()` resolves a preset and merges partial overrides.
+- `resolveProfile()` merges a base preset with a partial profile override.
+- `isMixedAU()` checks whether an AU has both morph and bone support in the CC4 preset.
 
 ---
 

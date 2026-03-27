@@ -525,25 +525,25 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
 };
 
 // ============================================================================
-// VISEME KEYS - CC4 viseme morph targets (15)
+// VISEME KEYS - CC4 1:1 Direct viseme morph targets (15)
 // ============================================================================
 
 export const VISEME_KEYS: string[] = [
-  'EE',
-  'Ah',
-  'Oh',
-  'OO',
-  'I',
-  'U',
-  'W',
-  'L',
-  'F_V',
-  'Th',
-  'S_Z',
-  'B_M_P',
-  'K_G_H_NG',
   'AE',
+  'Ah',
+  'B_M_P',
+  'Ch_J',
+  'EE',
+  'Er',
+  'F_V',
+  'Ih',
+  'K_G_H_NG',
+  'Oh',
   'R',
+  'S_Z',
+  'T_L_D_N',
+  'Th',
+  'W_OO',
 ];
 
 /**
@@ -552,21 +552,21 @@ export const VISEME_KEYS: string[] = [
  * Used by snippetToClip when autoVisemeJaw is enabled.
  */
 export const VISEME_JAW_AMOUNTS: number[] = [
-  0.20, // 0: EE
+  0.75, // 0: AE
   0.80, // 1: Ah
-  0.60, // 2: Oh
-  0.50, // 3: OO
-  0.20, // 4: I
-  0.50, // 5: U
-  0.40, // 6: W
-  0.30, // 7: L
-  0.10, // 8: F_V
-  0.15, // 9: Th
-  0.10, // 10: S_Z
-  0.00, // 11: B_M_P
-  0.35, // 12: K_G_H_NG
-  0.75, // 13: AE
-  0.35, // 14: R
+  0.00, // 2: B_M_P
+  0.30, // 3: Ch_J
+  0.20, // 4: EE
+  0.35, // 5: Er
+  0.10, // 6: F_V
+  0.20, // 7: Ih
+  0.35, // 8: K_G_H_NG
+  0.60, // 9: Oh
+  0.35, // 10: R
+  0.10, // 11: S_Z
+  0.30, // 12: T_L_D_N
+  0.15, // 13: Th
+  0.50, // 14: W_OO
 ];
 
 // ============================================================================

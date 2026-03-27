@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: npm
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - name: Checkout
@@ -86,6 +86,12 @@ jobs:
           echo "name=$(node -p 'require(\"./package.json\").name')" >> "$GITHUB_OUTPUT"
           echo "version=$(node -p 'require(\"./package.json\").version')" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve release metadata
+        id: release
+        run: |
+          echo "tag=v${{ steps.pkg.outputs.version }}" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Verify NPM auth
         run: |
           if [ -z "${NODE_AUTH_TOKEN}" ]; then
@@ -108,8 +114,61 @@ jobs:
             echo "Version ${{ steps.pkg.outputs.version }} is not published yet."
           fi
 
+      - name: Verify release tag drift
+        run: |
+          set -euo pipefail
+
+          tag="${{ steps.release.outputs.tag }}"
+          commit="$(git rev-parse HEAD)"
+          remote_commit="$(git ls-remote --tags origin "refs/tags/${tag}^{}" | awk '{print $1}')"
+
+          if [ -z "$remote_commit" ]; then
+            remote_commit="$(git ls-remote --tags origin "refs/tags/${tag}" | awk '{print $1}')"
+          fi
+
+          if [ -n "$remote_commit" ] && [ "$remote_commit" != "$commit" ]; then
+            echo "Tag ${tag} points to ${remote_commit}, expected ${commit}." >&2
+            exit 1
+          fi
+
       - name: Publish to NPM
+        id: publish_npm
         if: steps.existing.outputs.exists != 'true'
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_KEY }}
+
+      # Package version is the source of truth; create the release tag when it is missing,
+      # but fail if an existing tag already points at a different commit.
+      - name: Create release tag
+        if: ${{ steps.existing.outputs.exists == 'true' || steps.publish_npm.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+
+          tag="${{ steps.release.outputs.tag }}"
+          commit="$(git rev-parse HEAD)"
+          remote_commit="$(git ls-remote --tags origin "refs/tags/${tag}^{}" | awk '{print $1}')"
+
+          if [ -z "$remote_commit" ]; then
+            remote_commit="$(git ls-remote --tags origin "refs/tags/${tag}" | awk '{print $1}')"
+          fi
+
+          if [ -z "$remote_commit" ]; then
+            git tag -a "$tag" -m "Release $tag" "$commit"
+            git push origin "$tag"
+          fi
+
+      - name: Create or update GitHub release
+        if: ${{ steps.existing.outputs.exists == 'true' || steps.publish_npm.outcome == 'success' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ steps.release.outputs.commit }}
+          name: ${{ steps.release.outputs.tag }}
+          generate_release_notes: true
+          body: |
+            ## NPM Package
+
+            Install: `npm install @lovelace_lol/loom3@${{ steps.pkg.outputs.version }}`
+
+            Reference: [npmjs.com/package/@lovelace_lol/loom3](https://www.npmjs.com/package/@lovelace_lol/loom3)

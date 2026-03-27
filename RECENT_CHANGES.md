@@ -1,21 +1,19 @@
 # Recent Changes (Loom3)
 
-## Independent eye controls
+## Current release highlights
+
+### Mapping and control updates
 - CC4 now includes independent eye AUs 65-72 for both morph and bone mappings.
-- Grouped composite eye axes now evaluate per-node effective values consistently, so shared-eye balance no longer leaks into independent-eye controls.
+- Composite eye axes now evaluate per-node effective values consistently, so shared-eye balance no longer leaks into independent-eye controls.
+- CC4 head yaw/pitch/roll max degrees were increased for wider head turns.
 
-## Mixer + clip handling
-- Clip stop now resolves cleanly so stopping playback does not throw a rejected promise.
-- Eye/head tracking clips remain cached (no uncache on stop) to avoid pose resets during continuous tracking.
-- Snippet-to-clip conversion now supports UUID-based tracks for bones, which avoids dot-name binding issues.
+### Playback and mixer updates
+- Clip stop now resolves cleanly, so stopping playback does not throw a rejected promise.
+- Eye and head tracking clips stay cached on stop to avoid pose resets during continuous tracking.
+- Snippet-to-clip conversion supports UUID-based tracks for bones, which avoids dot-name binding issues.
+- Curves can be played through the mixer via `snippetToClip()` + `playClip()`, including composite bone rotations.
 
-## Curve playback + morph targeting
-- Curves can be played through the mixer via `snippetToClip` + `playClip`, including composite bone rotations.
+### Morph routing and docs
 - Morph targeting prefers `morphToMesh.face` when present and falls back to scanning meshes for morph keys.
-
-## CC4 head range tuning
-- Head yaw/pitch/roll max degrees increased for wider head turns.
-
-## Naming + exports
-- README updated to `Loom3` terminology and `@lovelace_lol/loom3` package usage.
-- `Loom3` is now the primary Three.js implementation name; legacy aliases remain for compatibility.
+- README terminology now uses `Loom3` as the primary name, with `@lovelace_lol/loom3` as the package import.
+- The docs now reflect the current viseme keys, preset merge helper, and profile fields that the code actually exports.

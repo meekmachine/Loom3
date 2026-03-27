@@ -4,11 +4,30 @@ import {
   BONE_AU_TO_BINDINGS,
   COMPOSITE_ROTATIONS,
   CONTINUUM_PAIRS_MAP,
+  VISEME_JAW_AMOUNTS,
   VISEME_KEYS,
   isMixedAU,
   hasLeftRightMorphs,
   hasLeftRightBones,
 } from '../cc4';
+
+const EXPECTED_CC4_VISEME_KEYS = [
+  'AE',
+  'Ah',
+  'B_M_P',
+  'Ch_J',
+  'EE',
+  'Er',
+  'F_V',
+  'Ih',
+  'K_G_H_NG',
+  'Oh',
+  'R',
+  'S_Z',
+  'T_L_D_N',
+  'Th',
+  'W_OO',
+];
 
 describe('CC4 Preset', () => {
   describe('AU_TO_MORPHS', () => {
@@ -292,16 +311,20 @@ describe('CC4 Preset', () => {
   });
 
   describe('VISEME_KEYS', () => {
-    it('should have 15 viseme keys (ARKit standard)', () => {
+    it('should have 15 viseme keys for the CC4 direct set', () => {
       expect(VISEME_KEYS.length).toBe(15);
     });
 
-    it('should include common visemes', () => {
-      expect(VISEME_KEYS).toContain('EE');
-      expect(VISEME_KEYS).toContain('Ah');
-      expect(VISEME_KEYS).toContain('Oh');
-      expect(VISEME_KEYS).toContain('B_M_P');
-      expect(VISEME_KEYS).toContain('F_V');
+    it('should match the CC4 1:1 Direct viseme set order', () => {
+      expect(VISEME_KEYS).toEqual(EXPECTED_CC4_VISEME_KEYS);
+    });
+
+    it('should keep jaw amounts aligned with viseme keys', () => {
+      expect(VISEME_JAW_AMOUNTS).toHaveLength(VISEME_KEYS.length);
+      expect(VISEME_JAW_AMOUNTS[0]).toBeCloseTo(0.75);
+      expect(VISEME_JAW_AMOUNTS[4]).toBeCloseTo(0.2);
+      expect(VISEME_JAW_AMOUNTS[2]).toBeCloseTo(0);
+      expect(VISEME_JAW_AMOUNTS[14]).toBeCloseTo(0.5);
     });
   });
 

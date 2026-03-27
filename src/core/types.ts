@@ -4,7 +4,7 @@
  * Type definitions for the 3D character animation engine.
  * These are framework-agnostic interfaces that work with any 3D engine.
  */
-
+ 
 /**
  * TransitionHandle - returned from transition methods
  * Provides promise-based completion notification plus fine-grained control.

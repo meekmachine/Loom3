@@ -4,7 +4,7 @@
  * Type definitions for the 3D character animation engine.
  * These are framework-agnostic interfaces that work with any 3D engine.
  */
-
+ 
 /**
  * TransitionHandle - returned from transition methods
  * Provides promise-based completion notification plus fine-grained control.
@@ -94,26 +94,49 @@ export interface Loom3Config {
 // BAKED ANIMATION TYPES (Three.js AnimationMixer support)
 // ============================================================================
 
+/** Source category for mixer-driven animations. */
+export type AnimationSource = 'baked' | 'clip' | 'snippet';
+
+/** Shared blend-mode surface for downstream animation UIs. */
+export type AnimationBlendMode = 'replace' | 'additive';
+
+/** Shared easing labels for downstream animation UIs. */
+export type AnimationEasing = 'linear' | 'easeInOut' | 'easeInOutCubic' | 'easeIn' | 'easeOut';
+
 /**
  * Options for playing a baked animation clip.
  */
 export interface AnimationPlayOptions {
-  /** Playback speed multiplier (default: 1.0) */
+  /** Playback speed multiplier (default: 1.0). Alias: playbackRate. */
   speed?: number;
-  /** Animation intensity/weight (0-1, default: 1.0) */
+  /** Alias for speed so baked clips and snippet clips can share one UI contract. */
+  playbackRate?: number;
+  /** Animation intensity/weight (default: 1.0). Alias: weight. */
   intensity?: number;
+  /** Alias for intensity so baked clips and snippet clips can share one UI contract. */
+  weight?: number;
   /** Whether the animation should loop (default: true) */
   loop?: boolean;
   /** Loop mode: 'repeat' (restart from beginning), 'pingpong' (reverse direction), 'once' (no loop) */
   loopMode?: 'repeat' | 'pingpong' | 'once';
   /** Number of repetitions when looping (default: Infinity for repeat/pingpong) */
   repeatCount?: number;
+  /** Play clip backwards when true (implemented via negative time scale) */
+  reverse?: boolean;
+  /** Shared balance metadata for downstream UIs (-1 to 1, default: 0) */
+  balance?: number;
+  /** Shared blend metadata for downstream UIs (default: replace) */
+  blendMode?: AnimationBlendMode;
+  /** Shared easing metadata for downstream UIs (default: linear) */
+  easing?: AnimationEasing;
   /** Crossfade duration in seconds when transitioning from another animation (default: 0.3) */
   crossfadeDuration?: number;
   /** Clamp animation at end when not looping (default: true) */
   clampWhenFinished?: boolean;
   /** Start time offset in seconds (default: 0) */
   startTime?: number;
+  /** Optional source override for downstream consumers */
+  source?: AnimationSource;
 }
 
 /**
@@ -126,6 +149,8 @@ export interface AnimationClipInfo {
   duration: number;
   /** Number of tracks (bones/morphs being animated) */
   trackCount: number;
+  /** Source of the clip for downstream UI grouping */
+  source?: AnimationSource;
 }
 
 /**
@@ -134,6 +159,10 @@ export interface AnimationClipInfo {
 export interface AnimationState {
   /** Name of the animation */
   name: string;
+  /** Optional action id for the current mixer action */
+  actionId?: string;
+  /** Source of the animation for downstream UIs */
+  source?: AnimationSource;
   /** Whether the animation is currently playing */
   isPlaying: boolean;
   /** Whether the animation is paused */
@@ -142,10 +171,26 @@ export interface AnimationState {
   time: number;
   /** Duration of the animation in seconds */
   duration: number;
-  /** Current playback speed */
+  /** Current playback speed magnitude. */
   speed: number;
-  /** Current weight/intensity (0-1) */
+  /** Alias for speed to match snippet-style UIs. */
+  playbackRate: number;
+  /** Whether the animation is playing in reverse */
+  reverse: boolean;
+  /** Current weight/intensity */
   weight: number;
+  /** Shared balance metadata for downstream UIs */
+  balance: number;
+  /** Shared blend metadata for downstream UIs */
+  blendMode: AnimationBlendMode;
+  /** Shared easing metadata for downstream UIs */
+  easing: AnimationEasing;
+  /** Whether the animation is looping */
+  loop: boolean;
+  /** Loop mode */
+  loopMode: 'repeat' | 'pingpong' | 'once';
+  /** Number of repetitions when looping (if configured) */
+  repeatCount?: number;
   /** Whether the animation is looping */
   isLooping: boolean;
 }
@@ -154,6 +199,8 @@ export interface AnimationState {
  * Handle returned when playing an animation, providing control methods.
  */
 export interface AnimationActionHandle {
+  /** Optional unique id for the underlying mixer action */
+  actionId?: string;
   /** Stop the animation */
   stop: () => void;
   /** Pause the animation */
@@ -207,12 +254,26 @@ export interface ClipOptions {
   repeatCount?: number;
   /** Playback rate multiplier (default: 1.0) */
   playbackRate?: number;
+  /** Alias for playbackRate so clip-backed animations can share one UI contract with baked clips. */
+  speed?: number;
   /** Play clip backwards when true (implemented via negative time scale) */
   reverse?: boolean;
+  /** Start time offset in seconds (default: clip start, or clip end for reverse once playback) */
+  startTime?: number;
   /** Mixer weight/intensity (default: 1.0) */
   mixerWeight?: number;
+  /** Alias for mixerWeight/intensity so clip-backed animations can share one UI contract. */
+  weight?: number;
+  /** Alias for weight/intensity so clip-backed animations can share one UI contract. */
+  intensity?: number;
   /** Left/right balance for bilateral AUs (-1 to 1, default: 0) */
   balance?: number;
+  /** Shared blend metadata for downstream UIs (default: replace) */
+  blendMode?: AnimationBlendMode;
+  /** Shared easing metadata for downstream UIs (default: linear) */
+  easing?: AnimationEasing;
+  /** Legacy additive toggle alias for downstream compatibility */
+  mixerAdditive?: boolean;
   /**
    * Per-curve left/right balance overrides keyed by curve id (typically AU ids as strings).
    * Example: { "43": 1, "12": 0.7 }.
@@ -234,6 +295,8 @@ export interface ClipOptions {
    * Default: true (for backwards compatibility with transitionViseme behavior)
    */
   autoVisemeJaw?: boolean;
+  /** Optional source override for downstream consumers */
+  source?: AnimationSource;
 }
 
 /**

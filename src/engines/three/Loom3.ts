@@ -32,8 +32,9 @@ import type {
   ClipHandle,
   Snippet,
   CompositeRotation,
-  RotationAxis,
-} from '../../core/types';
+    RotationAxis,
+    AnimationBlendMode,
+  } from '../../core/types';
 import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import { AnimationThree, BakedAnimationController } from './AnimationThree';
 import { getSideScale } from './balanceUtils';
@@ -181,13 +182,6 @@ export class Loom3 implements LoomLarge {
     this.compositeRotations = this.config.compositeRotations || CC4_COMPOSITE_ROTATIONS;
     this.auToCompositeMap = buildAUToCompositeMap(this.compositeRotations);
 
-    this.hairPhysics = new HairPhysicsController({
-      getMeshByName: (name) => this.meshByName.get(name),
-      getSelectedHairMeshNames: () => this.config.morphToMesh?.hair || [],
-      buildClip: (clipName, curves, options) => this.buildClip(clipName, curves, options),
-      cleanupSnippet: (name) => this.cleanupSnippet(name),
-    });
-
     this.bakedAnimations = new BakedAnimationController({
       getModel: () => this.model,
       getMeshes: () => this.meshes,
@@ -200,6 +194,14 @@ export class Loom3 implements LoomLarge {
       computeSideValues: (base, balance) => this.computeSideValues(base, balance),
       getAUMixWeight: (auId) => this.getAUMixWeight(auId),
       isMixedAU: (auId) => this.isMixedAU(auId),
+    });
+
+    this.hairPhysics = new HairPhysicsController({
+      getMeshByName: (name) => this.meshByName.get(name),
+      getSelectedHairMeshNames: () => this.config.morphToMesh?.hair || [],
+      // Hair physics needs clip construction, but mixer ownership still lives in BakedAnimationController.
+      buildClip: (clipName, curves, options) => this.bakedAnimations.buildClip(clipName, curves, options),
+      cleanupSnippet: (name) => this.bakedAnimations.cleanupSnippet(name),
     });
 
     this.applyHairPhysicsProfileConfig();
@@ -1803,8 +1805,8 @@ export class Loom3 implements LoomLarge {
 
   }
 
-  // ===========wha=================================================================
-  // BAKED ANIMATION CONTROL (Three.js AnimationMixer)
+  // ============================================================================
+  // MIXER / CLIP CONTROL
   // ============================================================================
 
   loadAnimationClips(clips: unknown[]): void {
@@ -1849,6 +1851,26 @@ export class Loom3 implements LoomLarge {
 
   setAnimationIntensity(clipName: string, intensity: number): void {
     this.bakedAnimations.setAnimationIntensity(clipName, intensity);
+  }
+
+  setAnimationLoopMode(clipName: string, loopMode: 'repeat' | 'once' | 'pingpong'): void {
+    this.bakedAnimations.setAnimationLoopMode(clipName, loopMode);
+  }
+
+  setAnimationRepeatCount(clipName: string, repeatCount?: number): void {
+    this.bakedAnimations.setAnimationRepeatCount(clipName, repeatCount);
+  }
+
+  setAnimationReverse(clipName: string, reverse: boolean): void {
+    this.bakedAnimations.setAnimationReverse(clipName, reverse);
+  }
+
+  setAnimationBlendMode(clipName: string, blendMode: AnimationBlendMode): void {
+    this.bakedAnimations.setAnimationBlendMode(clipName, blendMode);
+  }
+
+  seekAnimation(clipName: string, time: number): void {
+    this.bakedAnimations.seekAnimation(clipName, time);
   }
 
   setAnimationTimeScale(timeScale: number): void {

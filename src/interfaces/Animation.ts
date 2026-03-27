@@ -14,6 +14,7 @@ import type {
   ClipHandle,
   CompositeRotation,
   CurvePoint,
+  AnimationBlendMode,
 } from '../core/types';
 
 /** Loop mode for mixer clips */
@@ -248,6 +249,41 @@ export interface Animation {
    * @param intensity - Weight value from 0 (no effect) to 1 (full effect)
    */
   setAnimationIntensity(clipName: string, intensity: number): void;
+
+  /**
+   * Set the loop mode for a specific animation.
+   * @param clipName - Name of the animation
+   * @param loopMode - Loop policy for the mixer action
+   */
+  setAnimationLoopMode(clipName: string, loopMode: MixerLoopMode): void;
+
+  /**
+   * Set the repeat count for a specific animation.
+   * @param clipName - Name of the animation
+   * @param repeatCount - Number of repetitions, or undefined for the mixer default
+   */
+  setAnimationRepeatCount(clipName: string, repeatCount?: number): void;
+
+  /**
+   * Set reverse playback for a specific animation.
+   * @param clipName - Name of the animation
+   * @param reverse - Whether the mixer action should run backwards
+   */
+  setAnimationReverse(clipName: string, reverse: boolean): void;
+
+  /**
+   * Set the blend mode for a specific animation.
+   * @param clipName - Name of the animation
+   * @param blendMode - Mixer blend mode wrapper exposed to downstream UIs
+   */
+  setAnimationBlendMode(clipName: string, blendMode: AnimationBlendMode): void;
+
+  /**
+   * Seek a specific animation to a time in seconds.
+   * @param clipName - Name of the animation
+   * @param time - Target time in seconds
+   */
+  seekAnimation(clipName: string, time: number): void;
 
   /**
    * Set the global time scale for all animations.

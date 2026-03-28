@@ -31,21 +31,9 @@ jobs:
           node-version: "24"
           cache: "npm"
 
-      - name: Configure git author
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
       - name: Bump patch version
         id: bump
-        run: |
-          npm version patch --no-git-tag-version
-          VERSION=$(node -p 'require("./package.json").version')
-          git add package.json package-lock.json
-          git commit -m "build: bump npm package version to ${VERSION}"
-          git push origin HEAD:main
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: bash ./scripts/ci/prepare-release-commit.sh --push-ref main
 
   publish:
     if: "${{ always() && (github.event_name == 'workflow_dispatch' || needs.prepare_release.outputs.release_sha != '') }}"

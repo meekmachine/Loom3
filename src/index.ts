@@ -85,6 +85,9 @@ export type {
   CompositeRotationState,
   RotationsState,
   // Baked animation types
+  AnimationSource,
+  AnimationBlendMode,
+  AnimationEasing,
   AnimationPlayOptions,
   AnimationClipInfo,
   AnimationState,

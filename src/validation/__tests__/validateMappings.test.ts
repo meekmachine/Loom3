@@ -132,6 +132,33 @@ describe('validateMappings', () => {
     expect(result.foundBones).toContain('Head');
   });
 
+  it('treats prefixed and suffixed morph targets as found', () => {
+    const meshes = [
+      {
+        name: 'FaceMesh',
+        morphTargetDictionary: {
+          CC_Smile_geo: 0,
+          CC_Frown_geo_001: 1,
+        },
+      },
+    ];
+    const skeleton = { bones: [{ name: 'Head' }] };
+    const config: Profile = {
+      ...createBaseConfig(),
+      auToMorphs: {
+        1: { left: [], right: [], center: ['Smile', 'Frown'] },
+      },
+      morphPrefix: 'CC_',
+      morphSuffix: '_geo',
+      suffixPattern: '_\\d+$',
+      morphToMesh: { face: ['FaceMesh'] },
+    };
+
+    const result = validateMappings(meshes, skeleton, config);
+    expect(result.missingMorphs).toEqual([]);
+    expect(result.foundMorphs).toEqual(expect.arrayContaining(['Smile', 'Frown']));
+  });
+
   it('reports missing meshes referenced by morphToMesh', () => {
     const meshes = [
       { name: 'FaceMesh', morphTargetDictionary: { Smile: 0 } },

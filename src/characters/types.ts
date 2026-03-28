@@ -96,7 +96,10 @@ export interface Region {
   meshes?: string[];
   /** Any object names (bones or meshes). Use ['*'] for all objects */
   objects?: string[];
-  /** Override default padding factor for this annotation */
+  /**
+   * Camera framing multiplier for this annotation.
+   * Smaller values zoom in tighter; larger values leave more space around the target.
+   */
   paddingFactor?: number;
   /**
    * Camera angle in degrees around the Y axis (horizontal orbit).
@@ -170,6 +173,8 @@ export interface CharacterConfig {
   auPresetType?: PresetType;
   /** Optional: profile overrides applied on top of the preset */
   profile?: Partial<Profile>;
+  /** Baked clip names hidden from downstream UIs and filtered out on load */
+  deletedBakedAnimationClips?: string[];
 
   // === BONE RESOLUTION ===
   /** Prefix to prepend to bone names (e.g., 'Bone.' for fish) */

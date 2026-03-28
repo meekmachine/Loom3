@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: npm
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - name: Checkout
@@ -82,9 +82,12 @@ jobs:
 
       - name: Read package metadata
         id: pkg
+        run: bash ./scripts/ci/read-package-metadata.sh
+
+      - name: Resolve release metadata
+        id: release
         run: |
-          echo "name=$(node -p 'require(\"./package.json\").name')" >> "$GITHUB_OUTPUT"
-          echo "version=$(node -p 'require(\"./package.json\").version')" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Verify NPM auth
         run: |
@@ -108,8 +111,37 @@ jobs:
             echo "Version ${{ steps.pkg.outputs.version }} is not published yet."
           fi
 
+      - name: Verify release tag drift
+        run: |
+          bash ./scripts/ci/create-release-tag.sh \
+            --tag "${{ steps.pkg.outputs.tag }}" \
+            --commit HEAD \
+            --dry-run
+
       - name: Publish to NPM
+        id: publish_npm
         if: steps.existing.outputs.exists != 'true'
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_KEY }}
+
+      # Package version is the source of truth; create the release tag when it is missing,
+      # but fail if an existing tag already points at a different commit.
+      - name: Create release tag
+        if: ${{ steps.existing.outputs.exists == 'true' || steps.publish_npm.outcome == 'success' }}
+        run: |
+          bash ./scripts/ci/create-release-tag.sh \
+            --tag "${{ steps.pkg.outputs.tag }}" \
+            --commit HEAD \
+            --push
+
+      - name: Create or update GitHub release
+        if: ${{ steps.existing.outputs.exists == 'true' || steps.publish_npm.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash ./scripts/ci/upsert-github-release.sh \
+            --tag "${{ steps.pkg.outputs.tag }}" \
+            --commit "${{ steps.release.outputs.commit }}" \
+            --package-name "${{ steps.pkg.outputs.name }}" \
+            --package-version "${{ steps.pkg.outputs.version }}"

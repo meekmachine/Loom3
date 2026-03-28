@@ -1,0 +1,77 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - name: Build
+            command: npm run build
+          - name: Typecheck
+            command: npm run typecheck
+          - name: Test
+            command: npm test
+    name: ${{ matrix.check.name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ${{ matrix.check.name }}
+        run: ${{ matrix.check.command }}
+
+  release_smoke:
+    if: ${{ !github.event.pull_request.draft }}
+    name: Release smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Read package metadata
+        id: pkg
+        run: bash ./scripts/ci/read-package-metadata.sh
+
+      - name: Validate release tag creation
+        run: |
+          bash ./scripts/ci/create-release-tag.sh \
+            --tag "${{ steps.pkg.outputs.tag }}" \
+            --commit HEAD \
+            --dry-run

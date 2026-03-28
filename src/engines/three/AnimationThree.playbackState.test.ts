@@ -131,6 +131,23 @@ describe('BakedAnimationController playback state normalization', () => {
     expect(controller.getAnimationState('Idle')?.time).toBeCloseTo(0, 5);
   });
 
+  it('removes baked clips from subsequent list and playback queries', () => {
+    const { controller, model } = makeHost();
+    controller.loadAnimationClips([
+      makeClip(model, 'Idle'),
+      makeClip(model, 'Wave'),
+    ]);
+
+    const handle = controller.playAnimation('Idle');
+    expect(handle).toBeTruthy();
+
+    expect(controller.removeAnimationClip('Idle')).toBe(true);
+    expect(controller.getAnimationClips().map((clip) => clip.name)).toEqual(['Wave']);
+    expect(controller.getAnimationState('Idle')).toBeNull();
+    expect(controller.playAnimation('Idle')).toBeNull();
+    expect(controller.removeAnimationClip('Idle')).toBe(false);
+  });
+
   it('starts reverse once playback from the clip end for baked and clip-backed actions', () => {
     const { controller, model } = makeHost();
     const clip = makeClip(model, 'Wave');

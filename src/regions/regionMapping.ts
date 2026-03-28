@@ -20,7 +20,9 @@ export function resolveBoneName(semanticName: string, config?: CharacterConfig):
 
   const baseName = boneNodes[semanticName];
 
-  // Names that already include separators are treated as full names.
+  // Some rigs store the exact node name in boneNodes rather than a semantic base name.
+  // Treat names that already contain separators as pre-resolved full names so we do
+  // not accidentally prepend/append prefix or suffix fragments onto baked identifiers.
   if (baseName.includes('_') || baseName.includes('.')) {
     return baseName;
   }

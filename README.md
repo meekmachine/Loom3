@@ -279,18 +279,25 @@ import { CC4_PRESET } from '@lovelace_lol/loom3';
 
 The runtime resolves bone nodes by composing `bonePrefix + boneNodes[key] + boneSuffix`, then falling back to suffix-pattern matching when a model uses numbered exports such as `_01` or `.001`. The same prefix/suffix rules are used by validation and correction helpers, which is why `CC4_PRESET` can keep base bone names like `Head` and `JawRoot` instead of repeating the full node names everywhere.
 
-Two easy-to-miss details:
-- `morphPrefix` and `morphSuffix` are part of `Profile`, but morph playback still resolves exact morph keys on the targeted meshes today. They are already used by validation and correction helpers.
-- `leftMorphSuffixes` and `rightMorphSuffixes` are profile metadata for laterality detection in tooling, not the core runtime.
+For region and marker configs, `resolveBoneName()` treats any mapped bone name that already contains `_` or `.` as a fully qualified name and skips prefix/suffix composition.
 
-Other `Profile` fields worth calling out:
+Two caveats are worth calling out:
+- `morphPrefix` and `morphSuffix` are part of `Profile`, but morph playback still resolves exact morph keys on the targeted meshes today. They are already used by validation and correction helpers.
+- `leftMorphSuffixes` and `rightMorphSuffixes` are profile metadata for laterality detection in tooling, not core runtime behavior.
+
+Other `Profile` fields that are easy to miss:
 - `morphToMesh` routes categories such as `face`, `viseme`, `eye`, `tongue`, and `hair` to specific mesh names.
 - `eyeMeshNodes` provides fallback eye nodes when a rig uses meshes instead of bones for eye control.
 - `auMixDefaults` sets the default morph/bone blend weight per AU.
 - `compositeRotations` defines the per-node pitch/yaw/roll axis layout used by the composite rotation system.
 - `continuumPairs` and `continuumLabels` describe bidirectional AU pairs and their UI labels.
-- `annotationRegions` defines the regions used by marker or camera tooling.
+- `annotationRegions` defines the regions used by the marker and camera tooling, including per-region framing via `paddingFactor`.
 - `hairPhysics` stores the mixer-driven hair defaults, including direction signs and morph target mappings.
+
+For `annotationRegions`, `paddingFactor` is the camera framing multiplier for that region:
+- values below `1` zoom in tighter
+- values above `1` pull back to show more surrounding context
+- profile overrides can replace it per region by name without copying the whole preset
 
 ### Passing a preset to Loom3
 
@@ -327,6 +334,8 @@ const DAISY_PROFILE: Profile = {
   morphToMesh: { face: ['Object_9'] },
   annotationRegions: [
     { name: 'face', bones: ['CC_Base_Head'] },
+    { name: 'left_eye', paddingFactor: 0.9 },
+    { name: 'right_eye', paddingFactor: 0.9 },
   ],
 };
 
@@ -520,6 +529,57 @@ console.log(indices);
 //   ],
 // }
 ```
+
+### Validating and analyzing the model you loaded
+
+Use the extraction and validation helpers when inspection needs to turn into preset-fit analysis:
+
+```typescript
+import {
+  extractFromGLTF,
+  extractModelData,
+  analyzeModel,
+  validateMappings,
+  generateMappingCorrections,
+  resolvePreset,
+} from '@lovelace_lol/loom3';
+
+const preset = resolvePreset('cc4');
+const modelData = extractModelData(model, meshes, animations);
+const gltfData = extractFromGLTF(gltf); // Same ModelData shape, one-step GLTF wrapper
+
+const analysis = await analyzeModel({
+  source: { type: 'gltf', gltf },
+  preset,
+  suggestCorrections: true,
+});
+
+// Validate against lower-level mesh + skeleton inputs when you already have them
+const validation = validateMappings(meshes, skeleton, preset, { suggestCorrections: true });
+const corrections = generateMappingCorrections(meshes, skeleton, preset, { useResolvedNames: true });
+```
+
+If you already have a `ModelData` bundle, `analyzeModel()` is the higher-level path; `validateMappings()` and `generateMappingCorrections()` are intentionally lower-level mesh/skeleton helpers.
+
+Use these helpers to:
+- Extract raw model facts with `extractModelData(model, meshes?, animations?)` or `extractFromGLTF(gltf)`
+- Validate a preset against mesh/skeleton data with `validateMappings(meshes, skeleton, preset, options)`
+- Generate best-effort fixes with `generateMappingCorrections(meshes, skeleton, preset, options)`
+- Run a single end-to-end pass with `analyzeModel({ source, preset, suggestCorrections })`
+
+`validateMappings()` returns a `ValidationResult` with:
+- `valid` and `score`
+- `missingMorphs`, `missingBones`, `foundMorphs`, `foundBones`
+- `missingMeshes`, `foundMeshes`, `unmappedMorphs`, `unmappedBones`, `unmappedMeshes`
+- `warnings`
+- optional `suggestedConfig`, `corrections`, and `unresolved` when suggestion mode is enabled
+
+`generateMappingCorrections()` returns:
+- `correctedConfig`
+- `corrections`
+- `unresolved`
+
+`analyzeModel()` returns a `ModelAnalysisReport` containing the extracted model data, optional validation results, animation summary, `overallScore`, and a plain-language `summary`.
 
 ### Controlling mesh visibility
 
@@ -2026,6 +2086,7 @@ This is a compact reference for the public surface exported by `@lovelace_lol/lo
 - `Loom3` is the main Three.js implementation.
 - `collectMorphMeshes()` gathers meshes that already expose morph targets.
 - Lifecycle: `onReady()`, `update()`, `start()`, `stop()`, `dispose()`.
+- Preset state: `setProfile()`, `getProfile()`.
 - Control APIs: `setAU()`, `transitionAU()`, `setContinuum()`, `transitionContinuum()`, `setMorph()`, `transitionMorph()`, `setViseme()`, `transitionViseme()`.
 - Transition state: `pause()`, `resume()`, `getPaused()`, `clearTransitions()`, `getActiveTransitionCount()`, `resetToNeutral()`.
 
@@ -2048,7 +2109,7 @@ This is a compact reference for the public surface exported by `@lovelace_lol/lo
 - Mesh inspection: `getMeshList()`, `getMorphTargets()`, `getMorphTargetIndices()`, `getBones()`.
 - Mesh debugging: `setMeshVisible()`, `highlightMesh()`, `getMeshMaterialConfig()`, `setMeshMaterialConfig()`.
 - Hair runtime: `registerHairObjects()`, `getRegisteredHairObjects()`, `setHairPhysicsEnabled()`, `setHairPhysicsConfig()`, `validateHairMorphTargets()`, `applyHairStateToObject()`.
-- Mixer helpers: `loadAnimationClips()`, `playAnimation()`, `crossfadeTo()`, `snippetToClip()`, `playClip()`, `playSnippet()`, `buildClip()`, `updateClipParams()`, `supportsClipCurves()`.
+- Mixer helpers: `loadAnimationClips()`, `getAnimationClips()`, `playAnimation()`, `pauseAnimation()`, `resumeAnimation()`, `stopAnimation()`, `stopAllAnimations()`, `pauseAllAnimations()`, `resumeAllAnimations()`, `setAnimationSpeed()`, `setAnimationIntensity()`, `setAnimationTimeScale()`, `getAnimationState()`, `getPlayingAnimations()`, `crossfadeTo()`, `snippetToClip()`, `playClip()`, `playSnippet()`, `buildClip()`, `updateClipParams()`, `supportsClipCurves()`.
 
 ### Types and lower-level exports
 

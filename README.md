@@ -345,6 +345,21 @@ const loom = new Loom3({
 });
 ```
 
+### Annotation configuration
+
+`annotationRegions` is the Loom3 field for camera/marker region defaults and profile overrides.
+
+For the current runtime-oriented documentation, including:
+
+- `paddingFactor`
+- `cameraAngle`
+- `cameraOffset`
+- `style.lineDirection`
+- the difference between `cameraAngle: 0` and omitting `cameraAngle`
+- the current LoomLarge runtime note that annotations have not been moved from the demo project into Loom3 yet
+
+see [ANNOTATION_CONFIGURATION.md](./ANNOTATION_CONFIGURATION.md).
+
 ![Character properties UI showing a Loom3 preset applied to a live character](./assets/readme/preset-applied-ui.webp)
 
 ---

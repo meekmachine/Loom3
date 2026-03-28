@@ -137,15 +137,11 @@ jobs:
 
       - name: Create or update GitHub release
         if: ${{ steps.existing.outputs.exists == 'true' || steps.publish_npm.outcome == 'success' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.pkg.outputs.tag }}
-          target_commitish: ${{ steps.release.outputs.commit }}
-          name: ${{ steps.pkg.outputs.tag }}
-          generate_release_notes: true
-          body: |
-            ## NPM Package
-
-            Install: `npm install @lovelace_lol/loom3@${{ steps.pkg.outputs.version }}`
-
-            Reference: [npmjs.com/package/@lovelace_lol/loom3](https://www.npmjs.com/package/@lovelace_lol/loom3)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash ./scripts/ci/upsert-github-release.sh \
+            --tag "${{ steps.pkg.outputs.tag }}" \
+            --commit "${{ steps.release.outputs.commit }}" \
+            --package-name "${{ steps.pkg.outputs.name }}" \
+            --package-version "${{ steps.pkg.outputs.version }}"

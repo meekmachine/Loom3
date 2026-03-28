@@ -349,16 +349,85 @@ const loom = new Loom3({
 
 `annotationRegions` is the Loom3 field for camera/marker region defaults and profile overrides.
 
-For the current runtime-oriented documentation, including:
+There are two related shapes to understand today:
 
-- `paddingFactor`
-- `cameraAngle`
-- `cameraOffset`
-- `style.lineDirection`
-- the difference between `cameraAngle: 0` and omitting `cameraAngle`
-- the current LoomLarge runtime note that annotations have not been moved from the demo project into Loom3 yet
+1. Loom3 preset/profile configuration
+2. The current LoomLarge runtime character payload
 
-see [ANNOTATION_CONFIGURATION.md](./ANNOTATION_CONFIGURATION.md).
+Loom3-native annotation config lives on `profile.annotationRegions`:
+
+```typescript
+import type { Profile } from '@lovelace_lol/loom3';
+
+export const HUMAN_ANNOTATION_OVERRIDES: Partial<Profile> = {
+  annotationRegions: [
+    {
+      name: 'left_eye',
+      paddingFactor: 0.5,
+      cameraAngle: 45,
+    },
+    {
+      name: 'right_eye',
+      paddingFactor: 0.5,
+      cameraAngle: 315,
+    },
+  ],
+};
+```
+
+Current LoomLarge runtime data is still commonly stored as top-level `config.regions` on the character record:
+
+```typescript
+const runtimeCharacter = {
+  characterId: 'jonathan',
+  characterName: 'Jonathan',
+  modelPath: 'characters/jonathan_new.glb',
+  auPresetType: 'cc4',
+  regions: [
+    {
+      name: 'head',
+      bones: ['CC_Base_Head', 'CC_Base_JawRoot'],
+      children: ['face', 'left_eye', 'right_eye', 'mouth'],
+      paddingFactor: 1.5,
+    },
+    {
+      name: 'left_eye',
+      bones: ['CC_Base_L_Eye'],
+      parent: 'head',
+      paddingFactor: 0.5,
+      cameraAngle: 45,
+    },
+    {
+      name: 'right_eye',
+      bones: ['CC_Base_R_Eye'],
+      parent: 'head',
+      paddingFactor: 0.5,
+      cameraAngle: 315,
+    },
+  ],
+};
+```
+
+That split matters because Loom3 merges `annotationRegions` by region name, but some existing runtime tools still consume `config.regions` directly.
+
+The main region fields are:
+- `bones`, `meshes`, `objects`: geometry targets for the region
+- `paddingFactor`: framing multiplier for camera distance
+- `cameraAngle`: horizontal orbit angle in degrees
+- `cameraOffset`: final additive camera nudge
+- `parent` / `children`: expanding marker hierarchy
+- `style.lineDirection`: marker line direction, separate from camera framing
+
+Two runtime details are easy to miss:
+- omitting `cameraAngle` is different from setting `cameraAngle: 0`
+- `cameraAngle: 0` forces a front view, while omitting it allows the runtime to auto-angle some small off-center targets such as eyes
+
+Recommended authoring pattern:
+- put shared defaults in the preset’s `annotationRegions`
+- override only the fields that truly differ in the character profile
+- avoid copying the whole preset region list into each character unless the runtime truly needs a standalone snapshot
+
+Annotations have not been moved fully from the LoomLarge demo/runtime into Loom3 yet, but we plan to move them soon. For a runtime-oriented field-by-field reference, see [ANNOTATION_CONFIGURATION.md](./ANNOTATION_CONFIGURATION.md).
 
 ![Character properties UI showing a Loom3 preset applied to a live character](./assets/readme/preset-applied-ui.webp)
 
@@ -2030,6 +2099,145 @@ loom.transitionAU(45, 1.0, 100);  // Blink
 Open in LoomLarge: [Bones tab](https://loomlarge.web.app/?drawer=open&tab=bones) | [Mappings tab](https://loomlarge.web.app/?drawer=open&tab=mappings)
 
 These helpers are for applications that need semantic face regions, marker anchors, or camera targets in addition to direct animation control.
+
+### Annotation region structure
+
+Loom3 treats annotation regions as named semantic regions that can be defined in presets and then overridden per character.
+
+```typescript
+interface AnnotationRegion {
+  name: string;
+  bones?: string[];
+  meshes?: string[];
+  objects?: string[];
+  paddingFactor?: number;
+  cameraAngle?: number;
+  cameraOffset?: { x?: number; y?: number; z?: number };
+  parent?: string;
+  children?: string[];
+  expandAnimation?: 'outward' | 'staggered';
+  showChildConnections?: boolean;
+  style?: {
+    markerColor?: number;
+    markerRadius?: number;
+    lineColor?: number;
+    labelColor?: string;
+    labelBackground?: string;
+    labelFontSize?: number;
+    opacity?: number;
+    lineDirection?:
+      | 'radial'
+      | 'camera'
+      | 'up'
+      | 'down'
+      | 'left'
+      | 'right'
+      | 'forward'
+      | 'backward'
+      | { x: number; y: number; z: number };
+    line?: {
+      style?: 'solid' | 'dashed' | 'dotted';
+      curve?: 'straight' | 'bezier' | 'arc';
+      arrowHead?: boolean;
+      thickness?: number;
+      length?: number;
+    };
+  };
+  groupId?: string;
+  isFallback?: boolean;
+  customPosition?: { x: number; y: number; z: number };
+}
+```
+
+The important distinction is:
+- `bones`, `meshes`, and `objects` describe what geometry a region refers to
+- `paddingFactor`, `cameraAngle`, and `cameraOffset` affect camera framing
+- `style.lineDirection` and `style.line.*` affect marker rendering, not camera orbit choice
+
+### Preset + profile example
+
+Shared preset defaults:
+
+```typescript
+annotationRegions: [
+  {
+    name: 'head',
+    bones: ['CC_Base_Head', 'CC_Base_JawRoot'],
+    paddingFactor: 1.5,
+    children: ['face', 'left_eye', 'right_eye', 'mouth'],
+    expandAnimation: 'staggered',
+    showChildConnections: true,
+  },
+  {
+    name: 'face',
+    bones: ['CC_Base_Head'],
+    paddingFactor: 1.3,
+    parent: 'head',
+  },
+  {
+    name: 'left_eye',
+    bones: ['CC_Base_L_Eye'],
+    paddingFactor: 1.2,
+    parent: 'head',
+  },
+]
+```
+
+Character-specific override:
+
+```typescript
+const profile: Partial<Profile> = {
+  annotationRegions: [
+    {
+      name: 'face',
+      meshes: ['Object_24', 'Object_25'],
+      style: { lineDirection: 'camera' },
+    },
+    {
+      name: 'left_eye',
+      paddingFactor: 0.5,
+      cameraAngle: 45,
+    },
+  ],
+};
+```
+
+`resolveProfile()` merges these regions by `name`, so the override can replace only the fields it needs while preserving the preset geometry or hierarchy fields that were not changed.
+
+### Camera field semantics
+
+`paddingFactor`
+- values below `1` zoom in tighter
+- values above `1` pull back to show more context
+
+`cameraAngle`
+- `0` = front
+- `180` = back
+- `90` / `270` = side views
+- `45` / `315` = quarter-angle front-side views
+
+Important behavior:
+- omitting `cameraAngle` is not the same as setting `cameraAngle: 0`
+- omitting it lets runtime code choose an auto-angle for some small off-center targets
+- setting `cameraAngle: 0` explicitly forces a front view
+
+`cameraOffset`
+- applies a final positional nudge after framing is computed
+- use it for small adjustments, not to replace a semantic camera angle
+
+### Marker field semantics
+
+`style.lineDirection`
+- controls where the marker line projects
+- does not define the camera orbit angle
+
+`style.line`
+- controls how the marker line is rendered
+- style, curve, arrow head, thickness, and length are all marker-only concerns
+
+### Current runtime note
+
+Today, LoomLarge still commonly stores active annotation data as top-level `config.regions` on the character record. Loom3’s intended reusable shape is `profile.annotationRegions`, but the migration is still in progress.
 
 ### Finding a face center directly from the model
 

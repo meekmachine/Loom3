@@ -120,8 +120,6 @@ export interface Region {
   children?: string[];
   /** Animation style for expand/collapse. Default: 'outward' */
   expandAnimation?: ExpandAnimation;
-  /** Show connecting lines to children when expanded. Default: true */
-  showChildConnections?: boolean;
 
   // === STYLE OVERRIDES ===
   /** Per-marker style overrides */

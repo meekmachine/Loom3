@@ -1817,6 +1817,10 @@ export class Loom3 implements LoomLarge {
     return this.bakedAnimations.getAnimationClips();
   }
 
+  removeAnimationClip(clipName: string): boolean {
+    return this.bakedAnimations.removeAnimationClip(clipName);
+  }
+
   playAnimation(clipName: string, options: AnimationPlayOptions = {}): AnimationActionHandle | null {
     return this.bakedAnimations.playAnimation(clipName, options);
   }

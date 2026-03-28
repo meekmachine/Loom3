@@ -468,6 +468,47 @@ export class BakedAnimationController {
     }));
   }
 
+  removeAnimationClip(clipName: string): boolean {
+    const clip = this.animationClips.find((entry) => entry.name === clipName);
+    if (!clip || (this.clipSources.get(clipName) ?? 'baked') !== 'baked') {
+      return false;
+    }
+
+    const relatedActions = new Set<AnimationAction>();
+    const bakedAction = this.animationActions.get(clipName);
+    const clipAction = this.clipActions.get(clipName);
+    if (bakedAction) relatedActions.add(bakedAction);
+    if (clipAction) relatedActions.add(clipAction);
+
+    this.stopAnimation(clipName);
+
+    if (this.animationMixer) {
+      for (const action of relatedActions) {
+        try {
+          this.animationMixer.uncacheAction(clip);
+        } catch {}
+        try {
+          this.animationMixer.uncacheClip(clip);
+        } catch {}
+        const actionId = this.getActionId(action);
+        if (actionId) {
+          this.actionIdToClip.delete(actionId);
+        }
+        this.actionIds.delete(action);
+      }
+    }
+
+    this.animationClips = this.animationClips.filter((entry) => entry.name !== clipName);
+    this.animationActions.delete(clipName);
+    this.clipActions.delete(clipName);
+    this.clipHandles.delete(clipName);
+    this.animationFinishedCallbacks.delete(clipName);
+    this.playbackState.delete(clipName);
+    this.clipSources.delete(clipName);
+
+    return true;
+  }
+
   playAnimation(clipName: string, options: AnimationPlayOptions = {}): AnimationActionHandle | null {
     const action = this.getOrCreateBakedAction(clipName);
     if (!action) {

@@ -173,6 +173,8 @@ export interface CharacterConfig {
   auPresetType?: PresetType;
   /** Optional: profile overrides applied on top of the preset */
   profile?: Partial<Profile>;
+  /** Baked clip names hidden from downstream UIs and filtered out on load */
+  deletedBakedAnimationClips?: string[];
 
   // === BONE RESOLUTION ===
   /** Prefix to prepend to bone names (e.g., 'Bone.' for fish) */

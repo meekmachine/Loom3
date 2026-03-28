@@ -65,13 +65,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Read package metadata
-        id: pkg
-        run: bash ./scripts/ci/read-package-metadata.sh
+      # main publishes from a synthetic patch-bump commit created in prepare_release,
+      # so the PR check must simulate that commit instead of validating the stale PR version.
+      - name: Prepare simulated release commit
+        id: release
+        run: bash ./scripts/ci/prepare-release-commit.sh
 
       - name: Validate release tag creation
         run: |
           bash ./scripts/ci/create-release-tag.sh \
-            --tag "${{ steps.pkg.outputs.tag }}" \
-            --commit HEAD \
+            --tag "${{ steps.release.outputs.tag }}" \
+            --commit "${{ steps.release.outputs.release_sha }}" \
             --dry-run

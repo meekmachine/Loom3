@@ -82,14 +82,11 @@ jobs:
 
       - name: Read package metadata
         id: pkg
-        run: |
-          echo "name=$(node -p 'require(\"./package.json\").name')" >> "$GITHUB_OUTPUT"
-          echo "version=$(node -p 'require(\"./package.json\").version')" >> "$GITHUB_OUTPUT"
+        run: bash ./scripts/ci/read-package-metadata.sh
 
       - name: Resolve release metadata
         id: release
         run: |
-          echo "tag=v${{ steps.pkg.outputs.version }}" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Verify NPM auth
@@ -116,20 +113,10 @@ jobs:
 
       - name: Verify release tag drift
         run: |
-          set -euo pipefail
-
-          tag="${{ steps.release.outputs.tag }}"
-          commit="$(git rev-parse HEAD)"
-          remote_commit="$(git ls-remote --tags origin "refs/tags/${tag}^{}" | awk '{print $1}')"
-
-          if [ -z "$remote_commit" ]; then
-            remote_commit="$(git ls-remote --tags origin "refs/tags/${tag}" | awk '{print $1}')"
-          fi
-
-          if [ -n "$remote_commit" ] && [ "$remote_commit" != "$commit" ]; then
-            echo "Tag ${tag} points to ${remote_commit}, expected ${commit}." >&2
-            exit 1
-          fi
+          bash ./scripts/ci/create-release-tag.sh \
+            --tag "${{ steps.pkg.outputs.tag }}" \
+            --commit HEAD \
+            --dry-run
 
       - name: Publish to NPM
         id: publish_npm
@@ -143,28 +130,18 @@ jobs:
       - name: Create release tag
         if: ${{ steps.existing.outputs.exists == 'true' || steps.publish_npm.outcome == 'success' }}
         run: |
-          set -euo pipefail
-
-          tag="${{ steps.release.outputs.tag }}"
-          commit="$(git rev-parse HEAD)"
-          remote_commit="$(git ls-remote --tags origin "refs/tags/${tag}^{}" | awk '{print $1}')"
-
-          if [ -z "$remote_commit" ]; then
-            remote_commit="$(git ls-remote --tags origin "refs/tags/${tag}" | awk '{print $1}')"
-          fi
-
-          if [ -z "$remote_commit" ]; then
-            git tag -a "$tag" -m "Release $tag" "$commit"
-            git push origin "$tag"
-          fi
+          bash ./scripts/ci/create-release-tag.sh \
+            --tag "${{ steps.pkg.outputs.tag }}" \
+            --commit HEAD \
+            --push
 
       - name: Create or update GitHub release
         if: ${{ steps.existing.outputs.exists == 'true' || steps.publish_npm.outcome == 'success' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release.outputs.tag }}
+          tag_name: ${{ steps.pkg.outputs.tag }}
           target_commitish: ${{ steps.release.outputs.commit }}
-          name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.pkg.outputs.tag }}
           generate_release_notes: true
           body: |
             ## NPM Package

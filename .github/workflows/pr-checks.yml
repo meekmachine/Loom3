@@ -47,3 +47,31 @@ jobs:
 
       - name: Run ${{ matrix.check.name }}
         run: ${{ matrix.check.command }}
+
+  release_smoke:
+    if: ${{ !github.event.pull_request.draft }}
+    name: Release smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Read package metadata
+        id: pkg
+        run: bash ./scripts/ci/read-package-metadata.sh
+
+      - name: Validate release tag creation
+        run: |
+          bash ./scripts/ci/create-release-tag.sh \
+            --tag "${{ steps.pkg.outputs.tag }}" \
+            --commit HEAD \
+            --dry-run

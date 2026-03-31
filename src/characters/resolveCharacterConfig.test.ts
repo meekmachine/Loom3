@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { CharacterConfig } from './types';
 import { resolvePresetWithOverrides } from '../presets';
-import { mergeRegionsByName, resolveCharacterConfig } from './resolveCharacterConfig';
+import {
+  applyProfileToPreset,
+  extractProfileOverrides,
+  mergeRegionsByName,
+  resolveCharacterConfig,
+} from './resolveCharacterConfig';
 
 function createConfig(overrides: Partial<CharacterConfig> = {}): CharacterConfig {
   return {
@@ -158,7 +163,7 @@ describe('resolveCharacterConfig', () => {
     ]);
   });
 
-  it('applies profile annotation overrides before saved top-level region overrides', () => {
+  it('still honors legacy nested profile annotation overrides during migration', () => {
     const resolved = resolveCharacterConfig(
       createConfig({
         profile: {
@@ -258,5 +263,48 @@ describe('resolveCharacterConfig', () => {
     const resolved = resolveCharacterConfig(config);
 
     expect(resolved).toBe(config);
+  });
+});
+
+describe('extractProfileOverrides', () => {
+  it('flattens legacy nested profile overrides onto the top-level character profile shape', () => {
+    const overrides = extractProfileOverrides(
+      createConfig({
+        bonePrefix: 'Top_',
+        boneNodes: { HEAD: 'TopHead' },
+        profile: {
+          bonePrefix: 'Nested_',
+          boneNodes: { HEAD: 'NestedHead', EYE_L: 'NestedEye' },
+          meshes: { Head: { category: 'body', morphCount: 1 } },
+        },
+      })
+    );
+
+    expect(overrides.bonePrefix).toBe('Top_');
+    expect(overrides.boneNodes).toMatchObject({
+      HEAD: 'TopHead',
+      EYE_L: 'NestedEye',
+    });
+    expect(overrides.meshes).toMatchObject({
+      Head: { category: 'body', morphCount: 1 },
+    });
+    expect(overrides.annotationRegions).toBeUndefined();
+  });
+});
+
+describe('applyProfileToPreset', () => {
+  it('applies flattened character profile overrides on top of the selected preset', () => {
+    const resolvedProfile = applyProfileToPreset(
+      createConfig({
+        morphToMesh: { face: ['CustomFace'] },
+        meshes: { CustomFace: { category: 'body', morphCount: 1 } },
+      })
+    );
+
+    expect(resolvedProfile?.morphToMesh.face).toEqual(['CustomFace']);
+    expect(resolvedProfile?.meshes?.CustomFace).toMatchObject({
+      category: 'body',
+      morphCount: 1,
+    });
   });
 });

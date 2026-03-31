@@ -142,6 +142,8 @@ export type {
 } from './characters/types';
 
 export {
+  applyProfileToPreset,
+  extractProfileOverrides,
   resolveCharacterConfig,
   mergeRegionsByName as mergeCharacterRegionsByName,
 } from './characters/resolveCharacterConfig';

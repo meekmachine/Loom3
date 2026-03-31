@@ -142,7 +142,7 @@ export type {
 } from './characters/types';
 
 export {
-  applyProfileToPreset,
+  applyCharacterProfileToPreset,
   extractProfileOverrides,
   resolveCharacterConfig,
   mergeRegionsByName as mergeCharacterRegionsByName,
@@ -164,7 +164,7 @@ export {
 // ============================================================================
 
 export { CC4_PRESET } from './presets/cc4';
-export { resolveProfile } from './mappings/resolveProfile';
+export { applyProfileToPreset, resolveProfile } from './mappings/resolveProfile';
 
 // Individual CC4 preset components (for apps that need direct access)
 export {
@@ -188,7 +188,7 @@ export {
 } from './presets/cc4';
 
 // Fish/skeletal preset
-export { BETTA_FISH_PRESET, AU_MAPPING_CONFIG as FISH_AU_MAPPING_CONFIG } from './presets/bettaFish';
+export { BETTA_FISH_PRESET, AU_MAPPING_CONFIG, FISH_AU_MAPPING_CONFIG } from './presets/bettaFish';
 
 // Preset resolution by type name
 export { resolvePreset, resolvePresetWithOverrides } from './presets';

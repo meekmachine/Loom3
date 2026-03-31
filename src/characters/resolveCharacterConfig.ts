@@ -1,5 +1,6 @@
 import type { Profile } from '../mappings/types';
-import { resolvePresetWithOverrides } from '../presets';
+import { applyProfileToPreset } from '../mappings/resolveProfile';
+import { resolvePreset } from '../presets';
 import type { CharacterConfig, Region } from './types';
 
 const PROFILE_OVERRIDE_KEYS = [
@@ -198,13 +199,13 @@ export function extractProfileOverrides(config: CharacterConfig): Partial<Profil
   return overrides;
 }
 
-export function applyProfileToPreset(config: CharacterConfig): Profile | null {
+export function applyCharacterProfileToPreset(config: CharacterConfig): Profile | null {
   const presetType = config.auPresetType;
   if (!presetType) {
     return null;
   }
 
-  return resolvePresetWithOverrides(presetType, extractProfileOverrides(config));
+  return applyProfileToPreset(resolvePreset(presetType), extractProfileOverrides(config));
 }
 
 function orderResolvedRegions(
@@ -254,7 +255,7 @@ export function resolveCharacterConfig(config: CharacterConfig): CharacterConfig
   }
 
   const profileOverrides = extractProfileOverrides(config);
-  const presetResolvedProfile = applyProfileToPreset(config);
+  const presetResolvedProfile = applyCharacterProfileToPreset(config);
   if (!presetResolvedProfile) {
     return config;
   }

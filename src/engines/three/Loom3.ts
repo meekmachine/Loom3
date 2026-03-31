@@ -41,7 +41,7 @@ import { getSideScale } from './balanceUtils';
 import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUpdate, type HairPhysicsDirectionConfig, type HairMorphTargets } from './hair/HairPhysicsController';
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import { resolvePreset } from '../../presets';
-import { resolveProfile } from '../../mappings/resolveProfile';
+import { applyProfileToPreset } from '../../mappings/resolveProfile';
 import type { NodeBase, ResolvedBones } from './types';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
@@ -174,7 +174,7 @@ export class Loom3 implements LoomLarge {
     }
   ) {
     const basePreset = config.presetType ? resolvePreset(config.presetType) : CC4_PRESET;
-    this.config = config.profile ? resolveProfile(basePreset, config.profile) : basePreset;
+    this.config = applyProfileToPreset(basePreset, config.profile);
     this.mixWeights = { ...this.config.auMixDefaults };
     this.animation = animation || new AnimationThree();
 

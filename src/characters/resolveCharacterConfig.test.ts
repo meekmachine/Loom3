@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CharacterConfig } from './types';
 import { resolvePresetWithOverrides } from '../presets';
 import {
-  applyProfileToPreset,
+  applyCharacterProfileToPreset,
   extractProfileOverrides,
   mergeRegionsByName,
   resolveCharacterConfig,
@@ -292,9 +292,9 @@ describe('extractProfileOverrides', () => {
   });
 });
 
-describe('applyProfileToPreset', () => {
+describe('applyCharacterProfileToPreset', () => {
   it('applies flattened character profile overrides on top of the selected preset', () => {
-    const resolvedProfile = applyProfileToPreset(
+    const resolvedProfile = applyCharacterProfileToPreset(
       createConfig({
         morphToMesh: { face: ['CustomFace'] },
         meshes: { CustomFace: { category: 'body', morphCount: 1 } },

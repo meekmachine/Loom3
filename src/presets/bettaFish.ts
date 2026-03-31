@@ -19,7 +19,7 @@
  */
 
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
-import type { AnnotationRegion, MeshInfo, MeshCategory } from '../mappings/types';
+import type { AnnotationRegion, MeshInfo, MeshCategory, Profile } from '../mappings/types';
 import { checkBindingsForLeftRight } from './cc4';
 
 // ============================================================================
@@ -936,24 +936,7 @@ export const ANNOTATION_REGIONS: AnnotationRegion[] = [
 // PRESET EXPORT
 // ============================================================================
 
-export const BETTA_FISH_PRESET = {
-  name: 'Betta Fish',
-  animalType: 'fish',
-  emoji: '🐟',
-  bones: BONES,
-  boneNodes: BONE_NODES,
-  boneBindings: BONE_BINDINGS,
-  actionInfo: AU_INFO,
-  eyeMeshNodes: EYE_MESH_NODES,
-  // No morph targets in this model
-  auToMorphs: {} as Record<number, import('../mappings/types').MorphTargetsBySide>,
-  morphToMesh: {} as Record<string, string[]>,
-  visemeKeys: [] as string[],
-  annotationRegions: ANNOTATION_REGIONS,
-};
-
-// Engine-compatible config format for Loom3
-export const AU_MAPPING_CONFIG = {
+const BETTA_FISH_PROFILE: Profile = {
   name: 'Betta Fish',
   animalType: 'fish',
   emoji: '🐟',
@@ -977,6 +960,13 @@ export const AU_MAPPING_CONFIG = {
   continuumLabels: CONTINUUM_LABELS,
 };
 
+export const BETTA_FISH_PRESET = {
+  ...BETTA_FISH_PROFILE,
+  bones: BONES,
+  boneBindings: BONE_BINDINGS,
+  actionInfo: AU_INFO,
+};
+
 /**
  * Check if an AU has bilateral bone bindings (L and R nodes)
  * Used to determine if a balance slider should be shown
@@ -992,6 +982,10 @@ export default BETTA_FISH_PRESET;
 // LEGACY ALIASES - For backwards compatibility with existing code
 // ============================================================================
 
+// Deprecated alias: the fish preset is now a single preset object, not a
+// parallel "mapping config" that differs from the real preset.
+export const AU_MAPPING_CONFIG = BETTA_FISH_PRESET;
+
 export const ACTION_INFO = AU_INFO;
 export const FISH_BONES = BONES;
 export const FISH_BONE_NODES = BONE_NODES;
@@ -1003,5 +997,5 @@ export const FISH_CONTINUUM_LABELS = CONTINUUM_LABELS;
 export const FISH_COMPOSITE_ROTATIONS = COMPOSITE_ROTATIONS;
 export const FISH_EYE_MESH_NODES = EYE_MESH_NODES;
 export const FISH_MESHES = MESHES;
-export const FISH_AU_MAPPING_CONFIG = AU_MAPPING_CONFIG;
+export const FISH_AU_MAPPING_CONFIG = BETTA_FISH_PRESET;
 export const fishHasLeftRightBones = hasLeftRightBones;

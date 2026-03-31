@@ -141,6 +141,11 @@ export type {
   CharacterRegistry,
 } from './characters/types';
 
+export {
+  resolveCharacterConfig,
+  mergeRegionsByName as mergeCharacterRegionsByName,
+} from './characters/resolveCharacterConfig';
+
 // ========================================================================
 // REGION MAPPING HELPERS
 // ========================================================================

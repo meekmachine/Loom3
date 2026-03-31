@@ -349,6 +349,15 @@ const loom = new Loom3({
 
 `annotationRegions` is the Loom3 field for camera/marker region defaults and profile overrides.
 
+If your app fetches a full saved `CharacterConfig` from Firestore or another backend, use `resolveCharacterConfig(...)` to build the runtime shape before handing that config to camera/marker tooling:
+
+```typescript
+import { resolveCharacterConfig } from '@lovelace_lol/loom3';
+
+const savedConfig = await fetchCharacterConfig();
+const runtimeConfig = resolveCharacterConfig(savedConfig);
+```
+
 For the current runtime-oriented documentation, including:
 
 - `paddingFactor`

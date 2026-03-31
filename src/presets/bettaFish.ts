@@ -19,7 +19,7 @@
  */
 
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
-import type { MeshInfo, MeshCategory } from '../mappings/types';
+import type { AnnotationRegion, MeshInfo, MeshCategory } from '../mappings/types';
 import { checkBindingsForLeftRight } from './cc4';
 
 // ============================================================================
@@ -832,6 +832,107 @@ export const MESHES: Record<string, MeshInfo> = {
 };
 
 // ============================================================================
+// ANNOTATION REGIONS - Camera/marker defaults for the fish preset
+// ============================================================================
+
+export const ANNOTATION_REGIONS: AnnotationRegion[] = [
+  {
+    name: 'full_body',
+    objects: ['*'],
+    paddingFactor: 2.5,
+  },
+  {
+    name: 'head',
+    bones: ['HEAD'],
+    paddingFactor: 1.8,
+    children: ['left_eye', 'right_eye', 'mouth'],
+    expandAnimation: 'staggered',
+  },
+  {
+    name: 'left_eye',
+    meshes: ['EYES_0'],
+    parent: 'head',
+    paddingFactor: 1.4,
+    cameraAngle: 270,
+  },
+  {
+    name: 'right_eye',
+    meshes: ['EYES_0'],
+    parent: 'head',
+    paddingFactor: 1.4,
+    cameraAngle: 90,
+  },
+  {
+    name: 'mouth',
+    bones: ['HEAD'],
+    parent: 'head',
+    paddingFactor: 1.5,
+  },
+  {
+    name: 'body',
+    bones: ['BODY_FRONT', 'BODY_MID', 'BODY_BACK'],
+    paddingFactor: 1.8,
+  },
+  {
+    name: 'tail',
+    bones: ['TAIL_BASE', 'TAIL_TOP', 'TAIL_MID'],
+    paddingFactor: 1.6,
+  },
+  {
+    name: 'dorsal_fin',
+    bones: ['DORSAL_ROOT', 'DORSAL_L', 'DORSAL_R'],
+    paddingFactor: 1.8,
+  },
+  {
+    name: 'pectoral_fins',
+    bones: ['PECTORAL_L_ROOT', 'PECTORAL_R_ROOT'],
+    paddingFactor: 1.8,
+    children: ['pectoral_fin_left', 'pectoral_fin_right'],
+    expandAnimation: 'outward',
+  },
+  {
+    name: 'pectoral_fin_left',
+    bones: ['PECTORAL_L_ROOT', 'PECTORAL_L_CHAIN1', 'PECTORAL_L_CHAIN2'],
+    parent: 'pectoral_fins',
+    paddingFactor: 1.6,
+    cameraAngle: 270,
+  },
+  {
+    name: 'pectoral_fin_right',
+    bones: ['PECTORAL_R_ROOT', 'PECTORAL_R_CHAIN1', 'PECTORAL_R_ROOT2'],
+    parent: 'pectoral_fins',
+    paddingFactor: 1.6,
+    cameraAngle: 90,
+  },
+  {
+    name: 'ventral_fins',
+    bones: ['VENTRAL_L', 'VENTRAL_R'],
+    paddingFactor: 1.6,
+  },
+  {
+    name: 'gills',
+    bones: ['GILL_L', 'GILL_R'],
+    paddingFactor: 1.6,
+    children: ['throat', 'gill'],
+    expandAnimation: 'outward',
+  },
+  {
+    name: 'throat',
+    bones: ['GILL_L', 'GILL_L_MID', 'GILL_L_TIP'],
+    parent: 'gills',
+    paddingFactor: 1.4,
+    cameraAngle: 270,
+  },
+  {
+    name: 'gill',
+    bones: ['GILL_R', 'GILL_R_MID', 'GILL_R_TIP'],
+    parent: 'gills',
+    paddingFactor: 1.4,
+    cameraAngle: 90,
+  },
+];
+
+// ============================================================================
 // PRESET EXPORT
 // ============================================================================
 
@@ -848,6 +949,7 @@ export const BETTA_FISH_PRESET = {
   auToMorphs: {} as Record<number, import('../mappings/types').MorphTargetsBySide>,
   morphToMesh: {} as Record<string, string[]>,
   visemeKeys: [] as string[],
+  annotationRegions: ANNOTATION_REGIONS,
 };
 
 // Engine-compatible config format for Loom3
@@ -869,6 +971,7 @@ export const AU_MAPPING_CONFIG = {
   compositeRotations: COMPOSITE_ROTATIONS,
   eyeMeshNodes: EYE_MESH_NODES,
   meshes: MESHES,
+  annotationRegions: ANNOTATION_REGIONS,
   auMixDefaults: {} as Record<number, number>,  // No mixed AUs (morph+bone) in this model
   continuumPairs: CONTINUUM_PAIRS_MAP,
   continuumLabels: CONTINUUM_LABELS,

@@ -85,6 +85,10 @@ export interface ValidateMappingOptions extends MappingCorrectionOptions {
 /**
  * Check if a target name matches using fuzzy matching with suffix pattern
  */
+function normalizeLooseName(value: string): string {
+  return value.replace(/\./g, '');
+}
+
 function fuzzyMatch(
   targetName: string,
   candidateName: string,
@@ -96,6 +100,9 @@ function fuzzyMatch(
 
   // Exact match
   if (candidateName === fullTarget) {
+    return true;
+  }
+  if (normalizeLooseName(candidateName) === normalizeLooseName(fullTarget)) {
     return true;
   }
 

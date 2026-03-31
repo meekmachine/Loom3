@@ -813,6 +813,9 @@ export const MESHES: Record<string, MeshInfo> = {
     category: 'body' as MeshCategory,
     morphCount: 0,  // Fish model has no morphs
     material: {
+      renderOrder: 20,
+      transparent: true,
+      opacity: 1,
       depthWrite: true,
       depthTest: true,
       blending: 'Normal',
@@ -823,7 +826,23 @@ export const MESHES: Record<string, MeshInfo> = {
     category: 'eye' as MeshCategory,
     morphCount: 0,
     material: {
-      renderOrder: -10,  // Render early (behind body)
+      renderOrder: 17,
+      transparent: true,
+      opacity: 1,
+      depthWrite: true,
+      depthTest: true,
+      blending: 'Normal',
+    },
+  },
+  // Hidden helper shell from the source asset; keep it suppressed by default
+  // so Betta does not rely on a Firestore-only mesh override.
+  'Cube_0': {
+    category: 'body' as MeshCategory,
+    morphCount: 0,
+    material: {
+      renderOrder: -20,
+      transparent: true,
+      opacity: 0,
       depthWrite: true,
       depthTest: true,
       blending: 'Normal',

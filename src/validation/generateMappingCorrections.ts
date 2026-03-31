@@ -36,6 +36,10 @@ export interface MappingCorrectionOptions {
 
 const DEFAULT_MIN_CONFIDENCE = 0.6;
 
+function normalizeLooseName(value: string): string {
+  return value.replace(/\./g, '');
+}
+
 function levenshteinDistance(a: string, b: string): number {
   const matrix: number[][] = [];
   const aLen = a.length;
@@ -81,6 +85,9 @@ function scoreCandidate(
 ): { score: number; reason: string } {
   if (candidate === fullTarget) {
     return { score: 1, reason: 'exact match' };
+  }
+  if (normalizeLooseName(candidate) === normalizeLooseName(fullTarget)) {
+    return { score: 1, reason: 'separator-normalized exact match' };
   }
 
   if (suffixPattern && candidate.startsWith(fullTarget)) {

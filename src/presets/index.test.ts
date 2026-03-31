@@ -10,4 +10,22 @@ describe('resolvePreset', () => {
   it('keeps the legacy fish mapping alias pointed at the real fish preset', () => {
     expect(FISH_AU_MAPPING_CONFIG).toBe(BETTA_FISH_PRESET);
   });
+
+  it('keeps Betta mesh/material defaults in the preset instead of Firestore-only overrides', () => {
+    expect(BETTA_FISH_PRESET.meshes?.BODY_0?.material).toMatchObject({
+      renderOrder: 20,
+      transparent: true,
+      opacity: 1,
+    });
+    expect(BETTA_FISH_PRESET.meshes?.EYES_0?.material).toMatchObject({
+      renderOrder: 17,
+      transparent: true,
+      opacity: 1,
+    });
+    expect(BETTA_FISH_PRESET.meshes?.Cube_0?.material).toMatchObject({
+      renderOrder: -20,
+      transparent: true,
+      opacity: 0,
+    });
+  });
 });

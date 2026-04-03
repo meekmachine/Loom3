@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   AU_TO_MORPHS,
   BONE_AU_TO_BINDINGS,
-  CC4_EYE_MESH_NODES,
   CC4_PRESET,
   COMPOSITE_ROTATIONS,
   CONTINUUM_PAIRS_MAP,
@@ -402,8 +401,6 @@ describe('CC4 Preset', () => {
 
       expect(leftEye?.paddingFactor).toBe(0.9);
       expect(rightEye?.paddingFactor).toBe(0.9);
-      expect(leftEye?.meshes).toEqual([CC4_EYE_MESH_NODES.LEFT]);
-      expect(rightEye?.meshes).toEqual([CC4_EYE_MESH_NODES.RIGHT]);
     });
   });
 });

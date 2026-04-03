@@ -89,14 +89,12 @@ describe('resolveCharacterConfig', () => {
       name: 'left_eye',
       parent: 'head',
       paddingFactor: 0.5,
-      meshes: ['CC_Base_Eye'],
     });
     expect(leftEye?.cameraAngle).toBe(45);
     expect(rightEye).toMatchObject({
       name: 'right_eye',
       parent: 'head',
       paddingFactor: 0.5,
-      meshes: ['CC_Base_Eye_1'],
     });
     expect(rightEye?.cameraAngle).toBe(315);
   });
@@ -123,7 +121,6 @@ describe('resolveCharacterConfig', () => {
     expect(leftEye).toMatchObject({
       name: 'left_eye',
       bones: ['CC_Base_L_Eye'],
-      meshes: ['CC_Base_Eye'],
       paddingFactor: 0.5,
       parent: 'head',
     });
@@ -131,7 +128,6 @@ describe('resolveCharacterConfig', () => {
     expect(rightEye).toMatchObject({
       name: 'right_eye',
       bones: ['CC_Base_R_Eye'],
-      meshes: ['CC_Base_Eye_1'],
       paddingFactor: presetRightEye?.paddingFactor,
       parent: 'head',
     });

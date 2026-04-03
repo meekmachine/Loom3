@@ -19,7 +19,7 @@
  */
 
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
-import type { MeshInfo, MeshCategory } from '../mappings/types';
+import type { AnnotationRegion, MeshInfo, MeshCategory, Profile } from '../mappings/types';
 import { checkBindingsForLeftRight } from './cc4';
 
 // ============================================================================
@@ -813,6 +813,9 @@ export const MESHES: Record<string, MeshInfo> = {
     category: 'body' as MeshCategory,
     morphCount: 0,  // Fish model has no morphs
     material: {
+      renderOrder: 20,
+      transparent: true,
+      opacity: 1,
       depthWrite: true,
       depthTest: true,
       blending: 'Normal',
@@ -823,7 +826,23 @@ export const MESHES: Record<string, MeshInfo> = {
     category: 'eye' as MeshCategory,
     morphCount: 0,
     material: {
-      renderOrder: -10,  // Render early (behind body)
+      renderOrder: 17,
+      transparent: true,
+      opacity: 1,
+      depthWrite: true,
+      depthTest: true,
+      blending: 'Normal',
+    },
+  },
+  // Hidden helper shell from the source asset; keep it suppressed by default
+  // so Betta does not rely on a Firestore-only mesh override.
+  'Cube_0': {
+    category: 'body' as MeshCategory,
+    morphCount: 0,
+    material: {
+      renderOrder: -20,
+      transparent: true,
+      opacity: 0,
       depthWrite: true,
       depthTest: true,
       blending: 'Normal',
@@ -832,26 +851,111 @@ export const MESHES: Record<string, MeshInfo> = {
 };
 
 // ============================================================================
+// ANNOTATION REGIONS - Camera/marker defaults for the fish preset
+// ============================================================================
+
+export const ANNOTATION_REGIONS: AnnotationRegion[] = [
+  {
+    name: 'full_body',
+    objects: ['*'],
+    paddingFactor: 2.5,
+  },
+  {
+    name: 'head',
+    bones: ['HEAD'],
+    paddingFactor: 1.8,
+    children: ['left_eye', 'right_eye', 'mouth'],
+    expandAnimation: 'staggered',
+  },
+  {
+    name: 'left_eye',
+    meshes: ['EYES_0'],
+    parent: 'head',
+    paddingFactor: 1.4,
+    cameraAngle: 270,
+  },
+  {
+    name: 'right_eye',
+    meshes: ['EYES_0'],
+    parent: 'head',
+    paddingFactor: 1.4,
+    cameraAngle: 90,
+  },
+  {
+    name: 'mouth',
+    bones: ['HEAD'],
+    parent: 'head',
+    paddingFactor: 1.5,
+  },
+  {
+    name: 'body',
+    bones: ['BODY_FRONT', 'BODY_MID', 'BODY_BACK'],
+    paddingFactor: 1.8,
+  },
+  {
+    name: 'tail',
+    bones: ['TAIL_BASE', 'TAIL_TOP', 'TAIL_MID'],
+    paddingFactor: 1.6,
+  },
+  {
+    name: 'dorsal_fin',
+    bones: ['DORSAL_ROOT', 'DORSAL_L', 'DORSAL_R'],
+    paddingFactor: 1.8,
+  },
+  {
+    name: 'pectoral_fins',
+    bones: ['PECTORAL_L_ROOT', 'PECTORAL_R_ROOT'],
+    paddingFactor: 1.8,
+    children: ['pectoral_fin_left', 'pectoral_fin_right'],
+    expandAnimation: 'outward',
+  },
+  {
+    name: 'pectoral_fin_left',
+    bones: ['PECTORAL_L_ROOT', 'PECTORAL_L_CHAIN1', 'PECTORAL_L_CHAIN2'],
+    parent: 'pectoral_fins',
+    paddingFactor: 1.6,
+    cameraAngle: 270,
+  },
+  {
+    name: 'pectoral_fin_right',
+    bones: ['PECTORAL_R_ROOT', 'PECTORAL_R_CHAIN1', 'PECTORAL_R_ROOT2'],
+    parent: 'pectoral_fins',
+    paddingFactor: 1.6,
+    cameraAngle: 90,
+  },
+  {
+    name: 'ventral_fins',
+    bones: ['VENTRAL_L', 'VENTRAL_R'],
+    paddingFactor: 1.6,
+  },
+  {
+    name: 'gills',
+    bones: ['GILL_L', 'GILL_R'],
+    paddingFactor: 1.6,
+    children: ['throat', 'gill'],
+    expandAnimation: 'outward',
+  },
+  {
+    name: 'throat',
+    bones: ['GILL_L', 'GILL_L_MID', 'GILL_L_TIP'],
+    parent: 'gills',
+    paddingFactor: 1.4,
+    cameraAngle: 270,
+  },
+  {
+    name: 'gill',
+    bones: ['GILL_R', 'GILL_R_MID', 'GILL_R_TIP'],
+    parent: 'gills',
+    paddingFactor: 1.4,
+    cameraAngle: 90,
+  },
+];
+
+// ============================================================================
 // PRESET EXPORT
 // ============================================================================
 
-export const BETTA_FISH_PRESET = {
-  name: 'Betta Fish',
-  animalType: 'fish',
-  emoji: '🐟',
-  bones: BONES,
-  boneNodes: BONE_NODES,
-  boneBindings: BONE_BINDINGS,
-  actionInfo: AU_INFO,
-  eyeMeshNodes: EYE_MESH_NODES,
-  // No morph targets in this model
-  auToMorphs: {} as Record<number, import('../mappings/types').MorphTargetsBySide>,
-  morphToMesh: {} as Record<string, string[]>,
-  visemeKeys: [] as string[],
-};
-
-// Engine-compatible config format for Loom3
-export const AU_MAPPING_CONFIG = {
+const BETTA_FISH_PROFILE: Profile = {
   name: 'Betta Fish',
   animalType: 'fish',
   emoji: '🐟',
@@ -869,9 +973,17 @@ export const AU_MAPPING_CONFIG = {
   compositeRotations: COMPOSITE_ROTATIONS,
   eyeMeshNodes: EYE_MESH_NODES,
   meshes: MESHES,
+  annotationRegions: ANNOTATION_REGIONS,
   auMixDefaults: {} as Record<number, number>,  // No mixed AUs (morph+bone) in this model
   continuumPairs: CONTINUUM_PAIRS_MAP,
   continuumLabels: CONTINUUM_LABELS,
+};
+
+export const BETTA_FISH_PRESET = {
+  ...BETTA_FISH_PROFILE,
+  bones: BONES,
+  boneBindings: BONE_BINDINGS,
+  actionInfo: AU_INFO,
 };
 
 /**
@@ -889,6 +1001,10 @@ export default BETTA_FISH_PRESET;
 // LEGACY ALIASES - For backwards compatibility with existing code
 // ============================================================================
 
+// Deprecated alias: the fish preset is now a single preset object, not a
+// parallel "mapping config" that differs from the real preset.
+export const AU_MAPPING_CONFIG = BETTA_FISH_PRESET;
+
 export const ACTION_INFO = AU_INFO;
 export const FISH_BONES = BONES;
 export const FISH_BONE_NODES = BONE_NODES;
@@ -900,5 +1016,5 @@ export const FISH_CONTINUUM_LABELS = CONTINUUM_LABELS;
 export const FISH_COMPOSITE_ROTATIONS = COMPOSITE_ROTATIONS;
 export const FISH_EYE_MESH_NODES = EYE_MESH_NODES;
 export const FISH_MESHES = MESHES;
-export const FISH_AU_MAPPING_CONFIG = AU_MAPPING_CONFIG;
+export const FISH_AU_MAPPING_CONFIG = BETTA_FISH_PRESET;
 export const fishHasLeftRightBones = hasLeftRightBones;

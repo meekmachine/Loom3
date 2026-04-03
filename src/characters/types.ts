@@ -148,7 +148,7 @@ export type MarkerStyle = 'html' | '3d';
 /**
  * Per-character configuration for camera + animation
  */
-export interface CharacterConfig {
+export interface CharacterConfig extends Partial<Profile> {
   /** Unique identifier for the character */
   characterId: string;
   /** Display name */
@@ -171,7 +171,11 @@ export interface CharacterConfig {
   modelGroundClearance?: number;
   /** Preset type for animation mapping. Default: 'cc4' */
   auPresetType?: PresetType;
-  /** Optional: profile overrides applied on top of the preset */
+  /**
+   * Optional legacy nested override blob.
+   * New stored character documents should flatten preset overrides onto the
+   * top-level character profile object instead of nesting them here.
+   */
   profile?: Partial<Profile>;
   /** Baked clip names hidden from downstream UIs and filtered out on load */
   deletedBakedAnimationClips?: string[];

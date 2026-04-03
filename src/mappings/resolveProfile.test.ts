@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Profile } from './types';
-import { resolveProfile } from './resolveProfile';
+import { applyProfileToPreset, resolveProfile } from './resolveProfile';
 
 const basePreset: Profile = {
   name: 'base',
@@ -68,5 +68,19 @@ describe('resolveProfile', () => {
       Eye: 'eye',
       Tongue: 'tongue',
     });
+  });
+});
+
+describe('applyProfileToPreset', () => {
+  it('returns the base preset unchanged when no override is provided', () => {
+    expect(applyProfileToPreset(basePreset)).toBe(basePreset);
+  });
+
+  it('applies a profile override on top of the preset', () => {
+    const result = applyProfileToPreset(basePreset, {
+      morphToMesh: { face: ['CustomFace'] },
+    });
+
+    expect(result.morphToMesh.face).toEqual(['CustomFace']);
   });
 });

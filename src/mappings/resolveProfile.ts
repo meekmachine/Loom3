@@ -175,3 +175,12 @@ export function resolveProfile(base: Profile, override: Partial<Profile>): Profi
     hairPhysics: mergeHairPhysicsConfig(base.hairPhysics, override.hairPhysics),
   };
 }
+
+/**
+ * Explicit helper for the common operation: start with a preset, then apply a
+ * profile override on top. This is the preferred name at call sites where the
+ * distinction between preset and profile should stay obvious.
+ */
+export function applyProfileToPreset(base: Profile, override?: Partial<Profile>): Profile {
+  return override ? resolveProfile(base, override) : base;
+}

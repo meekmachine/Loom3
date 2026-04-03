@@ -11,11 +11,12 @@ export * from './cc4';
 export { resolveProfile } from '../mappings/resolveProfile';
 
 import type { Profile } from '../mappings/types';
-import { resolveProfile } from '../mappings/resolveProfile';
+import { applyProfileToPreset } from '../mappings/resolveProfile';
+export { applyProfileToPreset } from '../mappings/resolveProfile';
 
 // Betta fish preset (skeletal animation, no morphs)
-import { AU_MAPPING_CONFIG } from './bettaFish';
-export { BETTA_FISH_PRESET, AU_MAPPING_CONFIG as FISH_AU_MAPPING_CONFIG } from './bettaFish';
+import { BETTA_FISH_PRESET } from './bettaFish';
+export { BETTA_FISH_PRESET, AU_MAPPING_CONFIG, FISH_AU_MAPPING_CONFIG } from './bettaFish';
 
 // Re-export fish-specific items with FISH_ prefix to avoid conflicts
 export {
@@ -41,7 +42,7 @@ export function resolvePreset(presetType: PresetType | string | undefined) {
   switch (presetType) {
     case 'fish':
     case 'skeletal':
-      return AU_MAPPING_CONFIG;
+      return BETTA_FISH_PRESET;
     case 'cc4':
     case 'custom':
     default:
@@ -57,5 +58,5 @@ export function resolvePresetWithOverrides(
   overrides?: Partial<Profile>
 ): Profile {
   const base = resolvePreset(presetType);
-  return overrides ? resolveProfile(base, overrides) : base;
+  return applyProfileToPreset(base, overrides);
 }

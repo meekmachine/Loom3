@@ -190,6 +190,22 @@ describe('validateMappings', () => {
     expect(result.suggestedConfig).toBeDefined();
     expect(result.corrections?.length).toBeGreaterThan(0);
   });
+
+  it('matches dotless runtime bone names against dotted preset names', () => {
+    const meshes = [{ name: 'BODY_0', morphTargetDictionary: {} }];
+    const skeleton = { bones: [{ name: 'Bone001_Armature' }] };
+    const config: Profile = {
+      ...createBaseConfig(),
+      bonePrefix: 'Bone.',
+      boneSuffix: '_Armature',
+      boneNodes: { HEAD: '001' },
+      auToBones: { 2: [{ node: 'HEAD', channel: 'rx', scale: 1 }] },
+    };
+
+    const result = validateMappings(meshes, skeleton, config);
+    expect(result.missingBones).toEqual([]);
+    expect(result.foundBones).toContain('001');
+  });
 });
 
 describe('generateMappingCorrections', () => {
@@ -207,5 +223,22 @@ describe('generateMappingCorrections', () => {
     const result = generateMappingCorrections(meshes, skeleton, config, { minConfidence: 0.5 });
     expect(result.corrections.some((c) => c.type === 'morph')).toBe(true);
     expect(result.corrections.some((c) => c.type === 'mesh')).toBe(true);
+  });
+
+  it('scores separator-normalized bone names as exact matches', () => {
+    const meshes = [{ name: 'BODY_0', morphTargetDictionary: {} }];
+    const skeleton = { bones: [{ name: 'Bone001_Armature' }] };
+    const config: Profile = {
+      ...createBaseConfig(),
+      bonePrefix: 'Bone.',
+      boneSuffix: '_Armature',
+      boneNodes: { HEAD: '001' },
+      auToBones: { 2: [{ node: 'HEAD', channel: 'rx', scale: 1 }] },
+    };
+
+    const result = generateMappingCorrections(meshes, skeleton, config, { minConfidence: 0.5 });
+    const correction = result.corrections.find((entry) => entry.type === 'bone' && entry.key === 'HEAD');
+    expect(correction?.confidence).toBe(1);
+    expect(correction?.reason).toContain('exact match');
   });
 });

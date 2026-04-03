@@ -9,6 +9,10 @@ export interface ResolvedFaceCenter {
   debugInfo: string[];
 }
 
+function normalizeLooseName(value: string): string {
+  return value.replace(/\./g, '');
+}
+
 export function resolveBoneName(semanticName: string, config?: CharacterConfig): string {
   if (!config) return semanticName;
 
@@ -46,6 +50,7 @@ export function fuzzyNameMatch(
   suffixPattern?: string
 ): boolean {
   if (objectName === targetName) return true;
+  if (normalizeLooseName(objectName) === normalizeLooseName(targetName)) return true;
   if (!objectName.startsWith(targetName)) return false;
   const suffix = objectName.slice(targetName.length);
   if (suffix === '') return true;

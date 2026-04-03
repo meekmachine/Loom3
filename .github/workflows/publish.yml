@@ -20,10 +20,21 @@ jobs:
       release_sha: ${{ steps.bump.outputs.release_sha }}
       version: ${{ steps.bump.outputs.version }}
     steps:
+      - name: Require release push token
+        env:
+          PUBLISH_PUSH_TOKEN: ${{ secrets.PUBLISH_PUSH_TOKEN }}
+        run: |
+          if [ -z "${PUBLISH_PUSH_TOKEN}" ]; then
+            echo "PUBLISH_PUSH_TOKEN is not configured."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v5
         with:
           ref: "${{ github.ref_name }}"
+          token: ${{ secrets.PUBLISH_PUSH_TOKEN }}
+          persist-credentials: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -35,6 +46,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Configure git push auth
+        env:
+          PUBLISH_PUSH_TOKEN: ${{ secrets.PUBLISH_PUSH_TOKEN }}
+        run: |
+          git remote set-url origin "https://x-access-token:${PUBLISH_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
       - name: Bump patch version
         id: bump

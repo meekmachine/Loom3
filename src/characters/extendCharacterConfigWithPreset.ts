@@ -1,6 +1,7 @@
 import type { Profile } from '../mappings/types';
 import { extendPresetWithProfile } from '../mappings/extendPresetWithProfile';
 import { getPreset } from '../presets';
+import { resolveCharacterProfileOverrides } from '../presets/characterOverrides';
 import { normalizeRegionTree } from '../regions/normalizeRegionTree';
 import type { CharacterConfig, Region } from './types';
 
@@ -196,7 +197,12 @@ export function applyCharacterProfileToPreset(config: CharacterConfig): Profile 
     return null;
   }
 
-  return extendPresetWithProfile(getPreset(presetType), extractProfileOverrides(config));
+  const presetWithCharacterDefaults = extendPresetWithProfile(
+    getPreset(presetType),
+    resolveCharacterProfileOverrides(config.characterId)
+  );
+
+  return extendPresetWithProfile(presetWithCharacterDefaults, extractProfileOverrides(config));
 }
 
 function orderExtendedRegions(
@@ -234,9 +240,11 @@ function orderExtendedRegions(
  *
  * Precedence:
  * 1. preset defaults
- * 2. flattened top-level profile overrides
- * 3. legacy nested `config.profile` overrides (compatibility only)
- * 4. top-level saved `config.regions` overrides by region name
+ * 2. Loom3 character-specific preset overrides
+ * 3. flattened top-level profile overrides
+ * 4. legacy nested `config.profile` overrides (compatibility only)
+ * 5. top-level saved `config.regions` overrides by region name
+ * 6. top-level saved bone naming fields remain compatibility overrides
  */
 export function extendCharacterConfigWithPreset(config: CharacterConfig): CharacterConfig {
   const presetType = config.auPresetType;

@@ -10,13 +10,22 @@ import {
 
 function createConfig(overrides: Partial<CharacterConfig> = {}): CharacterConfig {
   return {
-    characterId: 'jonathan',
-    characterName: 'Jonathan',
-    modelPath: '/jonathan.glb',
+    characterId: 'generic_humanoid',
+    characterName: 'Generic Humanoid',
+    modelPath: '/generic.glb',
     auPresetType: 'cc4',
     regions: [],
     ...overrides,
   };
+}
+
+function createJonathanConfig(overrides: Partial<CharacterConfig> = {}): CharacterConfig {
+  return createConfig({
+    characterId: 'jonathan',
+    characterName: 'Jonathan',
+    modelPath: '/jonathan.glb',
+    ...overrides,
+  });
 }
 
 describe('mergeRegionsByName', () => {
@@ -59,6 +68,56 @@ describe('mergeRegionsByName', () => {
 });
 
 describe('resolveCharacterConfig', () => {
+  it('fills preset regions for generic preset-backed characters when saved top-level regions are absent', () => {
+    const resolved = resolveCharacterConfig(createConfig());
+    const face = resolved.regions.find((region) => region.name === 'face');
+    const leftEye = resolved.regions.find((region) => region.name === 'left_eye');
+
+    expect(resolved.regions.map((region) => region.name).slice(0, 6)).toEqual([
+      'full_body',
+      'head',
+      'face',
+      'left_eye',
+      'right_eye',
+      'mouth',
+    ]);
+    expect(resolved.regions.find((region) => region.name === 'head')?.children).toEqual([
+      'face',
+      'left_eye',
+      'right_eye',
+      'mouth',
+    ]);
+    expect(face?.paddingFactor).toBe(1.3);
+    expect(leftEye?.paddingFactor).toBe(0.9);
+    expect(leftEye?.cameraAngle).toBeUndefined();
+  });
+
+  it('applies Jonathan-specific Loom3 region defaults when saved top-level regions are absent', () => {
+    const resolved = resolveCharacterConfig(createJonathanConfig());
+
+    const face = resolved.regions.find((region) => region.name === 'face');
+    const leftEye = resolved.regions.find((region) => region.name === 'left_eye');
+    const rightEye = resolved.regions.find((region) => region.name === 'right_eye');
+
+    expect(face).toMatchObject({
+      name: 'face',
+      parent: 'head',
+      paddingFactor: 1.1,
+    });
+    expect(leftEye).toMatchObject({
+      name: 'left_eye',
+      parent: 'head',
+      paddingFactor: 0.5,
+    });
+    expect(leftEye?.cameraAngle).toBe(45);
+    expect(rightEye).toMatchObject({
+      name: 'right_eye',
+      parent: 'head',
+      paddingFactor: 0.5,
+    });
+    expect(rightEye?.cameraAngle).toBe(315);
+  });
+
   it('lets saved top-level regions override preset defaults by region name', () => {
     const presetRegions = resolvePresetWithOverrides('cc4').annotationRegions ?? [];
     const resolved = resolveCharacterConfig(
@@ -306,5 +365,25 @@ describe('applyCharacterProfileToPreset', () => {
       category: 'body',
       morphCount: 1,
     });
+  });
+
+  it('applies Jonathan-specific Loom3 overrides before saved per-character overrides', () => {
+    const resolvedProfile = applyCharacterProfileToPreset(
+      createJonathanConfig({
+        profile: {
+          annotationRegions: [{ name: 'left_eye', paddingFactor: 0.4 }],
+        },
+      })
+    );
+
+    const face = resolvedProfile?.annotationRegions?.find((region) => region.name === 'face');
+    const leftEye = resolvedProfile?.annotationRegions?.find((region) => region.name === 'left_eye');
+    const rightEye = resolvedProfile?.annotationRegions?.find((region) => region.name === 'right_eye');
+
+    expect(face?.paddingFactor).toBe(1.1);
+    expect(leftEye?.paddingFactor).toBe(0.4);
+    expect(leftEye?.cameraAngle).toBe(45);
+    expect(rightEye?.paddingFactor).toBe(0.5);
+    expect(rightEye?.cameraAngle).toBe(315);
   });
 });

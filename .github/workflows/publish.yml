@@ -11,16 +11,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  prepare_release:
-    if: "${{ github.event_name == 'push' && github.actor != 'github-actions[bot]' && !startsWith(github.event.head_commit.message, 'build: bump npm package version') }}"
+  publish:
+    if: "${{ github.event_name != 'push' || github.actor != 'github-actions[bot]' }}"
     runs-on: ubuntu-latest
+    environment: npm
     permissions:
       contents: write
-    outputs:
-      release_sha: ${{ steps.bump.outputs.release_sha }}
-      version: ${{ steps.bump.outputs.version }}
+      id-token: write
     steps:
-      - name: Require release push token
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: "${{ github.ref_name }}"
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: "npm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify release push token
         env:
           PUBLISH_PUSH_TOKEN: ${{ secrets.PUBLISH_PUSH_TOKEN }}
         run: |
@@ -28,19 +40,6 @@ jobs:
             echo "PUBLISH_PUSH_TOKEN is not configured."
             exit 1
           fi
-
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          ref: "${{ github.ref_name }}"
-          token: ${{ secrets.PUBLISH_PUSH_TOKEN }}
-          persist-credentials: true
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: "24"
-          cache: "npm"
 
       - name: Configure git author
         run: |
@@ -53,58 +52,8 @@ jobs:
         run: |
           git remote set-url origin "https://x-access-token:${PUBLISH_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-      - name: Bump patch version
-        id: bump
-        run: |
-          npm version patch --no-git-tag-version
-          VERSION=$(node -p 'require("./package.json").version')
-          git add package.json package-lock.json
-          git commit -m "build: bump npm package version to ${VERSION}"
-          git push origin HEAD:main
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-  publish:
-    if: "${{ always() && (github.event_name == 'workflow_dispatch' || needs.prepare_release.outputs.release_sha != '') }}"
-    needs: prepare_release
-    runs-on: ubuntu-latest
-    environment: npm
-    permissions:
-      contents: write
-      id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          ref: "${{ github.event_name == 'workflow_dispatch' && github.sha || needs.prepare_release.outputs.release_sha }}"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: "24"
-          cache: "npm"
-          registry-url: "https://registry.npmjs.org"
-
       - name: Install dependencies
         run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Run typecheck
-        run: npm run typecheck
-
-      - name: Run tests
-        run: npm test
-
-      - name: Read package metadata
-        id: pkg
-        run: bash ./scripts/ci/read-package-metadata.sh
-
-      - name: Resolve release metadata
-        id: release
-        run: |
-          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Verify NPM auth
         run: |
@@ -117,48 +66,133 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_KEY }}
 
+      - name: Determine release version
+        id: release
+        run: |
+          node <<'EOF'
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const outputPath = process.env.GITHUB_OUTPUT;
+
+          const currentVersion = pkg.version;
+          const releaseTag = execSync("git tag --points-at HEAD --list 'v*'", { encoding: 'utf8' })
+            .trim()
+            .split('\n')
+            .filter(Boolean)[0];
+
+          function parse(version) {
+            const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+            if (!match) {
+              throw new Error(`Unsupported semver: ${version}`);
+            }
+            return match.slice(1).map(Number);
+          }
+
+          function compare(a, b) {
+            const left = parse(a);
+            const right = parse(b);
+            for (let i = 0; i < 3; i += 1) {
+              if (left[i] !== right[i]) {
+                return left[i] - right[i];
+              }
+            }
+            return 0;
+          }
+
+          function bumpPatch(version) {
+            const [major, minor, patch] = parse(version);
+            return `${major}.${minor}.${patch + 1}`;
+          }
+
+          let version;
+          let existingTag = 'false';
+          let publishedVersion = '';
+
+          if (releaseTag) {
+            version = releaseTag.replace(/^v/, '');
+            existingTag = 'true';
+          } else {
+            try {
+              publishedVersion = execSync(`npm view "${pkg.name}" version`, {
+                encoding: 'utf8',
+                stdio: ['ignore', 'pipe', 'ignore'],
+              }).trim();
+            } catch (_error) {
+              publishedVersion = '';
+            }
+
+            const baseVersion =
+              publishedVersion && compare(publishedVersion, currentVersion) > 0
+                ? publishedVersion
+                : currentVersion;
+            version = bumpPatch(baseVersion);
+          }
+
+          execSync(`npm version ${version} --no-git-tag-version`, { stdio: 'inherit' });
+
+          const lines = [
+            `package_name=${pkg.name}`,
+            `version=${version}`,
+            `tag=v${version}`,
+            `existing_tag=${existingTag}`,
+            `published_version=${publishedVersion}`,
+            `release_commit=${execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim()}`,
+          ];
+          fs.appendFileSync(outputPath, `${lines.join('\n')}\n`);
+          EOF
+
+      - name: Build
+        run: npm run build
+
+      - name: Run typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
       - name: Check if version already exists on NPM
         id: existing
         run: |
-          if npm view "${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}" version >/dev/null 2>&1; then
+          if npm view "${{ steps.release.outputs.package_name }}@${{ steps.release.outputs.version }}" version >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Version ${{ steps.pkg.outputs.version }} is already published."
+            echo "Version ${{ steps.release.outputs.version }} is already published."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "Version ${{ steps.pkg.outputs.version }} is not published yet."
+            echo "Version ${{ steps.release.outputs.version }} is not published yet."
           fi
 
-      - name: Verify release tag drift
+      - name: Ensure release tag exists
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
         run: |
-          bash ./scripts/ci/create-release-tag.sh \
-            --tag "${{ steps.pkg.outputs.tag }}" \
-            --commit HEAD \
-            --dry-run
+          remote_sha="$(git ls-remote --tags origin "refs/tags/${TAG}^{}" | awk '{print $1}')"
+          head_sha="$(git rev-parse HEAD)"
+          if [ -n "${remote_sha}" ] && [ "${remote_sha}" != "${head_sha}" ]; then
+            echo "Tag ${TAG} already exists on ${remote_sha}, expected ${head_sha}."
+            exit 1
+          fi
+          if [ -z "${remote_sha}" ]; then
+            git tag -a "${TAG}" -m "Release ${TAG}"
+            git push origin "refs/tags/${TAG}"
+          fi
 
       - name: Publish to NPM
-        id: publish_npm
         if: steps.existing.outputs.exists != 'true'
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_KEY }}
 
-      # Package version is the source of truth; create the release tag when it is missing,
-      # but fail if an existing tag already points at a different commit.
-      - name: Create release tag
-        if: ${{ steps.existing.outputs.exists == 'true' || steps.publish_npm.outcome == 'success' }}
-        run: |
-          bash ./scripts/ci/create-release-tag.sh \
-            --tag "${{ steps.pkg.outputs.tag }}" \
-            --commit HEAD \
-            --push
-
       - name: Create or update GitHub release
-        if: ${{ steps.existing.outputs.exists == 'true' || steps.publish_npm.outcome == 'success' }}
+        if: ${{ steps.existing.outputs.exists == 'true' || success() }}
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
-          bash ./scripts/ci/upsert-github-release.sh \
-            --tag "${{ steps.pkg.outputs.tag }}" \
-            --commit "${{ steps.release.outputs.commit }}" \
-            --package-name "${{ steps.pkg.outputs.name }}" \
-            --package-version "${{ steps.pkg.outputs.version }}"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" --title "${TAG}" --notes "Published @lovelace_lol/loom3 ${VERSION}"
+          else
+            gh release create "${TAG}" --target "${GITHUB_SHA}" --title "${TAG}" --notes "Published @lovelace_lol/loom3 ${VERSION}"
+          fi

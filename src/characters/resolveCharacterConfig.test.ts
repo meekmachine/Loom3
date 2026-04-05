@@ -3,6 +3,7 @@ import type { CharacterConfig } from './types';
 import { resolvePresetWithOverrides } from '../presets';
 import {
   applyCharacterProfileToPreset,
+  extendCharacterConfigWithPreset,
   extractProfileOverrides,
   mergeRegionsByName,
   resolveCharacterConfig,
@@ -58,10 +59,10 @@ describe('mergeRegionsByName', () => {
   });
 });
 
-describe('resolveCharacterConfig', () => {
+describe('extendCharacterConfigWithPreset', () => {
   it('lets saved top-level regions override preset defaults by region name', () => {
     const presetRegions = resolvePresetWithOverrides('cc4').annotationRegions ?? [];
-    const resolved = resolveCharacterConfig(
+    const resolved = extendCharacterConfigWithPreset(
       createConfig({
         regions: presetRegions.map((region) =>
           region.name === 'left_eye'
@@ -103,7 +104,7 @@ describe('resolveCharacterConfig', () => {
     const presetRightEye = resolvePresetWithOverrides('cc4').annotationRegions?.find(
       (region) => region.name === 'right_eye'
     );
-    const resolved = resolveCharacterConfig(
+    const resolved = extendCharacterConfigWithPreset(
       createConfig({
         regions: [
           { name: 'left_eye', cameraAngle: 45, paddingFactor: 0.5 },
@@ -140,7 +141,7 @@ describe('resolveCharacterConfig', () => {
   });
 
   it('preserves saved region order ahead of preset-only fill-ins', () => {
-    const resolved = resolveCharacterConfig(
+    const resolved = extendCharacterConfigWithPreset(
       createConfig({
         regions: [
           { name: 'full_body', objects: ['*'], paddingFactor: 2.5 },
@@ -164,7 +165,7 @@ describe('resolveCharacterConfig', () => {
   });
 
   it('still honors legacy nested profile annotation overrides during migration', () => {
-    const resolved = resolveCharacterConfig(
+    const resolved = extendCharacterConfigWithPreset(
       createConfig({
         profile: {
           annotationRegions: [
@@ -194,14 +195,33 @@ describe('resolveCharacterConfig', () => {
   });
 
   it('carries preset bone resolution metadata needed by runtime consumers', () => {
-    const resolved = resolveCharacterConfig(createConfig());
+    const resolved = extendCharacterConfigWithPreset(createConfig());
 
     expect(resolved.suffixPattern).toBeDefined();
     expect(resolved.boneNodes).toBeDefined();
   });
 
+  it('returns the full preset-extended profile surface instead of only bone metadata', () => {
+    const resolved = extendCharacterConfigWithPreset(
+      createConfig({
+        morphToMesh: { face: ['CustomFace'] },
+        meshes: { CustomFace: { category: 'body', morphCount: 1 } },
+      })
+    );
+
+    expect(resolved.morphToMesh).toMatchObject({
+      face: ['CustomFace'],
+    });
+    expect(resolved.meshes).toMatchObject({
+      CustomFace: { category: 'body', morphCount: 1 },
+    });
+    expect(resolved.auToBones).toBeDefined();
+    expect(resolved.auToMorphs).toBeDefined();
+    expect(resolved.visemeKeys?.length).toBeGreaterThan(0);
+  });
+
   it('merges saved top-level bone node overrides over preset bone mappings by key', () => {
-    const resolved = resolveCharacterConfig(
+    const resolved = extendCharacterConfigWithPreset(
       createConfig({
         auPresetType: 'fish',
         boneNodes: {
@@ -223,7 +243,7 @@ describe('resolveCharacterConfig', () => {
   });
 
   it('uses fish preset annotation regions when saved top-level regions are absent', () => {
-    const resolved = resolveCharacterConfig(
+    const resolved = extendCharacterConfigWithPreset(
       createConfig({
         auPresetType: 'fish',
         regions: [],
@@ -260,9 +280,19 @@ describe('resolveCharacterConfig', () => {
       regions: [{ name: 'visor', objects: ['VisorMesh'], paddingFactor: 1.4 }],
     });
 
-    const resolved = resolveCharacterConfig(config);
+    const resolved = extendCharacterConfigWithPreset(config);
 
     expect(resolved).toBe(config);
+  });
+});
+
+describe('resolveCharacterConfig', () => {
+  it('stays as a compatibility alias for the explicit extender helper', () => {
+    const config = createConfig({
+      morphToMesh: { face: ['CustomFace'] },
+    });
+
+    expect(resolveCharacterConfig(config)).toEqual(extendCharacterConfigWithPreset(config));
   });
 });
 

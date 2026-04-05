@@ -1,4 +1,5 @@
 import type { Profile, AnnotationRegion, HairPhysicsProfileConfig } from './types';
+import { normalizeRegionTree } from '../regions/normalizeRegionTree';
 
 type RecordValue = string | number | boolean | object | null | undefined;
 type RecordKey = string | number;
@@ -142,6 +143,12 @@ const mergeHairPhysicsConfig = (
  * - annotationRegions: merged by region name, shallow field merge (override wins).
  */
 export function resolveProfile(base: Profile, override: Partial<Profile>): Profile {
+  const disabledRegions = override.disabledRegions
+    ? [...override.disabledRegions]
+    : base.disabledRegions
+      ? [...base.disabledRegions]
+      : undefined;
+
   return {
     ...base,
     ...override,
@@ -171,7 +178,11 @@ export function resolveProfile(base: Profile, override: Partial<Profile>): Profi
     continuumLabels: base.continuumLabels || override.continuumLabels
       ? mergeRecord(base.continuumLabels || {}, override.continuumLabels || {})
       : undefined,
-    annotationRegions: mergeAnnotationRegions(base.annotationRegions, override.annotationRegions),
+    annotationRegions: normalizeRegionTree(
+      mergeAnnotationRegions(base.annotationRegions, override.annotationRegions),
+      disabledRegions,
+    ),
+    disabledRegions,
     hairPhysics: mergeHairPhysicsConfig(base.hairPhysics, override.hairPhysics),
   };
 }

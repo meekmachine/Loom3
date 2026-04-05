@@ -195,6 +195,22 @@ describe('extendCharacterConfigWithPreset', () => {
     });
   });
 
+  it('drops disabled preset regions after extension and cleans parent-child links', () => {
+    const resolved = extendCharacterConfigWithPreset(
+      createConfig({
+        disabledRegions: ['mouth', 'right_eye'],
+      })
+    );
+
+    expect(resolved.disabledRegions).toEqual(['mouth', 'right_eye']);
+    expect(resolved.regions.find((region) => region.name === 'mouth')).toBeUndefined();
+    expect(resolved.regions.find((region) => region.name === 'right_eye')).toBeUndefined();
+    expect(resolved.regions.find((region) => region.name === 'head')?.children).toEqual([
+      'face',
+      'left_eye',
+    ]);
+  });
+
   it('carries preset bone resolution metadata needed by runtime consumers', () => {
     const resolved = extendCharacterConfigWithPreset(createConfig());
 
@@ -297,13 +313,17 @@ describe('extendCharacterConfigWithPreset', () => {
       'pectoral_fin_right',
       'ventral_fins',
       'gills',
-      'throat',
-      'gill',
+      'gill_left',
+      'gill_right',
     ]);
     expect(resolved.regions.find((region) => region.name === 'left_eye')).toMatchObject({
       meshes: ['EYES_0'],
       parent: 'head',
       cameraAngle: 270,
+    });
+    expect(resolved.regions.find((region) => region.name === 'gill_left')).toMatchObject({
+      parent: 'gills',
+      style: { lineDirection: 'left' },
     });
   });
 
@@ -335,10 +355,12 @@ describe('extractProfileOverrides', () => {
       createConfig({
         bonePrefix: 'Top_',
         boneNodes: { HEAD: 'TopHead' },
+        disabledRegions: ['mouth'],
         profile: {
           bonePrefix: 'Nested_',
           boneNodes: { HEAD: 'NestedHead', EYE_L: 'NestedEye' },
           meshes: { Head: { category: 'body', morphCount: 1 } },
+          disabledRegions: ['left_eye'],
         },
       })
     );
@@ -351,6 +373,7 @@ describe('extractProfileOverrides', () => {
     expect(overrides.meshes).toMatchObject({
       Head: { category: 'body', morphCount: 1 },
     });
+    expect(overrides.disabledRegions).toEqual(['mouth']);
     expect(overrides.annotationRegions).toBeUndefined();
   });
 });

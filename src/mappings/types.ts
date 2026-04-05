@@ -143,6 +143,11 @@ export interface Profile {
   annotationRegions?: AnnotationRegion[];
 
   /**
+   * Optional: preset region names this profile explicitly disables.
+   */
+  disabledRegions?: string[];
+
+  /**
    * Optional: Hair physics defaults for this preset/profile.
    */
   hairPhysics?: HairPhysicsProfileConfig;

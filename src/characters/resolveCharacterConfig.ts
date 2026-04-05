@@ -1,6 +1,7 @@
 import type { Profile } from '../mappings/types';
 import { applyProfileToPreset } from '../mappings/resolveProfile';
 import { resolvePreset } from '../presets';
+import { normalizeRegionTree } from '../regions/normalizeRegionTree';
 import type { CharacterConfig, Region } from './types';
 
 const PROFILE_OVERRIDE_KEYS = [
@@ -30,6 +31,7 @@ const PROFILE_OVERRIDE_KEYS = [
   'continuumPairs',
   'continuumLabels',
   'annotationRegions',
+  'disabledRegions',
   'hairPhysics',
 ] as const satisfies readonly (keyof Profile)[];
 
@@ -249,8 +251,12 @@ export function extendCharacterConfigWithPreset(config: CharacterConfig): Charac
   }
   const presetRegions = presetResolvedProfile.annotationRegions as Region[] | undefined;
   const mergedRegions = mergeRegionsByName(presetRegions, config.regions);
-  const resolvedRegions = orderResolvedRegions(
+  const normalizedRegions = normalizeRegionTree(
     mergedRegions,
+    profileOverrides.disabledRegions,
+  );
+  const resolvedRegions = orderResolvedRegions(
+    normalizedRegions,
     [config.regions, profileOverrides.annotationRegions as Region[] | undefined, presetRegions]
   );
 

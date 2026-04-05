@@ -1031,7 +1031,6 @@ export const CC4_PRESET: Profile = {
       paddingFactor: 1.5,
       children: ['face', 'left_eye', 'right_eye', 'mouth'],
       expandAnimation: 'staggered',
-      showChildConnections: true,
     },
     {
       name: 'face',

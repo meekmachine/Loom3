@@ -74,7 +74,6 @@ interface AnnotationRegion {
   parent?: string;
   children?: string[];
   expandAnimation?: 'outward' | 'staggered';
-  showChildConnections?: boolean;
   style?: {
     markerColor?: number;
     markerRadius?: number;

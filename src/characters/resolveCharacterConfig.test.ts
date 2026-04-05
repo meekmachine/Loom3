@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CharacterConfig } from './types';
 import { resolvePresetWithOverrides } from '../presets';
+import { resolveBoneNames } from '../regions/regionMapping';
 import {
   applyCharacterProfileToPreset,
   extendCharacterConfigWithPreset,
@@ -121,14 +122,14 @@ describe('extendCharacterConfigWithPreset', () => {
     expect(head).toBeTruthy();
     expect(leftEye).toMatchObject({
       name: 'left_eye',
-      bones: ['CC_Base_L_Eye'],
+      bones: ['EYE_L'],
       paddingFactor: 0.5,
       parent: 'head',
     });
     expect(leftEye?.cameraAngle).toBe(45);
     expect(rightEye).toMatchObject({
       name: 'right_eye',
-      bones: ['CC_Base_R_Eye'],
+      bones: ['EYE_R'],
       paddingFactor: presetRightEye?.paddingFactor,
       parent: 'head',
     });
@@ -184,7 +185,7 @@ describe('extendCharacterConfigWithPreset', () => {
 
     expect(leftEye).toMatchObject({
       name: 'left_eye',
-      bones: ['CC_Base_L_Eye'],
+      bones: ['EYE_L'],
       paddingFactor: 0.5,
       cameraAngle: 45,
       parent: 'head',
@@ -199,6 +200,38 @@ describe('extendCharacterConfigWithPreset', () => {
 
     expect(resolved.suffixPattern).toBeDefined();
     expect(resolved.boneNodes).toBeDefined();
+  });
+
+  it('lets semantic annotation region bones resolve through preset bone nodes plus profile affixes', () => {
+    const resolved = extendCharacterConfigWithPreset(
+      createConfig({
+        characterId: 'trex',
+        characterName: 'T-Rex',
+        bonePrefix: 'TRex_',
+        boneNodes: {
+          HEAD: 'Head',
+          JAW: 'Jaw',
+          EYE_L: 'eye_L',
+          EYE_R: 'eye_R',
+        },
+      })
+    );
+
+    const head = resolved.regions.find((region) => region.name === 'head');
+    const leftEye = resolved.regions.find((region) => region.name === 'left_eye');
+    const leftHand = resolved.regions.find((region) => region.name === 'left_hand');
+    const leftFoot = resolved.regions.find((region) => region.name === 'left_foot');
+
+    expect(head?.bones).toEqual(['HEAD', 'JAW']);
+    expect(resolveBoneNames(head?.bones, resolved)).toEqual(['TRex_Head', 'Head', 'TRex_Jaw', 'Jaw']);
+    expect(resolveBoneNames(leftEye?.bones, resolved)).toEqual(['TRex_eye_L', 'eye_L']);
+    expect(resolveBoneNames(leftHand?.bones, resolved)).toEqual(['TRex_L_Hand', 'L_Hand']);
+    expect(resolveBoneNames(leftFoot?.bones, resolved)).toEqual([
+      'TRex_L_Foot',
+      'L_Foot',
+      'TRex_L_ToeBase',
+      'L_ToeBase',
+    ]);
   });
 
   it('returns the full preset-extended profile surface instead of only bone metadata', () => {

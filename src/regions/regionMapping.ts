@@ -13,27 +13,30 @@ function normalizeLooseName(value: string): string {
   return value.replace(/\./g, '');
 }
 
-export function resolveBoneName(semanticName: string, config?: CharacterConfig): string {
-  if (!config) return semanticName;
+function resolveBoneNameCandidates(semanticName: string, config?: CharacterConfig): string[] {
+  if (!config) return [semanticName];
 
   const { bonePrefix, boneSuffix, boneNodes } = config;
-
   if (!boneNodes || !boneNodes[semanticName]) {
-    return semanticName;
+    return [semanticName];
   }
 
   const baseName = boneNodes[semanticName];
-
-  // Some rigs store the exact node name in boneNodes rather than a semantic base name.
-  // Treat names that already contain separators as pre-resolved full names so we do
-  // not accidentally prepend/append prefix or suffix fragments onto baked identifiers.
-  if (baseName.includes('_') || baseName.includes('.')) {
-    return baseName;
-  }
-
   const prefix = bonePrefix || '';
   const suffix = boneSuffix || '';
-  return prefix + baseName + suffix;
+
+  if (!prefix && !suffix) {
+    return [baseName];
+  }
+
+  const prefixedBase = prefix && baseName.startsWith(prefix) ? baseName : prefix + baseName;
+  const fullyAffixed = suffix && !prefixedBase.endsWith(suffix) ? `${prefixedBase}${suffix}` : prefixedBase;
+
+  return Array.from(new Set([fullyAffixed, baseName]));
+}
+
+export function resolveBoneName(semanticName: string, config?: CharacterConfig): string {
+  return resolveBoneNameCandidates(semanticName, config)[0] ?? semanticName;
 }
 
 export function resolveBoneNames(
@@ -41,7 +44,11 @@ export function resolveBoneNames(
   config?: CharacterConfig
 ): string[] {
   if (!names || names.length === 0) return [];
-  return names.map((name) => resolveBoneName(name, config));
+  return Array.from(
+    new Set(
+      names.flatMap((name) => resolveBoneNameCandidates(name, config))
+    )
+  );
 }
 
 export function fuzzyNameMatch(

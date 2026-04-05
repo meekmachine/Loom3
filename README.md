@@ -1,5 +1,7 @@
 # Loom3
 
+_Author: Jonathan Sutton Fields._
+
 The missing character controller for Three.js! Loom3 allows you to bring humanoid and animal characters to life. Loom3 is based on the Facial Action Coding System (FACS) as the basis of its mappings, providing a morph and bone mapping library for controlling high-definition 3D characters in Three.js.
 
 Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units to the morph targets and bone transforms found in Character Creator 4 (CC4) characters. Instead of manually figuring out which blend shapes correspond to which facial movements, you can simply say `setAU(12, 0.8)` and the library handles the rest.
@@ -1664,4 +1666,4 @@ loom.transitionAU(45, 1.0, 100);  // Blink
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License. Loom3 is authored by Jonathan Sutton Fields; see [LICENSE](LICENSE) and [AUTHORS.md](AUTHORS.md) for details.

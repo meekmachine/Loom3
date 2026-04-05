@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Profile } from './types';
-import { applyProfileToPreset, resolveProfile } from './resolveProfile';
+import { extendPresetWithProfile } from './extendPresetWithProfile';
 
 const basePreset: Profile = {
   name: 'base',
@@ -20,9 +20,9 @@ const basePreset: Profile = {
   ],
 };
 
-describe('resolveProfile', () => {
+describe('extendPresetWithProfile', () => {
   it('merges maps and overrides scalars', () => {
-    const result = resolveProfile(basePreset, {
+    const result = extendPresetWithProfile(basePreset, {
       name: 'override',
       auToMorphs: { 2: { left: [], right: [], center: ['B'] } },
       boneNodes: { HEAD: 'CC_Base_Head' },
@@ -35,7 +35,7 @@ describe('resolveProfile', () => {
   });
 
   it('merges annotation regions by name', () => {
-    const result = resolveProfile(basePreset, {
+    const result = extendPresetWithProfile(basePreset, {
       annotationRegions: [
         { name: 'face', meshes: ['FaceMesh2'], paddingFactor: 1.5 },
         { name: 'mouth', bones: ['Jaw'] },
@@ -51,8 +51,8 @@ describe('resolveProfile', () => {
     expect(mouth?.bones).toEqual(['Jaw']);
   });
 
-  it('drops disabled preset regions and cleans parent-child links', () => {
-    const result = resolveProfile(
+  it('carries disabled region names without pruning annotation regions', () => {
+    const result = extendPresetWithProfile(
       {
         ...basePreset,
         annotationRegions: [
@@ -74,12 +74,15 @@ describe('resolveProfile', () => {
     );
 
     expect(result.disabledRegions).toEqual(['mouth']);
-    expect(result.annotationRegions?.find((region) => region.name === 'mouth')).toBeUndefined();
-    expect(result.annotationRegions?.find((region) => region.name === 'head')?.children).toEqual(['face']);
+    expect(result.annotationRegions?.find((region) => region.name === 'mouth')).toMatchObject({
+      parent: 'head',
+      bones: ['Jaw'],
+    });
+    expect(result.annotationRegions?.find((region) => region.name === 'head')?.children).toEqual(['face', 'mouth']);
   });
 
   it('does not mutate the base preset', () => {
-    resolveProfile(basePreset, {
+    extendPresetWithProfile(basePreset, {
       annotationRegions: [{ name: 'face', meshes: ['FaceMesh2'] }],
     });
 
@@ -87,7 +90,7 @@ describe('resolveProfile', () => {
   });
 
   it('merges auFacePartToMeshCategory mappings', () => {
-    const result = resolveProfile(basePreset, {
+    const result = extendPresetWithProfile(basePreset, {
       auFacePartToMeshCategory: { Tongue: 'tongue' },
     });
 
@@ -98,13 +101,13 @@ describe('resolveProfile', () => {
   });
 });
 
-describe('applyProfileToPreset', () => {
-  it('returns the base preset unchanged when no override is provided', () => {
-    expect(applyProfileToPreset(basePreset)).toBe(basePreset);
+describe('extendPresetWithProfile reuse', () => {
+  it('returns the base preset unchanged when no extension is provided', () => {
+    expect(extendPresetWithProfile(basePreset)).toBe(basePreset);
   });
 
-  it('applies a profile override on top of the preset', () => {
-    const result = applyProfileToPreset(basePreset, {
+  it('applies a profile extension on top of the preset', () => {
+    const result = extendPresetWithProfile(basePreset, {
       morphToMesh: { face: ['CustomFace'] },
     });
 

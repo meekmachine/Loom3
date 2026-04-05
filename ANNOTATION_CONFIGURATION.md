@@ -56,7 +56,7 @@ export const HUMAN_ANNOTATION_OVERRIDES: Partial<Profile> = {
 };
 ```
 
-`resolveProfile()` merges `annotationRegions` by region name, so a profile can override just the fields it needs without copying the full preset region array.
+`extendPresetWithProfile()` merges `annotationRegions` by region name, so a profile can override just the fields it needs without copying the full preset region array.
 
 ## Region Fields
 

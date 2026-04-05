@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { CharacterConfig } from './types';
-import { resolvePresetWithOverrides } from '../presets';
+import { getPresetWithProfile } from '../presets';
 import { resolveBoneNames } from '../regions/regionMapping';
 import {
   applyCharacterProfileToPreset,
   extendCharacterConfigWithPreset,
   extractProfileOverrides,
   mergeRegionsByName,
-  resolveCharacterConfig,
-} from './resolveCharacterConfig';
+} from './extendCharacterConfigWithPreset';
 
 function createConfig(overrides: Partial<CharacterConfig> = {}): CharacterConfig {
   return {
@@ -62,8 +61,8 @@ describe('mergeRegionsByName', () => {
 
 describe('extendCharacterConfigWithPreset', () => {
   it('lets saved top-level regions override preset defaults by region name', () => {
-    const presetRegions = resolvePresetWithOverrides('cc4').annotationRegions ?? [];
-    const resolved = extendCharacterConfigWithPreset(
+    const presetRegions = getPresetWithProfile('cc4').annotationRegions ?? [];
+    const extended = extendCharacterConfigWithPreset(
       createConfig({
         regions: presetRegions.map((region) =>
           region.name === 'left_eye'
@@ -77,10 +76,10 @@ describe('extendCharacterConfigWithPreset', () => {
       })
     );
 
-    const head = resolved.regions.find((region) => region.name === 'head');
-    const face = resolved.regions.find((region) => region.name === 'face');
-    const leftEye = resolved.regions.find((region) => region.name === 'left_eye');
-    const rightEye = resolved.regions.find((region) => region.name === 'right_eye');
+    const head = extended.regions.find((region) => region.name === 'head');
+    const face = extended.regions.find((region) => region.name === 'face');
+    const leftEye = extended.regions.find((region) => region.name === 'left_eye');
+    const rightEye = extended.regions.find((region) => region.name === 'right_eye');
 
     expect(head?.children).toEqual(['face', 'left_eye', 'right_eye', 'mouth']);
     expect(face).toMatchObject({
@@ -102,10 +101,10 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('merges saved top-level regions over preset regions while preserving preset geometry', () => {
-    const presetRightEye = resolvePresetWithOverrides('cc4').annotationRegions?.find(
+    const presetRightEye = getPresetWithProfile('cc4').annotationRegions?.find(
       (region) => region.name === 'right_eye'
     );
-    const resolved = extendCharacterConfigWithPreset(
+    const extended = extendCharacterConfigWithPreset(
       createConfig({
         regions: [
           { name: 'left_eye', cameraAngle: 45, paddingFactor: 0.5 },
@@ -114,10 +113,10 @@ describe('extendCharacterConfigWithPreset', () => {
       })
     );
 
-    const leftEye = resolved.regions.find((region) => region.name === 'left_eye');
-    const rightEye = resolved.regions.find((region) => region.name === 'right_eye');
-    const head = resolved.regions.find((region) => region.name === 'head');
-    const hat = resolved.regions.find((region) => region.name === 'hat');
+    const leftEye = extended.regions.find((region) => region.name === 'left_eye');
+    const rightEye = extended.regions.find((region) => region.name === 'right_eye');
+    const head = extended.regions.find((region) => region.name === 'head');
+    const hat = extended.regions.find((region) => region.name === 'hat');
 
     expect(head).toBeTruthy();
     expect(leftEye).toMatchObject({
@@ -142,7 +141,7 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('preserves saved region order ahead of preset-only fill-ins', () => {
-    const resolved = extendCharacterConfigWithPreset(
+    const extended = extendCharacterConfigWithPreset(
       createConfig({
         regions: [
           { name: 'full_body', objects: ['*'], paddingFactor: 2.5 },
@@ -152,7 +151,7 @@ describe('extendCharacterConfigWithPreset', () => {
       })
     );
 
-    const regionNames = resolved.regions.map((region) => region.name);
+    const regionNames = extended.regions.map((region) => region.name);
 
     expect(regionNames.slice(0, 7)).toEqual([
       'full_body',
@@ -166,7 +165,7 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('still honors legacy nested profile annotation overrides during migration', () => {
-    const resolved = extendCharacterConfigWithPreset(
+    const extended = extendCharacterConfigWithPreset(
       createConfig({
         profile: {
           annotationRegions: [
@@ -180,8 +179,8 @@ describe('extendCharacterConfigWithPreset', () => {
       })
     );
 
-    const leftEye = resolved.regions.find((region) => region.name === 'left_eye');
-    const mouth = resolved.regions.find((region) => region.name === 'mouth');
+    const leftEye = extended.regions.find((region) => region.name === 'left_eye');
+    const mouth = extended.regions.find((region) => region.name === 'mouth');
 
     expect(leftEye).toMatchObject({
       name: 'left_eye',
@@ -196,30 +195,30 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('drops disabled preset regions after extension and cleans parent-child links', () => {
-    const resolved = extendCharacterConfigWithPreset(
+    const extended = extendCharacterConfigWithPreset(
       createConfig({
         disabledRegions: ['mouth', 'right_eye'],
       })
     );
 
-    expect(resolved.disabledRegions).toEqual(['mouth', 'right_eye']);
-    expect(resolved.regions.find((region) => region.name === 'mouth')).toBeUndefined();
-    expect(resolved.regions.find((region) => region.name === 'right_eye')).toBeUndefined();
-    expect(resolved.regions.find((region) => region.name === 'head')?.children).toEqual([
+    expect(extended.disabledRegions).toEqual(['mouth', 'right_eye']);
+    expect(extended.regions.find((region) => region.name === 'mouth')).toBeUndefined();
+    expect(extended.regions.find((region) => region.name === 'right_eye')).toBeUndefined();
+    expect(extended.regions.find((region) => region.name === 'head')?.children).toEqual([
       'face',
       'left_eye',
     ]);
   });
 
   it('carries preset bone resolution metadata needed by runtime consumers', () => {
-    const resolved = extendCharacterConfigWithPreset(createConfig());
+    const extended = extendCharacterConfigWithPreset(createConfig());
 
-    expect(resolved.suffixPattern).toBeDefined();
-    expect(resolved.boneNodes).toBeDefined();
+    expect(extended.suffixPattern).toBeDefined();
+    expect(extended.boneNodes).toBeDefined();
   });
 
   it('lets semantic annotation region bones resolve through preset bone nodes plus profile affixes', () => {
-    const resolved = extendCharacterConfigWithPreset(
+    const extended = extendCharacterConfigWithPreset(
       createConfig({
         characterId: 'trex',
         characterName: 'T-Rex',
@@ -233,16 +232,16 @@ describe('extendCharacterConfigWithPreset', () => {
       })
     );
 
-    const head = resolved.regions.find((region) => region.name === 'head');
-    const leftEye = resolved.regions.find((region) => region.name === 'left_eye');
-    const leftHand = resolved.regions.find((region) => region.name === 'left_hand');
-    const leftFoot = resolved.regions.find((region) => region.name === 'left_foot');
+    const head = extended.regions.find((region) => region.name === 'head');
+    const leftEye = extended.regions.find((region) => region.name === 'left_eye');
+    const leftHand = extended.regions.find((region) => region.name === 'left_hand');
+    const leftFoot = extended.regions.find((region) => region.name === 'left_foot');
 
     expect(head?.bones).toEqual(['HEAD', 'JAW']);
-    expect(resolveBoneNames(head?.bones, resolved)).toEqual(['TRex_Head', 'Head', 'TRex_Jaw', 'Jaw']);
-    expect(resolveBoneNames(leftEye?.bones, resolved)).toEqual(['TRex_eye_L', 'eye_L']);
-    expect(resolveBoneNames(leftHand?.bones, resolved)).toEqual(['TRex_L_Hand', 'L_Hand']);
-    expect(resolveBoneNames(leftFoot?.bones, resolved)).toEqual([
+    expect(resolveBoneNames(head?.bones, extended)).toEqual(['TRex_Head', 'Head', 'TRex_Jaw', 'Jaw']);
+    expect(resolveBoneNames(leftEye?.bones, extended)).toEqual(['TRex_eye_L', 'eye_L']);
+    expect(resolveBoneNames(leftHand?.bones, extended)).toEqual(['TRex_L_Hand', 'L_Hand']);
+    expect(resolveBoneNames(leftFoot?.bones, extended)).toEqual([
       'TRex_L_Foot',
       'L_Foot',
       'TRex_L_ToeBase',
@@ -251,26 +250,26 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('returns the full preset-extended profile surface instead of only bone metadata', () => {
-    const resolved = extendCharacterConfigWithPreset(
+    const extended = extendCharacterConfigWithPreset(
       createConfig({
         morphToMesh: { face: ['CustomFace'] },
         meshes: { CustomFace: { category: 'body', morphCount: 1 } },
       })
     );
 
-    expect(resolved.morphToMesh).toMatchObject({
+    expect(extended.morphToMesh).toMatchObject({
       face: ['CustomFace'],
     });
-    expect(resolved.meshes).toMatchObject({
+    expect(extended.meshes).toMatchObject({
       CustomFace: { category: 'body', morphCount: 1 },
     });
-    expect(resolved.auToBones).toBeDefined();
-    expect(resolved.auToMorphs).toBeDefined();
-    expect(resolved.visemeKeys?.length).toBeGreaterThan(0);
+    expect(extended.auToBones).toBeDefined();
+    expect(extended.auToMorphs).toBeDefined();
+    expect(extended.visemeKeys?.length).toBeGreaterThan(0);
   });
 
   it('merges saved top-level bone node overrides over preset bone mappings by key', () => {
-    const resolved = extendCharacterConfigWithPreset(
+    const extended = extendCharacterConfigWithPreset(
       createConfig({
         auPresetType: 'fish',
         boneNodes: {
@@ -280,26 +279,26 @@ describe('extendCharacterConfigWithPreset', () => {
       })
     );
 
-    expect(resolved.boneNodes).toMatchObject({
+    expect(extended.boneNodes).toMatchObject({
       HEAD: 'CustomHead',
       CUSTOM_FIN: '777',
       TAIL_BASE: '005',
       DORSAL_ROOT: '006',
     });
-    expect(resolved.bonePrefix).toBe('Bone.');
-    expect(resolved.boneSuffix).toBe('_Armature');
-    expect(resolved.suffixPattern).toBe('_\\d+$|\\.\\d+$');
+    expect(extended.bonePrefix).toBe('Bone.');
+    expect(extended.boneSuffix).toBe('_Armature');
+    expect(extended.suffixPattern).toBe('_\\d+$|\\.\\d+$');
   });
 
   it('uses fish preset annotation regions when saved top-level regions are absent', () => {
-    const resolved = extendCharacterConfigWithPreset(
+    const extended = extendCharacterConfigWithPreset(
       createConfig({
         auPresetType: 'fish',
         regions: [],
       })
     );
 
-    expect(resolved.regions.map((region) => region.name)).toEqual([
+    expect(extended.regions.map((region) => region.name)).toEqual([
       'full_body',
       'head',
       'left_eye',
@@ -316,12 +315,12 @@ describe('extendCharacterConfigWithPreset', () => {
       'gill_left',
       'gill_right',
     ]);
-    expect(resolved.regions.find((region) => region.name === 'left_eye')).toMatchObject({
+    expect(extended.regions.find((region) => region.name === 'left_eye')).toMatchObject({
       meshes: ['EYES_0'],
       parent: 'head',
       cameraAngle: 270,
     });
-    expect(resolved.regions.find((region) => region.name === 'gill_left')).toMatchObject({
+    expect(extended.regions.find((region) => region.name === 'gill_left')).toMatchObject({
       parent: 'gills',
       style: { lineDirection: 'left' },
     });
@@ -333,19 +332,9 @@ describe('extendCharacterConfigWithPreset', () => {
       regions: [{ name: 'visor', objects: ['VisorMesh'], paddingFactor: 1.4 }],
     });
 
-    const resolved = extendCharacterConfigWithPreset(config);
+    const extended = extendCharacterConfigWithPreset(config);
 
-    expect(resolved).toBe(config);
-  });
-});
-
-describe('resolveCharacterConfig', () => {
-  it('stays as a compatibility alias for the explicit extender helper', () => {
-    const config = createConfig({
-      morphToMesh: { face: ['CustomFace'] },
-    });
-
-    expect(resolveCharacterConfig(config)).toEqual(extendCharacterConfigWithPreset(config));
+    expect(extended).toBe(config);
   });
 });
 
@@ -380,15 +369,15 @@ describe('extractProfileOverrides', () => {
 
 describe('applyCharacterProfileToPreset', () => {
   it('applies flattened character profile overrides on top of the selected preset', () => {
-    const resolvedProfile = applyCharacterProfileToPreset(
+    const extendedPreset = applyCharacterProfileToPreset(
       createConfig({
         morphToMesh: { face: ['CustomFace'] },
         meshes: { CustomFace: { category: 'body', morphCount: 1 } },
       })
     );
 
-    expect(resolvedProfile?.morphToMesh.face).toEqual(['CustomFace']);
-    expect(resolvedProfile?.meshes?.CustomFace).toMatchObject({
+    expect(extendedPreset?.morphToMesh.face).toEqual(['CustomFace']);
+    expect(extendedPreset?.meshes?.CustomFace).toMatchObject({
       category: 'body',
       morphCount: 1,
     });

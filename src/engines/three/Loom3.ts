@@ -40,8 +40,8 @@ import { AnimationThree, BakedAnimationController } from './AnimationThree';
 import { getSideScale } from './balanceUtils';
 import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUpdate, type HairPhysicsDirectionConfig, type HairMorphTargets } from './hair/HairPhysicsController';
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
-import { resolvePreset } from '../../presets';
-import { applyProfileToPreset } from '../../mappings/resolveProfile';
+import { getPreset } from '../../presets';
+import { extendPresetWithProfile } from '../../mappings/extendPresetWithProfile';
 import type { NodeBase, ResolvedBones } from './types';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
@@ -173,8 +173,8 @@ export class Loom3 implements LoomLarge {
       getActiveTransitionCount(): number;
     }
   ) {
-    const basePreset = config.presetType ? resolvePreset(config.presetType) : CC4_PRESET;
-    this.config = applyProfileToPreset(basePreset, config.profile);
+    const basePreset = config.presetType ? getPreset(config.presetType) : CC4_PRESET;
+    this.config = extendPresetWithProfile(basePreset, config.profile);
     this.mixWeights = { ...this.config.auMixDefaults };
     this.animation = animation || new AnimationThree();
 

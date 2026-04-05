@@ -51,6 +51,33 @@ describe('resolveProfile', () => {
     expect(mouth?.bones).toEqual(['Jaw']);
   });
 
+  it('drops disabled preset regions and cleans parent-child links', () => {
+    const result = resolveProfile(
+      {
+        ...basePreset,
+        annotationRegions: [
+          {
+            name: 'head',
+            children: ['face', 'mouth'],
+          },
+          ...(basePreset.annotationRegions ?? []),
+          {
+            name: 'mouth',
+            parent: 'head',
+            bones: ['Jaw'],
+          },
+        ],
+      },
+      {
+        disabledRegions: ['mouth'],
+      }
+    );
+
+    expect(result.disabledRegions).toEqual(['mouth']);
+    expect(result.annotationRegions?.find((region) => region.name === 'mouth')).toBeUndefined();
+    expect(result.annotationRegions?.find((region) => region.name === 'head')?.children).toEqual(['face']);
+  });
+
   it('does not mutate the base preset', () => {
     resolveProfile(basePreset, {
       annotationRegions: [{ name: 'face', meshes: ['FaceMesh2'] }],

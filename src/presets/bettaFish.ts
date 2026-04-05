@@ -932,22 +932,24 @@ export const ANNOTATION_REGIONS: AnnotationRegion[] = [
     name: 'gills',
     bones: ['GILL_L', 'GILL_R'],
     paddingFactor: 1.6,
-    children: ['throat', 'gill'],
+    children: ['gill_left', 'gill_right'],
     expandAnimation: 'outward',
   },
   {
-    name: 'throat',
+    name: 'gill_left',
     bones: ['GILL_L', 'GILL_L_MID', 'GILL_L_TIP'],
     parent: 'gills',
     paddingFactor: 1.4,
     cameraAngle: 270,
+    style: { lineDirection: 'left' },
   },
   {
-    name: 'gill',
+    name: 'gill_right',
     bones: ['GILL_R', 'GILL_R_MID', 'GILL_R_TIP'],
     parent: 'gills',
     paddingFactor: 1.4,
     cameraAngle: 90,
+    style: { lineDirection: 'right' },
   },
 ];
 

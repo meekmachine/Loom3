@@ -398,9 +398,15 @@ describe('CC4 Preset', () => {
     it('uses tighter default camera framing for eye close-ups', () => {
       const leftEye = CC4_PRESET.annotationRegions?.find((region) => region.name === 'left_eye');
       const rightEye = CC4_PRESET.annotationRegions?.find((region) => region.name === 'right_eye');
+      const leftFoot = CC4_PRESET.annotationRegions?.find((region) => region.name === 'left_foot');
 
       expect(leftEye?.paddingFactor).toBe(0.9);
       expect(rightEye?.paddingFactor).toBe(0.9);
+      expect(leftEye?.bones).toEqual(['EYE_L']);
+      expect(rightEye?.bones).toEqual(['EYE_R']);
+      expect(leftFoot?.bones).toEqual(['FOOT_L', 'TOEBASE_L']);
+      expect(CC4_PRESET.boneNodes.HAND_L).toBe('L_Hand');
+      expect(CC4_PRESET.boneNodes.FOOT_L).toBe('L_Foot');
     });
   });
 });

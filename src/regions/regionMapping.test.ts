@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fuzzyNameMatch, resolveBoneName } from './regionMapping';
+import { fuzzyNameMatch, resolveBoneName, resolveBoneNames } from './regionMapping';
 
 describe('resolveBoneName', () => {
   it('builds prefixed/suffixed bone names from semantic nodes', () => {
@@ -14,6 +14,24 @@ describe('resolveBoneName', () => {
         boneNodes: { HEAD: '001' },
       })
     ).toBe('Bone.001_Armature');
+  });
+});
+
+describe('resolveBoneNames', () => {
+  it('tries both prefixed and exact node-name candidates for semantic region bones', () => {
+    expect(
+      resolveBoneNames(['EYE_L', 'HAND_L'], {
+        characterId: 'trex',
+        characterName: 'T-Rex',
+        modelPath: 'characters/trex.glb',
+        regions: [],
+        bonePrefix: 'TRex_',
+        boneNodes: {
+          EYE_L: 'eye_L',
+          HAND_L: 'L_Hand',
+        },
+      })
+    ).toEqual(['TRex_eye_L', 'eye_L', 'TRex_L_Hand', 'L_Hand']);
   });
 });
 

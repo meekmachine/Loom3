@@ -133,17 +133,6 @@ function mergeRegion(base: Region, override: Region): Region {
   };
 }
 
-function mergeStringRecord(
-  base?: Record<string, string>,
-  override?: Record<string, string>
-): Record<string, string> | undefined {
-  if (!base && !override) return undefined;
-  return {
-    ...(base ? { ...base } : {}),
-    ...(override ? { ...override } : {}),
-  };
-}
-
 export function mergeRegionsByName(base?: Region[], override?: Region[]): Region[] | undefined {
   if (!base && !override) return undefined;
 
@@ -238,17 +227,16 @@ function orderResolvedRegions(
 }
 
 /**
- * Resolve a saved character config into the runtime shape DPthree and similar
- * tools should consume.
+ * Extend a saved character config with its selected preset so callers get one
+ * canonical runtime object.
  *
  * Precedence:
  * 1. preset defaults
  * 2. flattened top-level profile overrides
  * 3. legacy nested `config.profile` overrides (compatibility only)
  * 4. top-level saved `config.regions` overrides by region name
- * 5. top-level saved bone naming fields remain compatibility overrides
  */
-export function resolveCharacterConfig(config: CharacterConfig): CharacterConfig {
+export function extendCharacterConfigWithPreset(config: CharacterConfig): CharacterConfig {
   const presetType = config.auPresetType;
   if (!presetType || presetType === 'custom') {
     return config;
@@ -268,10 +256,15 @@ export function resolveCharacterConfig(config: CharacterConfig): CharacterConfig
 
   return {
     ...config,
-    bonePrefix: config.bonePrefix ?? presetResolvedProfile.bonePrefix,
-    boneSuffix: config.boneSuffix ?? presetResolvedProfile.boneSuffix,
-    boneNodes: mergeStringRecord(presetResolvedProfile.boneNodes, config.boneNodes),
-    suffixPattern: config.suffixPattern ?? presetResolvedProfile.suffixPattern,
+    ...presetResolvedProfile,
     regions: resolvedRegions ?? config.regions,
   };
+}
+
+/**
+ * Backward-compatible alias for older integrations. Prefer
+ * `extendCharacterConfigWithPreset(...)` at new call sites.
+ */
+export function resolveCharacterConfig(config: CharacterConfig): CharacterConfig {
+  return extendCharacterConfigWithPreset(config);
 }

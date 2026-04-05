@@ -143,6 +143,7 @@ export type {
 
 export {
   applyCharacterProfileToPreset,
+  extendCharacterConfigWithPreset,
   extractProfileOverrides,
   resolveCharacterConfig,
   mergeRegionsByName as mergeCharacterRegionsByName,

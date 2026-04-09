@@ -308,7 +308,7 @@ import { Loom3, CC4_PRESET } from '@lovelace_lol/loom3';
 const loom = new Loom3({ profile: CC4_PRESET });
 ```
 
-You can also resolve presets by name and apply overrides without cloning the full preset:
+You can also look up presets by name and extend them without cloning the full preset:
 
 ```typescript
 import { Loom3 } from '@lovelace_lol/loom3';
@@ -386,13 +386,13 @@ Use preset helpers when you want a stable entry point by model class instead of 
 
 ```typescript
 import {
-  resolvePreset,
-  resolvePresetWithOverrides,
+  getPreset,
+  getPresetWithProfile,
 } from '@lovelace_lol/loom3';
 
-const preset = resolvePreset('cc4');
+const preset = getPreset('cc4');
 
-const resolved = resolvePresetWithOverrides('cc4', {
+const extended = getPresetWithProfile('cc4', {
   morphToMesh: { face: ['Object_9'] },
 });
 ```
@@ -566,10 +566,10 @@ import {
   analyzeModel,
   validateMappings,
   generateMappingCorrections,
-  resolvePreset,
+  getPreset,
 } from '@lovelace_lol/loom3';
 
-const preset = resolvePreset('cc4');
+const preset = getPreset('cc4');
 const modelData = extractModelData(model, meshes, animations);
 const gltfData = extractFromGLTF(gltf); // Same ModelData shape, one-step GLTF wrapper
 
@@ -673,12 +673,12 @@ Open in LoomLarge: [Properties tab](https://loomlarge.web.app/?drawer=open&tab=p
 
 ### Extending an existing preset
 
-Use `resolveProfile` to override specific mappings while keeping the rest:
+Use `extendPresetWithProfile` to override specific mappings while keeping the rest:
 
 ```typescript
-import { CC4_PRESET, resolveProfile } from '@lovelace_lol/loom3';
+import { CC4_PRESET, extendPresetWithProfile } from '@lovelace_lol/loom3';
 
-const MY_PRESET = resolveProfile(CC4_PRESET, {
+const MY_PRESET = extendPresetWithProfile(CC4_PRESET, {
 
   // Override AU12 (smile) with custom morph names
   auToMorphs: {
@@ -2117,8 +2117,8 @@ This is a compact reference for the public surface exported by `@lovelace_lol/lo
 
 ### Presets and profiles
 
-- Presets: `CC4_PRESET`, `BETTA_FISH_PRESET`, `resolvePreset()`, `resolvePresetWithOverrides()`.
-- Profile composition: `resolveProfile()`.
+- Presets: `CC4_PRESET`, `BETTA_FISH_PRESET`, `getPreset()`, `getPresetWithProfile()`.
+- Profile composition: `extendPresetWithProfile()`.
 - CC4 exports: `VISEME_KEYS`, `VISEME_JAW_AMOUNTS`, `CONTINUUM_PAIRS_MAP`, `CONTINUUM_LABELS`, `AU_INFO`, `COMPOSITE_ROTATIONS`, `AU_MIX_DEFAULTS`.
 - Compatibility helpers: `isMixedAU()`, `hasLeftRightMorphs()`.
 

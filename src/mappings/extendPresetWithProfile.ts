@@ -133,54 +133,56 @@ const mergeHairPhysicsConfig = (
 };
 
 /**
- * Merge a base preset with a profile override.
+ * Extend a base preset with a profile extension.
  *
  * Rules:
- * - Scalars: override if provided.
- * - Maps: shallow-merged by key (override wins), values cloned.
- * - Arrays: replaced when override is provided (except annotationRegions).
- * - annotationRegions: merged by region name, shallow field merge (override wins).
+ * - Scalars: extension wins when provided.
+ * - Maps: shallow-merged by key, values cloned.
+ * - Arrays: replaced when the extension provides them (except annotationRegions).
+ * - annotationRegions: merged by region name, shallow field merge (extension wins).
  */
-export function resolveProfile(base: Profile, override: Partial<Profile>): Profile {
+export function extendPresetWithProfile(base: Profile, extension?: Partial<Profile>): Profile {
+  if (!extension) {
+    return base;
+  }
+
+  const disabledRegions = extension.disabledRegions
+    ? [...extension.disabledRegions]
+    : base.disabledRegions
+      ? [...base.disabledRegions]
+      : undefined;
+
   return {
     ...base,
-    ...override,
-    auToMorphs: mergeRecord(base.auToMorphs, override.auToMorphs),
-    auToBones: mergeRecord(base.auToBones, override.auToBones),
-    boneNodes: mergeRecord(base.boneNodes, override.boneNodes),
-    morphToMesh: mergeRecord(base.morphToMesh, override.morphToMesh),
-    auFacePartToMeshCategory: base.auFacePartToMeshCategory || override.auFacePartToMeshCategory
-      ? mergeRecord(base.auFacePartToMeshCategory || {}, override.auFacePartToMeshCategory || {})
+    ...extension,
+    auToMorphs: mergeRecord(base.auToMorphs, extension.auToMorphs),
+    auToBones: mergeRecord(base.auToBones, extension.auToBones),
+    boneNodes: mergeRecord(base.boneNodes, extension.boneNodes),
+    morphToMesh: mergeRecord(base.morphToMesh, extension.morphToMesh),
+    auFacePartToMeshCategory: base.auFacePartToMeshCategory || extension.auFacePartToMeshCategory
+      ? mergeRecord(base.auFacePartToMeshCategory || {}, extension.auFacePartToMeshCategory || {})
       : undefined,
-    visemeKeys: override.visemeKeys ? [...override.visemeKeys] : [...base.visemeKeys],
-    visemeMeshCategory: override.visemeMeshCategory ?? base.visemeMeshCategory,
-    auMixDefaults: base.auMixDefaults || override.auMixDefaults
-      ? mergeRecord(base.auMixDefaults || {}, override.auMixDefaults || {})
+    visemeKeys: extension.visemeKeys ? [...extension.visemeKeys] : [...base.visemeKeys],
+    visemeMeshCategory: extension.visemeMeshCategory ?? base.visemeMeshCategory,
+    auMixDefaults: base.auMixDefaults || extension.auMixDefaults
+      ? mergeRecord(base.auMixDefaults || {}, extension.auMixDefaults || {})
       : undefined,
-    auInfo: base.auInfo || override.auInfo
-      ? mergeRecord(base.auInfo || {}, override.auInfo || {})
+    auInfo: base.auInfo || extension.auInfo
+      ? mergeRecord(base.auInfo || {}, extension.auInfo || {})
       : undefined,
-    eyeMeshNodes: override.eyeMeshNodes ?? base.eyeMeshNodes,
-    compositeRotations: override.compositeRotations ?? base.compositeRotations,
-    meshes: base.meshes || override.meshes
-      ? mergeRecord(base.meshes || {}, override.meshes || {})
+    eyeMeshNodes: extension.eyeMeshNodes ?? base.eyeMeshNodes,
+    compositeRotations: extension.compositeRotations ?? base.compositeRotations,
+    meshes: base.meshes || extension.meshes
+      ? mergeRecord(base.meshes || {}, extension.meshes || {})
       : undefined,
-    continuumPairs: base.continuumPairs || override.continuumPairs
-      ? mergeRecord(base.continuumPairs || {}, override.continuumPairs || {})
+    continuumPairs: base.continuumPairs || extension.continuumPairs
+      ? mergeRecord(base.continuumPairs || {}, extension.continuumPairs || {})
       : undefined,
-    continuumLabels: base.continuumLabels || override.continuumLabels
-      ? mergeRecord(base.continuumLabels || {}, override.continuumLabels || {})
+    continuumLabels: base.continuumLabels || extension.continuumLabels
+      ? mergeRecord(base.continuumLabels || {}, extension.continuumLabels || {})
       : undefined,
-    annotationRegions: mergeAnnotationRegions(base.annotationRegions, override.annotationRegions),
-    hairPhysics: mergeHairPhysicsConfig(base.hairPhysics, override.hairPhysics),
+    annotationRegions: mergeAnnotationRegions(base.annotationRegions, extension.annotationRegions),
+    disabledRegions,
+    hairPhysics: mergeHairPhysicsConfig(base.hairPhysics, extension.hairPhysics),
   };
-}
-
-/**
- * Explicit helper for the common operation: start with a preset, then apply a
- * profile override on top. This is the preferred name at call sites where the
- * distinction between preset and profile should stay obvious.
- */
-export function applyProfileToPreset(base: Profile, override?: Partial<Profile>): Profile {
-  return override ? resolveProfile(base, override) : base;
 }

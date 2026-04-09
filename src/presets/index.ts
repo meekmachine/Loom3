@@ -2,17 +2,16 @@
  * Loom3 - Preset Exports
  *
  * All AU presets are exported from here.
- * Frontend passes a presetType string and loom3 resolves the preset internally.
+ * Frontend passes a presetType string and Loom3 looks up the preset internally.
  */
 
 // CC4 preset (default for humanoid characters)
 export { CC4_PRESET, default } from './cc4';
 export * from './cc4';
-export { resolveProfile } from '../mappings/resolveProfile';
 
 import type { Profile } from '../mappings/types';
-import { applyProfileToPreset } from '../mappings/resolveProfile';
-export { applyProfileToPreset } from '../mappings/resolveProfile';
+import { extendPresetWithProfile } from '../mappings/extendPresetWithProfile';
+export { extendPresetWithProfile } from '../mappings/extendPresetWithProfile';
 
 // Betta fish preset (skeletal animation, no morphs)
 import { BETTA_FISH_PRESET } from './bettaFish';
@@ -31,14 +30,14 @@ export {
  */
 export type PresetType = 'cc4' | 'skeletal' | 'fish' | 'custom';
 
-// Import CC4_PRESET at module level for resolvePreset
+// Import CC4_PRESET at module level for getPreset
 import { CC4_PRESET } from './cc4';
 
 /**
- * Resolve a preset by type name.
+ * Get a preset by type name.
  * This allows frontend to pass a string instead of importing the full preset.
  */
-export function resolvePreset(presetType: PresetType | string | undefined) {
+export function getPreset(presetType: PresetType | string | undefined) {
   switch (presetType) {
     case 'fish':
     case 'skeletal':
@@ -51,12 +50,11 @@ export function resolvePreset(presetType: PresetType | string | undefined) {
 }
 
 /**
- * Resolve a preset and merge optional overrides.
+ * Get a preset, then extend it with an optional profile.
  */
-export function resolvePresetWithOverrides(
+export function getPresetWithProfile(
   presetType: PresetType | string | undefined,
-  overrides?: Partial<Profile>
+  profile?: Partial<Profile>
 ): Profile {
-  const base = resolvePreset(presetType);
-  return applyProfileToPreset(base, overrides);
+  return extendPresetWithProfile(getPreset(presetType), profile);
 }

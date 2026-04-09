@@ -1,6 +1,7 @@
 import type { Profile } from '../mappings/types';
-import { applyProfileToPreset } from '../mappings/resolveProfile';
-import { resolvePreset } from '../presets';
+import { extendPresetWithProfile } from '../mappings/extendPresetWithProfile';
+import { getPreset } from '../presets';
+import { normalizeRegionTree } from '../regions/normalizeRegionTree';
 import type { CharacterConfig, Region } from './types';
 
 const PROFILE_OVERRIDE_KEYS = [
@@ -30,6 +31,7 @@ const PROFILE_OVERRIDE_KEYS = [
   'continuumPairs',
   'continuumLabels',
   'annotationRegions',
+  'disabledRegions',
   'hairPhysics',
 ] as const satisfies readonly (keyof Profile)[];
 
@@ -194,16 +196,16 @@ export function applyCharacterProfileToPreset(config: CharacterConfig): Profile 
     return null;
   }
 
-  return applyProfileToPreset(resolvePreset(presetType), extractProfileOverrides(config));
+  return extendPresetWithProfile(getPreset(presetType), extractProfileOverrides(config));
 }
 
-function orderResolvedRegions(
-  resolvedRegions: Region[] | undefined,
+function orderExtendedRegions(
+  extendedRegions: Region[] | undefined,
   prioritizedLists: Array<Region[] | undefined>
 ): Region[] | undefined {
-  if (!resolvedRegions) return undefined;
+  if (!extendedRegions) return undefined;
 
-  const resolvedByName = new Map(resolvedRegions.map((region) => [region.name, region]));
+  const extendedByName = new Map(extendedRegions.map((region) => [region.name, region]));
   const orderedNames: string[] = [];
   const seen = new Set<string>();
 
@@ -215,14 +217,14 @@ function orderResolvedRegions(
     }
   }
 
-  for (const region of resolvedRegions) {
+  for (const region of extendedRegions) {
     if (seen.has(region.name)) continue;
     seen.add(region.name);
     orderedNames.push(region.name);
   }
 
   return orderedNames
-    .map((name) => resolvedByName.get(name))
+    .map((name) => extendedByName.get(name))
     .filter((region): region is Region => Boolean(region));
 }
 
@@ -243,28 +245,24 @@ export function extendCharacterConfigWithPreset(config: CharacterConfig): Charac
   }
 
   const profileOverrides = extractProfileOverrides(config);
-  const presetResolvedProfile = applyCharacterProfileToPreset(config);
-  if (!presetResolvedProfile) {
+  const extendedPresetProfile = applyCharacterProfileToPreset(config);
+  if (!extendedPresetProfile) {
     return config;
   }
-  const presetRegions = presetResolvedProfile.annotationRegions as Region[] | undefined;
+  const presetRegions = extendedPresetProfile.annotationRegions as Region[] | undefined;
   const mergedRegions = mergeRegionsByName(presetRegions, config.regions);
-  const resolvedRegions = orderResolvedRegions(
+  const normalizedRegions = normalizeRegionTree(
     mergedRegions,
+    profileOverrides.disabledRegions,
+  );
+  const extendedRegions = orderExtendedRegions(
+    normalizedRegions,
     [config.regions, profileOverrides.annotationRegions as Region[] | undefined, presetRegions]
   );
 
   return {
     ...config,
-    ...presetResolvedProfile,
-    regions: resolvedRegions ?? config.regions,
+    ...extendedPresetProfile,
+    regions: extendedRegions ?? config.regions,
   };
-}
-
-/**
- * Backward-compatible alias for older integrations. Prefer
- * `extendCharacterConfigWithPreset(...)` at new call sites.
- */
-export function resolveCharacterConfig(config: CharacterConfig): CharacterConfig {
-  return extendCharacterConfigWithPreset(config);
 }

@@ -1380,11 +1380,11 @@ Open in LoomLarge: [Visemes tab](https://loomlarge.web.app/?drawer=open&tab=vise
 
 This screenshot predates the current exported viseme labels. Use the table below and the shipped `VISEME_KEYS` export for the current CC4 order.
 
-Visemes are mouth shapes used for lip-sync. Loom3 includes 15 visemes with automatic jaw coupling.
+Visemes are mouth shapes used for lip-sync. Today, the shipped CC4 preset exports 15 viseme keys, and the runtime currently assumes the same 15-slot layout.
 
 ### The 15 visemes
 
-The `VISEME_KEYS` export uses unprefixed keys in this order.
+For the shipped CC4 preset, the current exported `VISEME_KEYS` order is:
 
 | Index | Key | Phoneme Example |
 |-------|-----|-----------------|

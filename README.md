@@ -22,12 +22,12 @@ Loom3 is broader than a face-controller wrapper. The library spans five practica
 ## Reading Paths
 
 Use the README in one of these paths:
-- First successful character: [Installation & Setup](#1-installation--setup) -> [Using Presets](#2-using-presets) -> [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Action Unit Control](#7-action-unit-control) -> [Viseme System](#12-viseme-system) -> [Baked Animations](#16-baked-animations)
+- First successful character: [Installation & Setup](#1-installation--setup) -> [Using Presets](#2-using-presets) -> [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Action Unit Control](#7-action-unit-control) -> [Lip Sync and Speech Animation](#12-lip-sync-and-speech-animation) -> [Baked Animations and Procedural Clips](#16-baked-animations-and-procedural-clips)
 - Retargeting an existing rig: [Using Presets](#2-using-presets) -> [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Extending & Custom Presets](#5-extending--custom-presets)
-- Skeletal-only character: [Creating Skeletal Animation Presets](#6-creating-skeletal-animation-presets) -> [Baked Animations](#16-baked-animations) -> [Regions & Geometry Helpers](#17-regions--geometry-helpers)
+- Skeletal-only character: [Creating Skeletal Animation Presets](#6-creating-skeletal-animation-presets) -> [Baked Animations and Procedural Clips](#16-baked-animations-and-procedural-clips) -> [Regions & Geometry Helpers](#17-regions--geometry-helpers)
 - Annotation or camera tooling: [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Regions & Geometry Helpers](#17-regions--geometry-helpers)
 
-## Production Playground
+## LoomLarge Companion
 
 These links open the LoomLarge companion app on useful tabs while you read the package docs. They are convenience links for exploration, not the source of truth for the npm API.
 
@@ -61,15 +61,15 @@ Use these links as companion product views while reading the package docs. They 
 ### Runtime Control
 
 7. [Action Unit Control](#7-action-unit-control)
-8. [Mix Weight System](#8-mix-weight-system)
-9. [Composite Rotation System](#9-composite-rotation-system)
+8. [Bone Blending and Mix Weights](#8-bone-blending-and-mix-weights)
+9. [Bone Rotations and Transformations](#9-bone-rotations-and-transformations)
 10. [Continuum Pairs](#10-continuum-pairs)
 11. [Direct Morph Control](#11-direct-morph-control)
-12. [Viseme System](#12-viseme-system)
-13. [Transition System](#13-transition-system)
+12. [Lip Sync and Speech Animation](#12-lip-sync-and-speech-animation)
+13. [Animation System](#13-animation-system)
 14. [Playback & State Control](#14-playback--state-control)
 15. [Hair Physics](#15-hair-physics)
-16. [Baked Animations](#16-baked-animations)
+16. [Baked Animations and Procedural Clips](#16-baked-animations-and-procedural-clips)
 
 ### Tooling & Reference
 
@@ -263,9 +263,9 @@ import { CC4_PRESET } from '@lovelace_lol/loom3';
   },
 
   auMixDefaults: {
-    // Default morph/bone blend weights (0 = morph, 1 = bone)
-    26: 0.5,  // Jaw drop: 50% morph, 50% bone
-    51: 0.7,  // Head turn: 70% bone
+    // Default morph contribution scale for mixed AUs
+    26: 0.5,  // Jaw drop: half-strength morph shaping layered onto full bone motion
+    51: 0.7,  // Head turn: strong morph accompaniment layered onto full bone motion
   },
 
   auInfo: {
@@ -1035,190 +1035,172 @@ Open in LoomLarge: [Action Units tab](https://loomlarge.web.app/?drawer=open&tab
 
 ![Grid of Loom3 Action Unit examples on a character](./assets/readme/au-values-grid.webp)
 
-Action Units are the core of FACS. Each AU represents a specific muscular movement of the face.
+Action Units are the core of Loom3’s control model. Instead of driving a character by remembering rig-specific morph names and bone channels, you drive it by semantic facial actions such as smile, blink, brow raise, jaw drop, head turn, or eye direction.
+
+That semantic layer matters because it is stable. A profile maps your rig’s actual morph targets and bones onto these controls, so a CC4 character, a custom face rig, or even a non-human preset can all be directed through the same higher-level interface.
+
+### Why FACS is useful here
+
+FACS gives Loom3 a shared vocabulary for expressive motion:
+- it is named and well-defined instead of ad hoc
+- it maps well to both artist-authored rigs and AI-assisted tooling
+- it lets a profile normalize arbitrary morph target names into reusable semantic controls
+
+That means you can say `setAU(12, 0.8)` and let the preset/profile resolve the actual morph targets and bone bindings behind the scenes.
+
+That mapping layer is also why Loom3 is not tied to one naming convention. A profile can adapt CC4 morph names, ARKit-style [blendShapes](https://developer.apple.com/documentation/arkit/arfaceanchor/blendshapes), or a studio-specific rig vocabulary into the same AU surface.
 
 ### Setting an AU immediately
 
 ```typescript
-// Set AU12 (smile) to 80% intensity
+// Smile
 loom.setAU(12, 0.8);
 
-// Set AU45 (blink) to full intensity
+// Inner brow raise
+loom.setAU(1, 0.5);
+
+// Blink
 loom.setAU(45, 1.0);
 
-// Set to 0 to deactivate
-loom.setAU(12, 0);
+// Jaw drop
+loom.setAU(26, 0.5);
 ```
 
-### Transitioning an AU over time
+### Transitioning an AU
 
 ```typescript
-async function animateSmile() {
-  // Animate AU12 to 0.8 over 200ms
-  const handle = loom.transitionAU(12, 0.8, 200);
-
-  // Wait for completion
-  await handle.promise;
-
-  // Or chain transitions
-  loom.transitionAU(12, 1.0, 200).promise.then(() => {
-    loom.transitionAU(12, 0, 300);  // Fade out
-  });
+async function react() {
+  await loom.transitionAU(1, 0.5, 120).promise;   // Brow raise
+  await loom.transitionAU(12, 0.8, 180).promise;  // Smile
 }
 ```
 
-### Getting the current AU value
+Every AU transition returns a `TransitionHandle`, so you can pause, resume, cancel, or await it.
+
+### Balance and asymmetry
+
+Many facial actions are bilateral. Loom3 lets you bias them left or right with `balance`:
+
+```typescript
+// Balance: -1 = left only, 0 = centered, 1 = right only
+loom.setAU(12, 0.8, 0);    // symmetric smile
+loom.setAU(12, 0.8, -1);   // left smile
+loom.setAU(12, 0.8, 1);    // right smile
+loom.setAU(12, 0.8, -0.4); // left-biased smile
+```
+
+You can also select a side directly:
+
+```typescript
+loom.setAU('12L', 0.8);
+loom.setAU('12R', 0.8);
+```
+
+### Current value
 
 ```typescript
 const smileAmount = loom.getAU(12);
-console.log(`Current smile: ${smileAmount}`);
+console.log(smileAmount);
 ```
 
-### Asymmetric control with balance
-
-Many AUs have left and right variants (e.g., `Mouth_Smile_L` and `Mouth_Smile_R`). The `balance` parameter lets you control them independently:
-
-```typescript
-// Balance range: -1 (left only) to +1 (right only), 0 = both equal
-
-// Smile on both sides equally
-loom.setAU(12, 0.8, 0);
-
-// Smile only on left side
-loom.setAU(12, 0.8, -1);
-
-// Smile only on right side
-loom.setAU(12, 0.8, 1);
-
-// 70% left, 30% right
-loom.setAU(12, 0.8, -0.4);
-```
-
-### String-based side selection
-
-You can also specify the side directly in the AU ID:
-
-```typescript
-// These are equivalent:
-loom.setAU('12L', 0.8);    // Left side only
-loom.setAU(12, 0.8, -1);   // Left side only
-
-loom.setAU('12R', 0.8);    // Right side only
-loom.setAU(12, 0.8, 1);    // Right side only
-```
-
----
-
-## 8. Mix Weight System
+## 8. Bone Blending and Mix Weights
 
 Open in LoomLarge: [Action Units tab](https://loomlarge.web.app/?drawer=open&tab=action-units)
 
 ![Comparison of morph-only, mixed, and bone-only AU results](./assets/readme/mix-weight-comparison.webp)
 
-Some AUs can be driven by both morph targets (blend shapes) AND bone rotations. The mix weight controls the blend between them.
+One of Loom3’s most important features is that an expressive control does not have to be “only morph” or “only bone.” Many actions feel best when both contribute.
 
-### Why mix weights?
+For example:
+- a jaw drop should usually deform the mouth shape and rotate the jaw bone
+- a head motion may need both soft-tissue morph response and skeletal motion
+- eye and tongue actions often benefit from the same blend
 
-Take jaw opening (AU26) as an example:
-- **Morph-only (weight 0)**: Vertices deform to show open mouth, but jaw bone doesn't move
-- **Bone-only (weight 1)**: Jaw bone rotates down, but no soft tissue deformation
-- **Mixed (weight 0.5)**: Both contribute equally for realistic results
+For mixed AUs, Loom3 exposes a per-AU mix weight, but it is important to describe it accurately:
+- the bone side still follows the AU normally
+- the mix weight scales how much morph contribution is layered on top
+- `0` means bone-only for that mixed AU
+- `1` means full authored morph contribution alongside the bone motion
+- values in between let you keep the skeletal motion while dialing the soft-tissue shaping up or down
 
-### Setting mix weights
+### Why this matters
+
+This is one of the mechanisms that makes the package feel more realistic. A pure blend-shape-only system can look rubbery. A pure bone-only system can look rigid. Mixed AUs let you keep the anatomical motion while dialing in the extra shaping the face needs.
+
+### Example
 
 ```typescript
-// Get the default mix weight for AU26
-const weight = loom.getAUMixWeight(26);  // e.g., 0.5
+// Jaw drop with the preset default
+const defaultWeight = loom.getAUMixWeight(26);
 
-// Set to pure morph
+// Bone-only jaw
 loom.setAUMixWeight(26, 0);
 
-// Set to pure bone
-loom.setAUMixWeight(26, 1);
+// Morph-light jaw
+loom.setAUMixWeight(26, 0.25);
 
-// Set to 70% bone, 30% morph
-loom.setAUMixWeight(26, 0.7);
+// Morph-heavy jaw
+loom.setAUMixWeight(26, 0.75);
 ```
 
-### Which AUs support mixing?
+Only AUs that have both morph and bone bindings participate in this system. You can check that in tooling or with preset helpers such as `isMixedAU()`.
 
-Only AUs that have both `auToMorphs` AND `auToBones` entries support mixing. Common examples:
-- AU26 (Jaw Drop)
-- AU27 (Mouth Stretch)
-- AU51-56 (Head movements)
-- AU61-72 (Shared + independent eye movements)
-
-```typescript
-import { isMixedAU } from '@lovelace_lol/loom3';
-
-if (isMixedAU(26)) {
-  console.log('AU26 supports morph/bone mixing');
-}
-```
-
----
-
-## 9. Composite Rotation System
+## 9. Bone Rotations and Transformations
 
 Open in LoomLarge: [Action Units tab](https://loomlarge.web.app/?drawer=open&tab=action-units) | [Bones tab](https://loomlarge.web.app/?drawer=open&tab=bones)
 
 ![Diagram showing pitch, yaw, and roll axes on the head](./assets/readme/head-axes-diagram.svg)
 
-Bones like the head and eyes need multi-axis rotation (pitch, yaw, roll). The composite rotation system handles this automatically.
+Loom3 does not only animate morph targets. It also drives bone rotation and translation, and it does that in a way that can still be mixed with morph motion and mixer playback.
 
-### How it works
+This matters for:
+- head direction
+- eye direction
+- jaw motion
+- tongue motion
+- rigs where skeletal motion carries a large part of the expressive result
 
-When you set an AU that affects a bone rotation, Loom3:
-1. Queues the rotation update in `pendingCompositeNodes`
-2. At the end of `update()`, calls `flushPendingComposites()`
-3. Applies all three axes (pitch, yaw, roll) together to prevent gimbal issues
+### Composite rotations
 
-### Supported bones and their axes
+Bones like the head and eyes need multiple axes working together:
+- pitch
+- yaw
+- roll
 
-| Bone | Pitch (X) | Yaw (Y) | Roll (Z) |
-|------|-----------|---------|----------|
-| HEAD | AU53 (up) / AU54 (down) | AU51 (left) / AU52 (right) | AU55 (tilt left) / AU56 (tilt right) |
-| EYE_L | AU63 (up) / AU64 (down) | AU61 (left) / AU62 (right) | - |
-| EYE_R | AU63 (up) / AU64 (down) | AU61 (left) / AU62 (right) | - |
-| JAW | AU25-27 (open) | AU30 (left) / AU35 (right) | - |
-| TONGUE | AU37 (up) / AU38 (down) | AU39 (left) / AU40 (right) | AU41 / AU42 (tilt) |
-
-### Example: Moving the head
+Loom3’s composite rotation system groups those axes so one semantic action can resolve into the right combination of bone channels and limits.
 
 ```typescript
-// Turn head left 50%
+// Turn head left
 loom.setAU(51, 0.5);
 
-// Turn head right 50%
-loom.setAU(52, 0.5);
-
-// Tilt head up 30%
+// Tilt head up
 loom.setAU(53, 0.3);
 
-// Combine: turn left AND tilt up
-loom.setAU(51, 0.5);
-loom.setAU(53, 0.3);
-// Both are applied together in a single composite rotation
+// Both motions combine on the same head bone
 ```
 
-### Example: Eye gaze
+### Eye direction
 
 ```typescript
-// Look left
-loom.setAU(61, 0.7);
-
-// Look right
-loom.setAU(62, 0.7);
-
-// Look up
-loom.setAU(63, 0.5);
-
-// Look down-right (combined)
-loom.setAU(62, 0.6);
-loom.setAU(64, 0.4);
+loom.setAU(61, 0.6); // eyes left
+loom.setAU(64, 0.4); // eyes down
 ```
 
----
+### Why quaternions show up here
+
+Under the hood, Loom3 uses quaternion composition for composite bone rotation and quaternion tracks for generated clips. You do not need to know quaternion math to use the package, but it is worth knowing why they matter: they are the standard way to represent 3D orientation cleanly and interpolate it without the common problems you get from simple Euler-angle composition.
+
+If you want the intuition behind that, the right explainer is 3Blue1Brown’s:
+[Quaternions and 3d rotation, explained interactively](https://www.3blue1brown.com/lessons/quaternions-and-3d-rotation)
+
+### Translation channels
+
+Loom3 also supports bone translation bindings (`tx`, `ty`, `tz`) where a preset uses them. That means a generated clip can combine:
+- morph influence tracks
+- quaternion bone rotation tracks
+- bone translation tracks
+
+inside the same mixer-playable animation.
 
 ## 10. Continuum Pairs
 
@@ -1226,105 +1208,32 @@ Open in LoomLarge: [Action Units tab](https://loomlarge.web.app/?drawer=open&tab
 
 ![Continuum slider UI for paired Loom3 AUs](./assets/readme/continuum-slider-ui.webp)
 
-Continuum pairs are bidirectional AU pairs that represent opposite directions on the same axis. They're linked so that activating one should deactivate the other.
+Continuum pairs are the cleanest way to work with bidirectional controls such as:
+- head left / right
+- head up / down
+- eye left / right
+- eye up / down
+- jaw shift left / right
 
-### Pair mappings
-
-| Pair | Description |
-|------|-------------|
-| AU51 ↔ AU52 | Head turn left / right |
-| AU53 ↔ AU54 | Head up / down |
-| AU55 ↔ AU56 | Head tilt left / right |
-| AU61 ↔ AU62 | Eyes look left / right |
-| AU63 ↔ AU64 | Eyes look up / down |
-| AU30 ↔ AU35 | Jaw shift left / right |
-| AU37 ↔ AU38 | Tongue up / down |
-| AU39 ↔ AU40 | Tongue left / right |
-| AU73 ↔ AU74 | Tongue narrow / wide |
-| AU76 ↔ AU77 | Tongue tip up / down |
-
-### Negative value shorthand (recommended)
-
-The simplest way to work with continuum pairs is using **negative values**. When you pass a negative value to `setAU()` or `transitionAU()`, the engine automatically activates the paired AU instead:
+You can use the dedicated API:
 
 ```typescript
-// Head looking left at 50% (AU51 is "head left")
-loom.setAU(51, 0.5);
-
-// Head looking right at 50% - just use a negative value!
-loom.setAU(51, -0.5);  // Automatically activates AU52 at 0.5
-
-// This is equivalent to manually setting the pair:
-loom.setAU(51, 0);
-loom.setAU(52, 0.5);
+loom.setContinuum(51, 52, -0.5); // head left
+loom.setContinuum(51, 52, 0.7);  // head right
 ```
 
-This works for transitions too:
+or the shorthand most people prefer:
 
 ```typescript
-async function sweepHead() {
-  // Animate head from left to right over 500ms
-  await loom.transitionAU(51, 0.5, 250).promise;   // Turn left
-  await loom.transitionAU(51, -0.5, 500).promise;  // Turn right (activates AU52)
-}
+loom.setAU(51, 0.5);   // left
+loom.setAU(51, -0.5);  // right via the paired AU
 ```
 
-### The setContinuum method
-
-For explicit continuum control, use `setContinuum()` with a single value from -1 to +1:
+That same shorthand works for transitions:
 
 ```typescript
-// setContinuum(negativeAU, positiveAU, value)
-// value: -1 = full negative, 0 = neutral, +1 = full positive
-
-// Head centered
-loom.setContinuum(51, 52, 0);
-
-// Head 50% left
-loom.setContinuum(51, 52, -0.5);
-
-// Head 70% right
-loom.setContinuum(51, 52, 0.7);
+await loom.transitionAU(51, -0.6, 300).promise;
 ```
-
-With smooth animation:
-
-```typescript
-async function animateContinuumPairs() {
-  // Animate head from current position to 80% right over 300ms
-  await loom.transitionContinuum(51, 52, 0.8, 300).promise;
-
-  // Animate eyes to look left over 200ms
-  await loom.transitionContinuum(61, 62, -0.6, 200).promise;
-}
-```
-
-### Manual pair management
-
-You can also manually manage pairs by setting each AU individually:
-
-```typescript
-// Head looking left at 50%
-loom.setAU(51, 0.5);
-loom.setAU(52, 0);  // Right should be 0
-
-// Head looking right at 70%
-loom.setAU(51, 0);  // Left should be 0
-loom.setAU(52, 0.7);
-```
-
-### The CONTINUUM_PAIRS_MAP
-
-You can access pair information programmatically:
-
-```typescript
-import { CONTINUUM_PAIRS_MAP } from '@lovelace_lol/loom3';
-
-const pair = CONTINUUM_PAIRS_MAP[51];
-// { pairId: 52, isNegative: true, axis: 'yaw', node: 'HEAD' }
-```
-
----
 
 ## 11. Direct Morph Control
 
@@ -1332,223 +1241,242 @@ Open in LoomLarge: [Meshes tab](https://loomlarge.web.app/?drawer=open&tab=meshe
 
 ![Direct morph control screenshot with a live morph preview](./assets/readme/direct-morph-control.webp)
 
-Sometimes you need to control morph targets directly by name, bypassing the AU system.
+Sometimes the semantic AU layer is not the right tool. You may already know the exact morph target you want, or you may be building a custom effect that is outside the preset vocabulary.
 
-### Setting a morph immediately
+That is what direct morph control is for.
 
 ```typescript
-// Set a specific morph to 50%
 loom.setMorph('Mouth_Smile_L', 0.5);
-
-// Set on specific meshes only
-loom.setMorph('Mouth_Smile_L', 0.5, ['CC_Base_Body']);
+loom.transitionMorph('Eye_Blink_L', 1.0, 100, ['CC_Base_Body']);
 ```
 
-### Transitioning a morph
+You can also target morph influences by index when a workflow already has the numeric slot:
 
 ```typescript
-async function animateMorphs() {
-  // Animate morph over 200ms
-  const handle = loom.transitionMorph('Mouth_Smile_L', 0.8, 200);
-
-  // With mesh targeting
-  loom.transitionMorph('Eye_Blink_L', 1.0, 100, ['CC_Base_Body']);
-
-  // Wait for completion
-  await handle.promise;
-}
+loom.setMorphInfluence(12, 0.3);
+loom.transitionMorphInfluence(12, 0.8, 200);
 ```
 
-### Resolving current morph targets
+This is the lower-level path. It is useful, but the main value of Loom3 is still that most of the time you do not need to think at this level.
 
-```typescript
-const targets = loom.resolveMorphTargets('Mouth_Smile_L', ['CC_Base_Body']);
-const value = targets.length > 0 ? (targets[0].infl[targets[0].idx] ?? 0) : 0;
-```
-
-### Morph caching
-
-Loom3 caches morph target lookups for performance. The first time you access a morph, it searches all meshes and caches the index. Subsequent accesses are O(1).
-
----
-
-## 12. Viseme System
+## 12. Lip Sync and Speech Animation
 
 Open in LoomLarge: [Visemes tab](https://loomlarge.web.app/?drawer=open&tab=visemes) | [Speech tab](https://loomlarge.web.app/?drawer=open&tab=speech)
 
 ![Grid of all 15 Loom3 viseme mouth shapes](./assets/readme/viseme-grid.webp)
 
-This screenshot predates the current exported viseme labels. Use the table below and the shipped `VISEME_KEYS` export for the current CC4 order.
+Most rigs represent speech primarily through morph targets: mouth shapes that are baked into the character as named blend-shape influences. Realistic speech usually needs more than that, though. The jaw has to move as well, and the relative degree of lip and jaw activation changes the character of the speech.
 
-Visemes are mouth shapes used for lip-sync. Today, the shipped CC4 preset exports 15 viseme keys, and the runtime currently assumes the same 15-slot layout.
+A viseme is the visual mouth-shape side of speech animation: the visible shape family associated with a sound or phoneme sequence. In Loom3 today, visemes are still the low-level runtime API surface, but the user-facing concept is broader than that: speech animation is lip shaping plus jaw motion over time.
 
-### The 15 visemes
+That broad idea is explored in the JALI paper, which frames speech animation around two visually distinct anatomical actions, jaw and lip, and shows how changing their relative activation can approximate different styles of speech:
 
-For the shipped CC4 preset, the current exported `VISEME_KEYS` order is:
+- [JALI project page](https://www.dgp.toronto.edu/~elf/jali.html)
+- [JALI paper PDF](https://www.dgp.toronto.edu/~elf/JALISIG16.pdf)
 
-| Index | Key | Phoneme Example |
-|-------|-----|-----------------|
-| 0 | AE | "c**a**t" |
-| 1 | Ah | "f**a**ther" |
-| 2 | B_M_P | "**b**at, **m**an, **p**op" |
-| 3 | Ch_J | "**ch**eck, **j**et" |
-| 4 | EE | "b**ee**" |
-| 5 | Er | "h**er**" |
-| 6 | F_V | "**f**un, **v**an" |
-| 7 | Ih | "s**i**t" |
-| 8 | K_G_H_NG | "**k**ite, **g**o, **h**at, si**ng**" |
-| 9 | Oh | "g**o**" |
-| 10 | R | "**r**ed" |
-| 11 | S_Z | "**s**un, **z**oo" |
-| 12 | T_L_D_N | "**t**op, **l**ip, **d**og, ru**n**" |
-| 13 | Th | "**th**ink" |
-| 14 | W_OO | "**w**e, t**oo**" |
+Loom3 is a good fit for this kind of speech animation because it can:
+- drive lip-shape morph targets
+- drive jaw bone motion
+- turn timed speech curves into mixer-playable animation
+- blend speech animation with the rest of the character’s motion
 
-### Setting a viseme
+### The current low-level API
+
+Today, the low-level speech API in Loom3 is still viseme-based:
 
 ```typescript
-// Set viseme 1 (Ah) to full intensity
 loom.setViseme(1, 1.0);
-
-// With jaw scale (0-1, default 1)
-loom.setViseme(1, 1.0, 0.5);  // Half jaw opening
+loom.transitionViseme(3, 1.0, 80);
 ```
 
-### Transitioning visemes
+That is an implementation detail readers should know, but the higher-level concept is still lip sync and speech animation.
 
-Viseme transitions default to 80ms and use the standard `easeInOutQuad` easing when no duration is provided.
+For the shipped CC4 preset, the viseme indices are the zero-based positions in the exported `VISEME_KEYS` array shown below.
+
+### Current shipped CC4 viseme order
+
+For the shipped CC4 preset, the exported `VISEME_KEYS` order is:
 
 ```typescript
-// Animate to a viseme using the default 80ms duration
-const handle = loom.transitionViseme(3, 1.0); // Ch_J in the shipped CC4 preset
-
-// Disable jaw coupling (duration can be omitted to use the 80ms default)
-loom.transitionViseme(3, 1.0, 80, 0);
+[
+  'AE',
+  'Ah',
+  'B_M_P',
+  'Ch_J',
+  'EE',
+  'Er',
+  'F_V',
+  'Ih',
+  'K_G_H_NG',
+  'Oh',
+  'R',
+  'S_Z',
+  'T_L_D_N',
+  'Th',
+  'W_OO',
+]
 ```
 
-### Automatic jaw coupling
+### Jaw contribution
 
-Jaw coupling is currently split across two paths:
+The jaw path is important enough to state explicitly:
+- live `setViseme()` and `transitionViseme()` move the viseme morphs and can also drive jaw bone motion through `jawScale`
+- clip generation can also auto-generate jaw rotation from viseme curves
+
+The current shipped implementation is still split:
 - clip generation uses `profile.visemeJawAmounts`
-- live `setViseme()` and `transitionViseme()` still use the runtime's internal jaw table
+- live viseme playback still uses the runtime’s internal jaw table
 
-In both cases, `jawScale` multiplies the jaw contribution:
-- `jawScale = 1.0`: Normal jaw opening
-- `jawScale = 0.5`: Half jaw opening
-- `jawScale = 0`: Skip jaw contribution for that viseme call
+That mismatch is real, and the broader viseme / lip / jaw overhaul is tracked in issue `#100`.
 
-### Lip-sync example
+### Using jawScale
 
 ```typescript
-async function speak(phonemes: number[]) {
-  const visemeCount = 15; // CC4 preset
+// Full jaw contribution
+loom.setViseme(1, 1.0, 1.0);
 
-  for (const viseme of phonemes) {
-    // Clear previous viseme
-    for (let i = 0; i < visemeCount; i++) loom.setViseme(i, 0);
+// More lip-heavy, less jaw-heavy speech
+loom.setViseme(1, 1.0, 0.4);
 
-    // Transition to new viseme
-    await loom.transitionViseme(viseme, 1.0, 80).promise;
-
-    // Hold briefly
-    await new Promise(r => setTimeout(r, 100));
-  }
-
-  // Return to neutral
-  for (let i = 0; i < visemeCount; i++) loom.setViseme(i, 0);
-}
-
-// Example sequence in shipped CC4 order
-speak([1, 4, 11, 9]);
+// Morph shape only, no jaw contribution
+loom.setViseme(1, 1.0, 0);
 ```
 
----
+That control is one of the ways you can approximate different styles of speech even before building a fuller speech pipeline.
 
-## 13. Transition System
+### Speech clip example
+
+```typescript
+const clip = loom.snippetToClip('hello-speech', {
+  '1': [
+    { time: 0.00, intensity: 0.0 },
+    { time: 0.08, intensity: 1.0 },
+    { time: 0.16, intensity: 0.0 },
+  ],
+  '4': [
+    { time: 0.16, intensity: 0.0 },
+    { time: 0.26, intensity: 0.9 },
+    { time: 0.34, intensity: 0.0 },
+  ],
+}, {
+  snippetCategory: 'visemeSnippet',
+  jawScale: 0.8,
+});
+
+if (clip) {
+  loom.playClip(clip, { playbackRate: 1.0, loop: false });
+}
+```
+
+## 13. Animation System
 
 Open in LoomLarge: [Animation tab](https://loomlarge.web.app/?drawer=open&tab=animation)
 
 ![Diagram showing a Loom3 transition timeline with easing and handle methods](./assets/readme/transition-timeline-easing.svg)
 
-All animated changes in Loom3 go through the transition system, which provides smooth interpolation with easing.
+This is one of the most important sections of the package.
 
-### TransitionHandle
+Loom3 is not just “some transition helpers.” It is an animation system that lets imported clips and procedurally generated clips live in the same `AnimationMixer` world.
 
-Every transition method returns a `TransitionHandle`:
+That is what makes the library useful for real-time, socially interactive characters:
+- body animation can come from imported clips
+- facial expression can come from AU transitions
+- gaze, speech, or prosody can be generated procedurally
+- all of it can still be mixed, layered, crossfaded, weighted, paused, and resumed coherently
+
+### Four terms worth knowing
+
+#### Transition
+
+A direct runtime interpolation such as:
+- `transitionAU()`
+- `transitionMorph()`
+- `transitionViseme()`
+
+This is the simplest path when you want to change a value smoothly right now.
+
+#### Curve
+
+A time-varying control signal for one channel.
+
+In Loom3, a curve might target:
+- an AU
+- a viseme slot
+- a morph target
+
+#### Snippet
+
+A named bundle of curves.
+
+Snippets are compact, editable, and easy to reason about. They are a good authoring shape for things like:
+- eye/head motion
+- speech animation
+- expressive micro-behaviors
+
+#### Clip
+
+A real `AnimationMixer` clip built from tracks.
+
+When Loom3 compiles curves into a clip, that clip can contain:
+- morph influence tracks
+- quaternion bone rotation tracks
+- bone translation tracks
+
+### Why this is exciting
+
+This is the bridge between semantic authoring and real animation infrastructure.
+
+You author something compact and meaningful, and Loom3 expands it into the constituent animation tracks the mixer actually plays. A single AU curve can eventually become rig-specific morph changes, quaternion bone rotation, and translation tracks without forcing you to author each low-level track by hand.
+
+That is the core value:
+- easy to compose
+- still high performance
+- still mixable with imported animation
+
+### Transition playback vs mixer playback
+
+Use transitions when:
+- you want a direct runtime response
+- you are reacting immediately to state or user input
+- you do not need a reusable clip
+
+Use mixer playback when:
+- you want a reusable animation asset
+- you want stronger layering and mixing behavior
+- you want generated motion to live beside baked motion
+
+### Combined example
 
 ```typescript
-interface TransitionHandle {
-  promise: Promise<void>;  // Resolves when transition completes
-  pause(): void;           // Pause this transition
-  resume(): void;          // Resume this transition
-  cancel(): void;          // Cancel immediately
+loom.loadAnimationClips(gltf.animations);
+
+// Start a baked body loop
+loom.playAnimation('Idle', {
+  intensity: 1.0,
+  loop: true,
+});
+
+// Build a procedural gaze clip
+const gazeClip = loom.snippetToClip('gaze-left', {
+  '61': [
+    { time: 0.0, intensity: 0.0 },
+    { time: 0.25, intensity: 0.7 },
+  ],
+  '62': [
+    { time: 0.0, intensity: 0.0 },
+    { time: 0.25, intensity: 0.0 },
+  ],
+}, {
+  loop: false,
+});
+
+if (gazeClip) {
+  loom.playClip(gazeClip, { loop: false, playbackRate: 1.0 });
 }
+
+// Layer live facial response on top
+loom.transitionAU(12, 0.6, 180);
 ```
-
-### Using handles
-
-```typescript
-async function controlHandle() {
-  // Start a transition
-  const handle = loom.transitionAU(12, 1.0, 500);
-
-  // Pause it
-  handle.pause();
-
-  // Resume later
-  handle.resume();
-
-  // Or cancel entirely
-  handle.cancel();
-
-  // Wait for completion
-  await handle.promise;
-}
-```
-
-### Combining multiple transitions
-
-When you call `transitionAU`, it may create multiple internal transitions (one per morph target). The returned handle controls all of them:
-
-```typescript
-// AU12 might affect Mouth_Smile_L and Mouth_Smile_R
-const handle = loom.transitionAU(12, 1.0, 200);
-
-// Pausing the handle pauses both morph transitions
-handle.pause();
-```
-
-### Easing
-
-The default easing is `easeInOutQuad`. Custom easing can be provided when using the Animation system directly:
-
-```typescript
-// The AnimationThree class supports custom easing
-animation.addTransition(
-  'custom',
-  0,
-  1,
-  200,
-  (v) => console.log(v),
-  (t) => t * t  // Custom ease-in quadratic
-);
-```
-
-### Active transition count
-
-```typescript
-const count = loom.getActiveTransitionCount();
-console.log(`${count} transitions in progress`);
-```
-
-### Clearing all transitions
-
-```typescript
-// Cancel everything immediately
-loom.clearTransitions();
-```
-
----
 
 ## 14. Playback & State Control
 
@@ -1556,58 +1484,45 @@ Open in LoomLarge: [Animation tab](https://loomlarge.web.app/?drawer=open&tab=an
 
 ![Playback controls UI showing Loom3 pause and resume controls](./assets/readme/pause-resume-controls.webp)
 
-### Pausing and resuming
+Loom3 gives you handle-based control at both layers:
+- transition handles for direct runtime interpolation
+- animation handles for mixer-backed clips
+
+### Transition handles
 
 ```typescript
-// Pause all animation updates
-loom.pause();
-
-// Check pause state
-if (loom.getPaused()) {
-  console.log('Animation is paused');
-}
-
-// Resume
-loom.resume();
+const handle = loom.transitionAU(12, 1.0, 500);
+handle.pause();
+handle.resume();
+handle.cancel();
+await handle.promise;
 ```
 
-When paused, `loom.update()` stops processing transitions, but you can still call `setAU()` for immediate changes.
-
-### Resetting to neutral
+### Engine pause and resume
 
 ```typescript
-// Reset everything to rest state
+loom.pause();
+loom.resume();
+console.log(loom.getPaused());
+```
+
+### Neutral reset
+
+```typescript
 loom.resetToNeutral();
 ```
 
-This:
-- Clears all AU values to 0
-- Cancels all active transitions
-- Resets all morph targets to 0
-- Returns all bones to their original position/rotation
-
-### Mesh visibility
-
-```typescript
-// Get list of all meshes
-const meshes = loom.getMeshList();
-// Returns: [{ name: 'CC_Base_Body', visible: true, morphCount: 80 }, ...]
-
-// Hide a mesh
-loom.setMeshVisible('CC_Base_Hair', false);
-
-// Show it again
-loom.setMeshVisible('CC_Base_Hair', true);
-```
+That reset:
+- clears cached AU values
+- cancels active transitions
+- zeros morph influences
+- returns bones to their base pose
 
 ### Cleanup
 
 ```typescript
-// When done, dispose of resources
 loom.dispose();
 ```
-
----
 
 ## 15. Hair Physics
 
@@ -1615,19 +1530,14 @@ Open in LoomLarge: [Hair tab](https://loomlarge.web.app/?drawer=open&tab=hair)
 
 ![Animated GIF showing Loom3 hair physics reacting to head motion](./assets/readme/hair-physics.gif)
 
-Loom3 includes a built-in hair physics system that drives morph targets through the AnimationMixer.
-It is **mixer-only** (no per-frame morph LERP), and it reacts to **head rotation** coming from AUs.
+Loom3 includes a built-in hair physics system that is also mixer-backed. It does not fight the rest of the animation system; it uses the same clip-oriented infrastructure.
 
-### How it works
+At a high level, hair motion is built from:
+- idle/wind loops
+- short impulse clips triggered by head motion
+- a gravity-style clip scrubbed by head pitch
 
-Hair motion is decomposed into three clip families:
-
-1. **Idle/Wind loop** - continuous sway and optional wind.
-2. **Impulse clips** - short oscillations triggered by *changes* in head yaw/pitch.
-3. **Gravity clip** - a single clip that is **scrubbed** by head pitch (up/down).
-
-All clips are created with `buildClip` and applied to the mixer.  
-When you update head AUs (e.g. `setAU`, `setContinuum`, `transitionAU`), hair updates automatically.
+That means head AUs and head continuum controls can feed secondary motion without requiring a separate bespoke runtime.
 
 ### Basic setup
 
@@ -1638,71 +1548,15 @@ loader.load('/character.glb', (gltf) => {
   const meshes = collectMorphMeshes(gltf.scene);
   loom.onReady({ meshes, model: gltf.scene });
 
-  // Register hair + eyebrow meshes (filters using CC4_MESHES category tags)
   const allObjects: Object3D[] = [];
   gltf.scene.traverse((obj) => allObjects.push(obj));
   loom.registerHairObjects(allObjects);
 
-  // Enable physics (starts idle + gravity + impulse clips)
   loom.setHairPhysicsEnabled(true);
 });
 ```
 
-### Inspecting registered hair objects
-
-```typescript
-const hairObjects = loom.getRegisteredHairObjects();
-console.log(hairObjects.map((mesh) => mesh.name));
-```
-
-### Configuration (profile defaults)
-
-Hair physics defaults live in the preset/profile and are applied automatically at init:
-
-```typescript
-import type { Profile } from '@lovelace_lol/loom3';
-
-const profile: Profile = {
-  // ...all your usual AU mappings...
-  hairPhysics: {
-    stiffness: 7.5,
-    damping: 0.18,
-    inertia: 3.5,
-    gravity: 12,
-    responseScale: 2.5,
-    idleSwayAmount: 0.12,
-    idleSwaySpeed: 1.0,
-    windStrength: 0,
-    windDirectionX: 1.0,
-    windDirectionZ: 0,
-    windTurbulence: 0.3,
-    windFrequency: 1.4,
-    idleClipDuration: 10,
-    impulseClipDuration: 1.4,
-    direction: {
-      yawSign: -1,
-      pitchSign: -1,
-    },
-    morphTargets: {
-      swayLeft: { key: 'L_Hair_Left', axis: 'yaw' },
-      swayRight: { key: 'L_Hair_Right', axis: 'yaw' },
-      swayFront: { key: 'L_Hair_Front', axis: 'pitch' },
-      fluffRight: { key: 'Fluffy_Right', axis: 'yaw' },
-      fluffBottom: { key: 'Fluffy_Bottom_ALL', axis: 'pitch' },
-      headUp: {
-        Hairline_High_ALL: { value: 0.45, axis: 'pitch' },
-        Length_Short: { value: 0.65, axis: 'pitch' },
-      },
-      headDown: {
-        L_Hair_Front: { value: 2.0, axis: 'pitch' },
-        Fluffy_Bottom_ALL: { value: 1.0, axis: 'pitch' },
-      },
-    },
-  },
-};
-```
-
-### Configuration (runtime overrides)
+### Runtime tuning
 
 ```typescript
 loom.setHairPhysicsConfig({
@@ -1711,37 +1565,9 @@ loom.setHairPhysicsConfig({
   inertia: 3.5,
   gravity: 12,
   responseScale: 2.5,
-  idleSwayAmount: 0.12,
-  idleSwaySpeed: 1.0,
-  windStrength: 0,
-  windDirectionX: 1.0,
-  windDirectionZ: 0,
-  windTurbulence: 0.3,
-  windFrequency: 1.4,
-  idleClipDuration: 10,
-  impulseClipDuration: 1.4,
-
-  // Direction mapping (signs) – adjust if hair goes the wrong way.
   direction: {
-    yawSign: -1,   // hair lags opposite head yaw
-    pitchSign: -1, // head down drives forward hair motion
-  },
-
-  // Morph target mapping (override per character/rig)
-  morphTargets: {
-    swayLeft: 'L_Hair_Left',
-    swayRight: 'L_Hair_Right',
-    swayFront: 'L_Hair_Front',
-    fluffRight: 'Fluffy_Right',
-    fluffBottom: 'Fluffy_Bottom_ALL',
-    headUp: {
-      Hairline_High_ALL: 0.45,
-      Length_Short: 0.65,
-    },
-    headDown: {
-      L_Hair_Front: 2.0,
-      Fluffy_Bottom_ALL: 1.0,
-    },
+    yawSign: -1,
+    pitchSign: -1,
   },
 });
 ```
@@ -1751,146 +1577,87 @@ loom.setHairPhysicsConfig({
 ```typescript
 const missing = loom.validateHairMorphTargets();
 if (missing.length > 0) {
-  console.warn('Missing hair morph targets:', missing);
+  console.warn(missing);
 }
 ```
 
-Loom3 also logs a warning the first time it encounters a missing hair morph key.
+If hair moves the wrong way, the first thing to inspect is the direction mapping and the per-rig morph target mapping.
 
-### Applying styling state
-
-Use the engine helpers when you want to toggle brows, outlines, or simple per-object visual state from a UI:
-
-```typescript
-loom.applyHairStateToObject('Sideburns', {
-  visible: true,
-  outline: { show: true, color: '#7dd3fc', opacity: 0.6 },
-  color: {
-    baseColor: '#8b5e3c',
-    emissive: '#000000',
-    emissiveIntensity: 0,
-  },
-});
-```
-
-### Applying morphs to named hair meshes
-
-```typescript
-loom.setMorphOnMeshes(
-  ['Side_part_wavy_1', 'Side_part_wavy_2'],
-  'L_Hair_Front',
-  0.35
-);
-```
-
-### Notes
-
-- **Head rotation input** comes from AUs (e.g. 51/52 yaw, 53/54 pitch).  
-  Hair updates when those AUs change.
-- **Mesh selection** comes from the preset (`CC4_MESHES` categories).  
-  Hair morph target *names* live in the preset/profile (`Profile.hairPhysics`) and can be overridden at runtime.
-- **Direction/morphs are explicit** so you can expose a clean, user-friendly API.
-
-### Troubleshooting
-
-- Hair moves the wrong direction → flip `direction.yawSign` or `direction.pitchSign`.
-- Wrong morphs are moving → override `morphTargets` with your rig’s names.
-- Need stronger response → increase `responseScale` or the `headDown/headUp` values.
-
----
-
-## 16. Baked Animations
+## 16. Baked Animations and Procedural Clips
 
 Open in LoomLarge: [Animation tab](https://loomlarge.web.app/?drawer=open&tab=animation)
 
-Loom3 can play baked skeletal animations from your GLB/GLTF files using Three.js AnimationMixer. This allows you to combine pre-made animations (idle, walk, gestures) with real-time facial control.
+This section is the practical API surface for working with `AnimationMixer` in Loom3.
 
-### Loading animations
-
-After loading your model, pass the animations array to Loom3:
+### Loading baked clips from a GLB/GLTF
 
 ```typescript
-const loader = new GLTFLoader();
 loader.load('/character.glb', (gltf) => {
   scene.add(gltf.scene);
 
   const meshes = collectMorphMeshes(gltf.scene);
   loom.onReady({ meshes, model: gltf.scene });
-
-  // Load baked animations from the GLB file
   loom.loadAnimationClips(gltf.animations);
-
-  // Start the internal update loop
-  loom.start();
 });
 ```
 
-### Listing available animations
+### Listing clips
 
 ```typescript
 const clips = loom.getAnimationClips();
 console.log(clips);
-// [
-//   { name: 'Idle', duration: 4.0, trackCount: 52 },
-//   { name: 'Walk', duration: 1.2, trackCount: 52 },
-//   { name: 'Wave', duration: 2.5, trackCount: 24 },
-// ]
 ```
 
-### Playing animations
+### Playing a baked clip
 
 ```typescript
-async function playWave() {
-  // Play an animation with default settings (looping)
-  loom.playAnimation('Idle');
+const handle = loom.playAnimation('Wave', {
+  speed: 1.0,
+  intensity: 1.0,
+  loop: false,
+  loopMode: 'once',
+  clampWhenFinished: true,
+});
 
-  // Play with options
-  const handle = loom.playAnimation('Wave', {
-    speed: 1.0,           // Playback speed (1.0 = normal)
-    intensity: 1.0,       // Weight/intensity (0-1)
-    loop: false,          // Don't loop
-    loopMode: 'once',     // 'repeat', 'pingpong', or 'once'
-    clampWhenFinished: true,  // Hold last frame when done
-    startTime: 0,         // Start from beginning
+await handle?.finished;
+```
+
+### Crossfading
+
+```typescript
+loom.playAnimation('Idle');
+loom.crossfadeTo('Walk', 0.3);
+```
+
+### Building a procedural clip from curves
+
+```typescript
+const clip = loom.snippetToClip('gaze', {
+  '61': [{ time: 0, intensity: 0 }, { time: 0.4, intensity: 0.6 }],
+  '62': [{ time: 0, intensity: 0 }, { time: 0.4, intensity: 0 }],
+}, {
+  loop: false,
+});
+```
+
+### Playing that generated clip
+
+```typescript
+if (clip) {
+  const clipHandle = loom.playClip(clip, {
+    loop: false,
+    playbackRate: 1.0,
+    mixerWeight: 1.0,
   });
 
-  if (handle) {
-    await handle.finished;
-  }
-}
-```
-
-### Mixer clip playback for curves
-
-Loom3 can convert AU/morph curves into AnimationMixer clips for smooth, mixer-only playback. This is the preferred path for high-frequency animation agencies (eye/head tracking, visemes, prosody) because it avoids per-keyframe transitions.
-
-Key APIs:
-- `snippetToClip(name, curves, options)` builds an AnimationClip from curves.
-- `playClip(clip, options)` returns a ClipHandle you can pause/resume/stop.
-- `clipHandle.stop()` now resolves cleanly (no rejected promise).
-
-```typescript
-async function playGazeClip() {
-  const clip = loom.snippetToClip('gaze', {
-    '61': [{ time: 0, intensity: 0 }, { time: 0.4, intensity: 0.6 }],
-    '62': [{ time: 0, intensity: 0 }, { time: 0.4, intensity: 0 }],
-  }, { loop: false });
-
-  if (clip) {
-    const handle = loom.playClip(clip, { loop: false, speed: 1 });
-    if (handle) {
-      await handle.finished;
-    }
-  }
+  await clipHandle?.finished;
 }
 ```
 
 ### Playing a snippet directly
 
-If you already have a named snippet object, you can skip manual clip creation:
-
 ```typescript
-const handle = loom.playSnippet({
+loom.playSnippet({
   name: 'look-left',
   curves: {
     '61': [{ time: 0, intensity: 0 }, { time: 0.25, intensity: 0.7 }],
@@ -1899,9 +1666,7 @@ const handle = loom.playSnippet({
 }, { loop: false });
 ```
 
-### Building and updating managed clips
-
-`buildClip()` keeps a named clip/action around so you can adjust it later without rebuilding your entire animation flow:
+### Keeping a managed clip around
 
 ```typescript
 const clipHandle = loom.buildClip('gaze-loop', {
@@ -1922,141 +1687,14 @@ clipHandle?.pause();
 clipHandle?.resume();
 ```
 
-### Checking curve support
+### Why this path matters
 
-```typescript
-const supported = loom.supportsClipCurves({
-  '61': [{ time: 0, intensity: 0 }, { time: 0.2, intensity: 0.4 }],
-});
+`snippetToClip()` is where the expressive control layer becomes real mixer playback. That compiled clip can combine:
+- morph tracks
+- quaternion rotation tracks
+- translation tracks
 
-if (!supported) {
-  console.warn('Curves need a fallback playback path');
-}
-```
-
-### Controlling playback
-
-The handle returned from `playAnimation()` provides full control:
-
-```typescript
-const handle = loom.playAnimation('Idle');
-
-// Pause and resume
-handle.pause();
-handle.resume();
-
-// Adjust speed in real-time
-handle.setSpeed(0.5);  // Half speed
-handle.setSpeed(2.0);  // Double speed
-
-// Adjust intensity/weight
-handle.setWeight(0.5);  // 50% influence
-
-// Seek to specific time
-handle.seekTo(1.5);  // Jump to 1.5 seconds
-
-// Get current state
-const state = handle.getState();
-console.log(state);
-// {
-//   name: 'Idle',
-//   isPlaying: true,
-//   isPaused: false,
-//   time: 1.5,
-//   duration: 4.0,
-//   speed: 1.0,
-//   weight: 1.0,
-//   isLooping: true
-// }
-
-// Stop the animation
-handle.stop();
-```
-
-### Crossfading between animations
-
-Smoothly transition from one animation to another:
-
-```typescript
-// Start with idle
-loom.playAnimation('Idle');
-
-// Later, crossfade to walk over 0.3 seconds
-loom.crossfadeTo('Walk', 0.3);
-
-// Or use the handle
-const idleHandle = loom.playAnimation('Idle');
-idleHandle.crossfadeTo('Walk', 0.5);
-```
-
-### Global animation control
-
-Control all animations at once:
-
-```typescript
-// Stop all animations
-loom.stopAllAnimations();
-
-// Pause all animations
-loom.pauseAllAnimations();
-
-// Resume all paused animations
-loom.resumeAllAnimations();
-
-// Set global time scale (affects all animations)
-loom.setAnimationTimeScale(0.5);  // Everything at half speed
-
-// Get all currently playing animations
-const playing = loom.getPlayingAnimations();
-```
-
-### Direct control by name
-
-You can also control animations directly without using handles:
-
-```typescript
-loom.playAnimation('Idle');
-
-// Later...
-loom.setAnimationSpeed('Idle', 1.5);
-loom.setAnimationIntensity('Idle', 0.8);
-loom.pauseAnimation('Idle');
-loom.resumeAnimation('Idle');
-loom.stopAnimation('Idle');
-
-// Get state of specific animation
-const state = loom.getAnimationState('Idle');
-```
-
-### Combining with facial animation
-
-Baked animations and facial AU control work together seamlessly. The AnimationMixer updates automatically when you call `loom.update()` or use `loom.start()`:
-
-```typescript
-loom.loadAnimationClips(gltf.animations);
-loom.start();  // Starts internal RAF loop
-
-// Play a body animation
-loom.playAnimation('Idle');
-
-// Control facial expressions on top
-loom.setAU(12, 0.8);  // Smile
-loom.transitionAU(45, 1.0, 100);  // Blink
-
-// Both update together - no separate render loop needed
-```
-
-### Animation types
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `speed` | number | 1.0 | Playback speed multiplier |
-| `intensity` | number | 1.0 | Animation weight (0-1) |
-| `loop` | boolean | true | Whether to loop |
-| `loopMode` | string | 'repeat' | 'repeat', 'pingpong', or 'once' |
-| `crossfadeDuration` | number | 0 | Fade in duration (seconds) |
-| `clampWhenFinished` | boolean | true | Hold last frame when done |
-| `startTime` | number | 0 | Initial playback position |
+which is exactly why Loom3 can turn high-level semantic motion into something that still mixes properly with the rest of a Three.js animation stack.
 
 ---
 
@@ -2176,6 +1814,10 @@ This is a compact reference for the public surface exported by `@lovelace_lol/lo
 - [FACS on Wikipedia](https://en.wikipedia.org/wiki/Facial_Action_Coding_System)
 - [Paul Ekman Group - FACS](https://www.paulekman.com/facial-action-coding-system/)
 - [Character Creator 4](https://www.reallusion.com/character-creator/)
+- [ARKit `ARFaceAnchor.blendShapes`](https://developer.apple.com/documentation/arkit/arfaceanchor/blendshapes)
+- [JALI Project Page](https://www.dgp.toronto.edu/~elf/jali.html)
+- [JALI Paper PDF](https://www.dgp.toronto.edu/~elf/JALISIG16.pdf)
+- [3Blue1Brown: Quaternions and 3d rotation, explained interactively](https://www.3blue1brown.com/lessons/quaternions-and-3d-rotation)
 - [Three.js Documentation](https://threejs.org/docs/)
 
 ## License

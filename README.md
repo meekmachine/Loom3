@@ -1,9 +1,8 @@
 # Loom3
 
+Loom3 is an expressive animation engine for Three.js characters. It creates performant, mixable character animation built on `AnimationMixer`, but lets you author and control that animation in a higher-level language: [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units, speech animation, morph targets, bone rotations, reusable presets, and profile mappings instead of one-off rig plumbing.
 
-The missing character controller for Three.js! Loom3 allows you to bring humanoid and animal characters to life. Loom3 is based on the Facial Action Coding System (FACS) as the basis of its mappings, providing a morph and bone mapping library for controlling high-definition 3D characters in Three.js.
-
-Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units to the morph targets and bone transforms found in 3d character assets. Instead of manually figuring out which blend shapes correspond to which facial movements, you can simply say `setAU(12, 0.8)` and the library handles the rest.
+At runtime, Loom3 can mix baked clips with procedurally generated animation, drive both morph target influence and bone motion, and map rig-specific names into a stable semantic control surface. That combination is what makes it useful for real-time, socially expressive characters rather than just isolated face poses.
 
 > **Note:** If you previously used the `loomlarge` npm package, it has been renamed to `@lovelace_lol/loom3`.
 
@@ -13,16 +12,17 @@ Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https:
 
 ## What Loom3 Covers
 
-Loom3 is broader than a face-controller wrapper. The library spans four practical areas:
-- Runtime control: Action Units, visemes, direct morphs, continuum pairs, composite rotations, transitions, and mixer playback.
+Loom3 is broader than a face-controller wrapper. The library spans five practical areas:
+- Mixable Three.js animation: baked clip playback, procedurally generated clips, shared playback handles, crossfading, weighting, and runtime layering through `AnimationMixer`.
+- Semantic runtime control: Action Units, speech animation, direct morph control, bone rotation, bone translation, continuum pairs, composite rotations, and transitions.
 - Rig configuration: built-in presets, profile overrides, preset resolution, name resolution, viseme routing, mix weights, and skeletal-only preset support.
 - Inspection and validation: mesh, morph, and bone discovery; preset-fit checks; correction suggestions; and full model analysis.
-- Runtime tooling: mesh/material debugging, baked animation clip helpers, hair physics, and region/geometry helpers for annotation or camera tooling.
+- Runtime tooling: mesh/material debugging, hair physics, and region/geometry helpers for annotation, camera, and interaction tooling.
 
 ## Reading Paths
 
 Use the README in one of these paths:
-- First successful character: [Installation & Setup](#1-installation--setup) -> [Using Presets](#2-using-presets) -> [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Action Unit Control](#7-action-unit-control) -> [Viseme System](#12-viseme-system) -> [Transition System](#13-transition-system) -> [Baked Animations](#16-baked-animations)
+- First successful character: [Installation & Setup](#1-installation--setup) -> [Using Presets](#2-using-presets) -> [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Action Unit Control](#7-action-unit-control) -> [Viseme System](#12-viseme-system) -> [Baked Animations](#16-baked-animations)
 - Retargeting an existing rig: [Using Presets](#2-using-presets) -> [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Extending & Custom Presets](#5-extending--custom-presets)
 - Skeletal-only character: [Creating Skeletal Animation Presets](#6-creating-skeletal-animation-presets) -> [Baked Animations](#16-baked-animations) -> [Regions & Geometry Helpers](#17-regions--geometry-helpers)
 - Annotation or camera tooling: [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Regions & Geometry Helpers](#17-regions--geometry-helpers)
@@ -42,7 +42,7 @@ These links open the LoomLarge companion app on useful tabs while you read the p
 | Inspect lip-sync views | [Visemes tab](https://loomlarge.web.app/?drawer=open&tab=visemes) and [Speech tab](https://loomlarge.web.app/?drawer=open&tab=speech) |
 | Tune hair behavior | [Hair tab](https://loomlarge.web.app/?drawer=open&tab=hair) |
 
-Most screenshots below were captured from LoomLarge with the matching tab open so the docs and the live product are easy to compare. A few screenshots may lag behind current labels or exports; when that happens, the shipped package exports take precedence.
+Use these links as companion product views while reading the package docs. They are most useful when you want to compare a concept in the README with the corresponding authoring or inspection surface in LoomLarge.
 
 ## Table of Contents
 

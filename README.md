@@ -27,9 +27,9 @@ Use the README in one of these paths:
 - Skeletal-only character: [Creating Skeletal Animation Presets](#6-creating-skeletal-animation-presets) -> [Baked Animations](#16-baked-animations) -> [Regions & Geometry Helpers](#17-regions--geometry-helpers)
 - Annotation or camera tooling: [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Regions & Geometry Helpers](#17-regions--geometry-helpers)
 
-## Production Playground
+## Demo Site Links
 
-These links open the production LoomLarge drawer on the matching tab. Production currently supports stable `drawer` + `tab` deep links, so the README should lean on tab-specific links instead of pretending it can deep-link to a fully reconstructed authoring state.
+These demo site links open the LoomLarge drawer on the matching tab. The demo site currently supports stable `drawer` + `tab` deep links, so the README should lean on tab-specific links instead of pretending it can deep-link to a fully reconstructed authoring state.
 
 | Goal | Open in LoomLarge |
 |------|-------------------|

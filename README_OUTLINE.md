@@ -14,8 +14,11 @@ The goal is:
 ## Main README Principles
 
 - Lead with what Loom3 is, why it exists, and why the abstraction matters.
+- Open with the fact that Loom3 creates performant, mixable Three.js character animation that is still easy to compose.
 - Show the real public API and the real setup path early.
 - Explain the system as a system, not as a bag of unrelated methods.
+- Make `AnimationMixer` central to the story, not a footnote.
+- Make the FACS-based semantic layer feel like a strength: it is well-defined, reusable, and configurable enough for AI-assisted mapping workflows.
 - Put preset/profile fit before advanced runtime control, because readers need to know whether their character matches the mappings first.
 - Treat the animation system as a first-class value proposition, not a late appendix.
 - Keep LoomLarge references useful but secondary; they should clarify the product, not narrate documentation assembly.
@@ -27,7 +30,7 @@ The goal is:
 ### 1. Title and one-paragraph promise
 
 - State what Loom3 is in one clean paragraph.
-- Say that it is the expressive runtime and profile layer for Three.js characters.
+- Say that it is the expressive runtime and profile layer for performant, mixable Three.js character animation.
 - Explain the central abstraction: developers work in expressive semantics instead of rig plumbing.
 - Briefly clarify the boundary with LoomLarge.
 
@@ -41,11 +44,12 @@ The goal is:
 ### 3. What Loom3 covers
 
 - Give the broad capability map:
+- performant, mixable Three.js animation
 - semantic runtime control
 - profile and preset mapping
 - validation and inspection
 - animation playback and clip generation
-- speech / viseme control
+- speech animation and lip sync
 - hair and region tooling
 - Make clear that Loom3 is more than a face wrapper, but do not dump full API details here.
 
@@ -121,6 +125,7 @@ The goal is:
 
 - Give the broad map of control surfaces:
 - Action Units
+- bone rotations and translations
 - direct morph control
 - continuum pairs
 - composite rotations
@@ -142,21 +147,36 @@ The goal is:
 - Briefly mention mixed morph/bone AUs and mix weights.
 - Do not inline the full AU catalog in the main README.
 
-### 11. Direct morph control, continuum pairs, and composite rotations
+### 11. Bone rotations, transformations, and mix weights
+
+- Explain that Loom3 does not only animate morph targets. It also drives bone rotation and translation.
+- Explain composite rotations and why they matter for rigs like head, eyes, jaw, and tongue.
+- Mention that quaternion composition is what keeps 3D bone rotation stable and interpolatable.
+- Briefly link to the 3Blue1Brown quaternion lesson as optional intuition, not required background.
+- Explain mix weights clearly:
+- morph targets and bone motion can be blended together for the same semantic control
+- the blend is configurable per AU
+- this is one of the keys to making movement feel realistic instead of rigid
+
+### 12. Direct morph control and continuum pairs
 
 - Explain these as the lower-level or specialized runtime controls.
 - Cover when to use:
 - `setMorph()` / `transitionMorph()`
 - `setContinuum()` / `transitionContinuum()`
-- composite rotations
 - Explain that these are important, but not the first thing a new reader should reach for.
 
-### 12. Viseme, lip-sync, and jaw overview
+### 13. Lip sync and speech animation
 
-- This section must be very carefully scoped.
-- State the current shipped CC4 `VISEME_KEYS` order exactly.
-- Explain that current live viseme APIs are index-based.
-- Explain the current jaw truth exactly:
+- Use `Lip Sync` or `Lip Sync and Speech Animation` as the user-facing heading.
+- Introduce `viseme` as the current low-level API term, not the main reader-facing concept.
+- Explain that realistic speech animation needs both lip articulation and jaw motion.
+- Explain that changing the relative degree of jaw and lip activation can approximate different speaking styles.
+- Say that this idea is explored in the JALI paper and cite it directly.
+- Recommend recreating a Loom3-specific diagram inspired by the JALI speech-style graphic rather than relying on unexplained jargon.
+- Then explain the current shipped Loom3 truth exactly:
+- the shipped CC4 `VISEME_KEYS` order
+- current live viseme APIs are index-based
 - clip generation uses profile `visemeJawAmounts`
 - live `setViseme()` and `transitionViseme()` still use the runtime's internal jaw table
 - Make clear that viseme and jaw behavior are under active overhaul in `#100`.
@@ -164,14 +184,19 @@ The goal is:
 - Give readers the correct current behavior plus the broad direction of change.
 - Keep provider-specific depth out of the main README.
 
-### 13. Animation system
+### 14. Animation system
 
 - This needs to be one of the central sections, not an afterthought.
+- Start by saying Loom3 works with Three.js `AnimationMixer`, and that this is what makes baked and procedural animation mixable.
 - Explain the animation model as a coherent system:
 - transitions
 - baked animation clips
 - snippet / curve-to-clip playback
 - shared handles and lifecycle
+- Define the terms clearly:
+- curve = a value changing over time for an AU, viseme, morph, or other channel
+- clip = a mixer-playable animation built from tracks
+- snippet = a named bundle of curves that can be turned into a clip and scheduled
 - Explain how transition playback differs from mixer-backed clip playback.
 - Explain the role of:
 - crossfading
@@ -185,12 +210,13 @@ The goal is:
 - Explain how direct runtime control coexists with clip playback.
 - Explain the efficiency and reliability story in plain language.
 - Be explicit that the point is not just feature enumeration. This section needs to explain why the system feels coherent instead of accidental.
+- Explain that procedural clip generation is valuable because a high-level semantic curve can be compiled down into its constituent morph target activations, bone rotations, and bone translations.
 - Include one combined example:
 - play a baked clip
 - layer a generated clip or snippet
 - drive a live AU or viseme on top
 
-### 14. Playback and state control
+### 15. Playback and state control
 
 - Cover:
 - pause/resume
@@ -201,13 +227,13 @@ The goal is:
 - reset/neutral behavior
 - This can stay short if the animation section already explains the architecture.
 
-### 15. Hair physics
+### 16. Hair physics
 
 - Explain what Loom3 provides here at a broad level.
 - Cover registration, configuration, and runtime enable/disable.
 - Keep detailed parameter tuning in a dedicated doc.
 
-### 16. Regions, geometry, and annotation helpers
+### 17. Regions, geometry, and annotation helpers
 
 - Explain these as tooling helpers for semantic camera targets, markers, and face anchors.
 - Cover:
@@ -219,7 +245,7 @@ The goal is:
 - Keep the current Loom3 versus LoomLarge annotation boundary accurate.
 - Link to the deeper annotation configuration doc instead of inlining every field.
 
-### 17. Skeletal-only and non-human presets
+### 18. Skeletal-only and non-human presets
 
 - Keep a dedicated broad section for rigs like the fish preset.
 - Explain what this section is really proving:
@@ -228,7 +254,7 @@ The goal is:
 - Use the shipped fish preset structure, not pseudo-API inventions.
 - Keep the full fish preset walkthrough in a deeper doc.
 
-### 18. LoomLarge companion walkthrough
+### 19. LoomLarge companion walkthrough
 
 - Keep this optional and concise.
 - Use screenshots and links only when they help the reader understand the product.
@@ -244,7 +270,7 @@ The goal is:
 - features not yet moved from a demo/runtime unless that limitation materially changes user understanding
 - The walkthrough prose should read like product guidance, not notes from whoever assembled the docs.
 
-### 19. Compact API reference
+### 20. Compact API reference
 
 - End with a compact export-oriented reference.
 - Group by:
@@ -255,16 +281,18 @@ The goal is:
 - tooling/helpers
 - Do not turn the bottom of the README into generated docs.
 
-### 20. Further reading
+### 21. Further reading
 
 - Link to deeper docs by topic.
 - Link to relevant reference material:
 - FACS
+- ARKit face blend shapes as an example of a different rig vocabulary that can be normalized into semantic mappings
+- JALI paper
 - Reallusion CC4
 - Three.js
 - internal Loom3 docs
 
-### 21. License
+### 22. License
 
 - Keep this minimal.
 
@@ -337,14 +365,15 @@ Concretely, that means:
 8. Validate and inspect before authoring
 9. Runtime control overview
 10. Action Units
-11. Direct morph control, continuum pairs, and composite rotations
-12. Viseme, lip-sync, and jaw overview
-13. Animation system
-14. Playback and state control
-15. Hair physics
-16. Regions, geometry, and annotation helpers
-17. Skeletal-only and non-human presets
-18. LoomLarge companion walkthrough
-19. Compact API reference
-20. Further reading
-21. License
+11. Bone rotations, transformations, and mix weights
+12. Direct morph control and continuum pairs
+13. Lip sync and speech animation
+14. Animation system
+15. Playback and state control
+16. Hair physics
+17. Regions, geometry, and annotation helpers
+18. Skeletal-only and non-human presets
+19. LoomLarge companion walkthrough
+20. Compact API reference
+21. Further reading
+22. License

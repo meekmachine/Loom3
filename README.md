@@ -1,8 +1,8 @@
 # Loom3
 
-Loom3 is an expressive animation engine for Three.js characters. It creates performant, mixable character animation built on `AnimationMixer`, but lets you author and control that animation in a higher-level language: [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units, speech animation, morph targets, bone rotations, reusable presets, and profile mappings instead of one-off rig plumbing.
+Loom3 is an expressive animation engine for Three.js characters. It creates performant, mixable character animation built on `AnimationMixer`, but lets you author and control that animation in a higher-level language: [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units, speech animation, reusable presets, and profile mappings instead of one-off rig plumbing.
 
-At runtime, Loom3 can mix baked clips with procedurally generated animation, drive both morph target influence and bone motion, and map rig-specific names into a stable semantic control surface. That combination is what makes it useful for real-time, socially expressive characters rather than just isolated face poses.
+At runtime, Loom3 can mix baked clips with procedurally generated animation, drive both morph target influence and bone motion, and map rig-specific names into a stable semantic control surface. The important idea is that the expression you ask for is the final visible shape, not a single rig mechanism. A smile, jaw drop, blink, or speech mouth shape can come from morphs, bones, or both working together. That combination is what makes Loom3 useful for real-time, socially expressive characters rather than just isolated face poses.
 
 > **Note:** If you previously used the `loomlarge` npm package, it has been renamed to `@lovelace_lol/loom3`.
 
@@ -207,7 +207,14 @@ Open in LoomLarge: [Properties tab](https://loomlarge.web.app/?drawer=open&tab=p
 
 ![Diagram showing how Loom3 presets connect AUs to morphs and bones](./assets/readme/preset-au-flow.svg)
 
-Presets define how FACS Action Units map to your character's morph targets and bones. Loom3 ships with `CC4_PRESET` for Character Creator 4 characters.
+Presets define how FACS Action Units and visemes map to your character's morph targets and bones. Loom3 ships with `CC4_PRESET` for Character Creator 4 characters.
+
+Think of a preset as the translation layer between the expression you want and the rig you actually have:
+- FACS AUs describe what facial action or movement you want.
+- Visemes describe what speech shape you want.
+- Morph targets and bone rotations describe how that shape is built on this specific character.
+
+That distinction matters because believable facial animation often needs both systems. A jaw-open shape may need bone rotation for the hinge motion and morph targets for the lips and cheeks. A speech pose may need a viseme morph plus jaw movement. Loom3 lets one semantic control produce that combined result as a single readable shape.
 
 ### What's in a preset?
 
@@ -1109,7 +1116,7 @@ Open in LoomLarge: [Action Units tab](https://loomlarge.web.app/?drawer=open&tab
 
 ![Comparison of morph-only, mixed, and bone-only AU results](./assets/readme/mix-weight-comparison.webp)
 
-One of Loom3’s most important features is that an expressive control does not have to be “only morph” or “only bone.” Many actions feel best when both contribute.
+One of Loom3’s most important features is that an expressive control does not have to be "only morph" or "only bone." Many actions look right only when both contribute to the final shape.
 
 For example:
 - a jaw drop should usually deform the mouth shape and rotate the jaw bone
@@ -1268,6 +1275,8 @@ Open in LoomLarge: [Visemes tab](https://loomlarge.web.app/?drawer=open&tab=vise
 Most rigs represent speech primarily through morph targets: mouth shapes that are baked into the character as named blend-shape influences. Realistic speech usually needs more than that, though. The jaw has to move as well, and the relative degree of lip and jaw activation changes the character of the speech.
 
 A viseme is the visual mouth-shape side of speech animation: the visible shape family associated with a sound or phoneme sequence. In Loom3 today, visemes are still the low-level runtime API surface, but the user-facing concept is broader than that: speech animation is lip shaping plus jaw motion over time.
+
+That is the same core pattern as the AU system. The thing you care about is the spoken shape the audience sees. Loom3 can build that shape by combining viseme morphs with jaw bone motion, so the result reads as one coherent speech pose instead of a mouth morph pasted onto a static face.
 
 That broad idea is explored in the JALI paper, which frames speech animation around two visually distinct anatomical actions, jaw and lip, and shows how changing their relative activation can approximate different styles of speech:
 

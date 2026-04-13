@@ -10,27 +10,27 @@ Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https:
 
 ---
 
-## Why Loom3 Exists
+## Why Loom3 Matters
 
-Three.js can render a character beautifully, but it does not give you a shared language for driving one. In most character pipelines, facial expressions live in morph targets, head turns and eye gaze live in bones, speech lives in a viseme table, authored motion lives in `AnimationMixer`, and every new rig arrives with different names and assumptions. Loom3 exists to pull those layers back together.
+The hard part of character animation is not making one smile work. The hard part is building a character system where expressions, speech, head turns, eye gaze, jaw motion, and authored clips all work together, and still survive when the next rig has different names, different meshes, and different assumptions. That is the problem Loom3 is built to solve.
 
-## What You Get
+Loom3 gives you one expressive control layer over that whole stack. Instead of thinking in terms of rig plumbing, you work in terms of performance: smile, blink, look left, tilt the head, open the jaw, speak. The runtime then resolves those controls into the morph targets, bone transforms, and mixer-driven playback the character actually needs.
 
-With Loom3, you work at the level of expressive intent and let the runtime resolve the rig details:
-- Whole-face and speech shapes: FACS AUs and visemes can drive morph targets and bone motion together, so a smile, blink, jaw drop, or spoken mouth shape reads as one coherent pose.
-- Natural head, eye, jaw, and tongue motion: continuum pairs and composite rotations coordinate head turns, nods, tilts, gaze shifts, jaw shifts, and other multi-axis movement instead of making those controls fight each other.
-- Reusable rig mappings: built-in presets, preset resolution, profile overrides, name resolution, viseme routing, and skeletal-only support let the same expressive system travel across very different characters.
-- A runtime built for mixing motion: transitions, snippet playback, curve-to-clip generation, baked clip playback, crossfades, weights, and playback controls all sit on top of `AnimationMixer`.
-- Faster iteration: mesh, morph, and bone inspection, preset-fit validation, correction suggestions, compatibility scoring, and model analysis help you discover early whether a character will actually work.
-- Production-side helpers: region helpers, face-center and facing-direction tools, mesh debugging, and hair physics support the rest of the character workflow.
+## What You Can Do With It
 
-## Why That Matters
+Loom3 lets a single expressive system drive the whole performance:
+- FACS AUs and visemes can shape the face through morphs, bones, or both at once, so the result looks like one coherent pose instead of a collection of separate rig tricks.
+- Continuum pairs and composite rotations make head turns, nods, tilts, eye gaze, jaw shifts, and other multi-axis motion feel coordinated instead of brittle.
+- Presets, profile overrides, and name resolution make that same expressive layer reusable across different characters, including skeletal-only rigs.
+- Transitions, snippets, generated clips, baked clips, crossfades, weights, and playback controls let procedural animation and authored motion live in the same `AnimationMixer` runtime.
+- Validation, inspection, and correction helpers tell you what a model actually contains and whether it really fits the preset before you waste time tuning it.
+- Region, geometry, mesh, and hair tooling support the production workflow around the character, not just the animation call itself.
 
-The value of Loom3 is not just convenience. It gives you a reusable expressive layer for Three.js characters.
+## Why This Is Useful
 
-You animate what the audience should see: smile, look left, speak, blink, tilt the head, open the jaw. Loom3 handles the low-level work underneath: morph values, head rotations, eye rotations, jaw motion, bone transforms, and playable clips. That makes characters easier to author, easier to retarget, and much more believable once they are actually moving.
+This is what makes Loom3 more than a face-controller wrapper. It is a reusable expressive-character layer for Three.js.
 
-That is the real payoff: instead of stitching together separate systems for facial animation, speech, head rotation, eye direction, and playback, you get one runtime that treats them as parts of the same performance.
+You are not manually wiring smile morphs, eye-bone rotations, jaw pivots, viseme tables, head rotation channels, and clip playback as separate systems. You are giving the character a shared expressive language and letting the runtime carry that language across rigs, motions, and tools.
 
 ## How To Read This README
 

@@ -1,8 +1,8 @@
 # Loom3
 
-Loom3 is an expressive character-animation engine for Three.js. It gives you a semantic way to drive faces, speech, gaze, head motion, mixer clips, and character tooling without hardcoding every blend shape, bone channel, mesh name, and per-rig exception yourself.
+Loom3 is an expressive animation engine for Three.js characters. It creates performant, mixable character animation built on `AnimationMixer`, but lets you author and control that animation in a higher-level language: [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units, speech animation, reusable presets, and profile mappings instead of one-off rig plumbing.
 
-The core idea is simple: you ask for the visible behavior you want, and Loom3 resolves how that behavior is built on the actual rig. A smile, jaw drop, blink, head turn, or spoken mouth shape is not treated as "just a morph" or "just a bone move." In practice, those shapes often need morph targets and bone motion working together. Loom3 gives you that higher-level control surface, then maps it onto the rig-specific details.
+At runtime, Loom3 can mix baked clips with procedurally generated animation, drive both morph target influence and bone motion, and map rig-specific names into a stable semantic control surface. The important idea is that the expression you ask for is the final visible shape, not a single rig mechanism. A smile, jaw drop, blink, or speech mouth shape can come from morphs, bones, or both working together. That combination is what makes Loom3 useful for real-time, socially expressive characters rather than just isolated face poses.
 
 > **Note:** If you previously used the `loomlarge` npm package, it has been renamed to `@lovelace_lol/loom3`.
 
@@ -10,27 +10,37 @@ The core idea is simple: you ask for the visible behavior you want, and Loom3 re
 
 ---
 
-## Why Loom3 Is Useful
+## What Loom3 Does
 
-Loom3 is not just one thing. It combines several capabilities that are much more useful together than they are on their own:
+Loom3 solves a real integration problem: expressive characters need more than a bag of blend shapes. They need facial controls, speech shapes, coordinated bone motion, playable clips, rig adaptation, and enough inspection tooling to tell you when a character does not actually match your assumptions.
 
-| Capability | What Loom3 gives you | Why it matters |
-|------|-------------------|----------------|
-| Semantic facial control | FACS-style Action Units, visemes, continuum pairs, direct morph control, and coordinated bone rotation/translation | You animate intent like smile, blink, jaw drop, look left, or speech shape instead of wiring low-level rig channels by hand |
-| Combined morph + bone shaping | Mix weights, composite rotations, viseme jaw contribution, and AU-to-morph / AU-to-bone routing | The shape the audience sees can be built from both soft-tissue deformation and skeletal motion, so expressions read as one coherent pose |
-| Rig adaptation | Built-in presets, preset resolution, profile overrides, name resolution, viseme routing, and skeletal-only preset support | The same control logic can survive different character rigs instead of collapsing into one-off mappings |
-| Runtime animation system | Transitions, `AnimationMixer` playback, crossfading, weighting, playback state, clip building from curves, and snippet playback | You can combine authored animation with procedural expression and speech in one runtime instead of splitting them across separate systems |
-| Inspection and validation | Mesh/morph/bone discovery, preset-fit validation, compatibility scoring, correction suggestions, and full model analysis | You can tell whether a character actually fits a preset before wasting time tuning broken mappings |
-| Character tooling | Region helpers, face-center and facing-direction geometry helpers, mesh inspection/debugging, and hair physics runtime controls | Loom3 supports the practical workflow around the character, not just the animation call itself |
+That is why the library combines several capabilities that normally end up scattered across separate systems:
+- Semantic facial and speech control: FACS Action Units, visemes, continuum pairs, direct morph control, and coordinated bone rotation/translation.
+- Combined morph and bone shaping: mix weights, composite rotations, and viseme jaw contribution so one visible shape can be built from multiple rig mechanisms.
+- Rig adaptation: built-in presets, preset resolution, profile overrides, name resolution, viseme routing, and skeletal-only preset support.
+- Runtime animation playback: transitions, `AnimationMixer` playback, crossfading, weighting, playback state, snippet playback, and clip building from semantic curves.
+- Inspection and validation: mesh, morph, and bone discovery; preset-fit checks; compatibility scoring; correction suggestions; and full model analysis.
+- Supporting tooling: region helpers, face-center and facing-direction helpers, mesh debugging, and hair physics runtime controls.
 
-What ties these together is the value proposition: Loom3 turns rig-specific complexity into reusable character behavior. It gives you a stable expressive interface at authoring time, while still producing the low-level morph tracks, bone rotations, translations, and mixer playback that a real character runtime needs.
+## Why That Matters
 
-## Who This README Is For
+The value of Loom3 is not just that it has many features. It is that those features line up around one useful goal: turning rig-specific complexity into reusable expressive behavior.
 
-- If you want your first working character, start with [Installation & Setup](#1-installation--setup), then [Using Presets](#2-using-presets), [Preset Selection & Validation](#3-preset-selection--validation), [Action Unit Control](#7-action-unit-control), and [Lip Sync and Speech Animation](#12-lip-sync-and-speech-animation).
-- If you already have a rig and need Loom3 to adapt to it, focus on [Using Presets](#2-using-presets), [Preset Selection & Validation](#3-preset-selection--validation), [Getting to Know Your Character](#4-getting-to-know-your-character), and [Extending & Custom Presets](#5-extending--custom-presets).
-- If you are working with a skeletal-only or non-human character, go to [Creating Skeletal Animation Presets](#6-creating-skeletal-animation-presets) and then [Baked Animations and Procedural Clips](#16-baked-animations-and-procedural-clips).
-- If you care about camera, markers, or interaction tooling around the face, read [Preset Selection & Validation](#3-preset-selection--validation), [Getting to Know Your Character](#4-getting-to-know-your-character), and [Regions & Geometry Helpers](#17-regions--geometry-helpers).
+From a user perspective, that means:
+- you animate intent like smile, jaw drop, look left, or speech shape instead of remembering low-level rig names
+- AUs and visemes can produce the final shape through morphs, bones, or both, which is why the result feels more coherent and believable
+- the same control model can be adapted across different characters instead of being rewritten for every rig
+- authored animation, procedural expression, and speech can live in the same runtime instead of competing systems
+- you can validate a model before spending time tuning mappings that were never going to work
+
+This is what makes Loom3 more than a face controller. It is a reusable expressive-character layer for Three.js.
+
+## How To Read This README
+
+- First working character: start with [Installation & Setup](#1-installation--setup), then [Using Presets](#2-using-presets), [Preset Selection & Validation](#3-preset-selection--validation), [Action Unit Control](#7-action-unit-control), and [Lip Sync and Speech Animation](#12-lip-sync-and-speech-animation).
+- Adapting an existing rig: focus on [Using Presets](#2-using-presets), [Preset Selection & Validation](#3-preset-selection--validation), [Getting to Know Your Character](#4-getting-to-know-your-character), and [Extending & Custom Presets](#5-extending--custom-presets).
+- Skeletal-only or non-human character: go to [Creating Skeletal Animation Presets](#6-creating-skeletal-animation-presets) and then [Baked Animations and Procedural Clips](#16-baked-animations-and-procedural-clips).
+- Tooling, camera, or inspection workflow: read [Preset Selection & Validation](#3-preset-selection--validation), [Getting to Know Your Character](#4-getting-to-know-your-character), and [Regions & Geometry Helpers](#17-regions--geometry-helpers).
 
 ## LoomLarge Companion
 

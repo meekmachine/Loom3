@@ -1,8 +1,8 @@
 # Loom3
 
-Loom3 is an expressive animation engine for Three.js characters. It creates performant, mixable character animation built on `AnimationMixer`, but lets you author and control that animation in a higher-level language: [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units, speech animation, reusable presets, and profile mappings instead of one-off rig plumbing.
+Loom3 is an expressive animation engine for Three.js characters. It creates performant, mixable character animation built on `AnimationMixer`, but lets you author and control that animation in a higher-level language: [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units, speech animation, morph targets, bone rotations, reusable presets, and profile mappings instead of one-off rig plumbing.
 
-At runtime, Loom3 can mix baked clips with procedurally generated animation, drive both morph target influence and bone motion, and map rig-specific names into a stable semantic control surface. The important idea is that the expression you ask for is the final visible shape, not a single rig mechanism. A smile, jaw drop, blink, or speech mouth shape can come from morphs, bones, or both working together. That combination is what makes Loom3 useful for real-time, socially expressive characters rather than just isolated face poses.
+At runtime, Loom3 can mix baked clips with procedurally generated animation, drive both morph target influence and bone motion, and map rig-specific names into a stable semantic control surface. That combination is what makes it useful for real-time, socially expressive characters rather than just isolated face poses.
 
 > **Note:** If you previously used the `loomlarge` npm package, it has been renamed to `@lovelace_lol/loom3`.
 
@@ -12,28 +12,28 @@ At runtime, Loom3 can mix baked clips with procedurally generated animation, dri
 
 ## What Loom3 Does
 
-Loom3 solves a real integration problem: expressive characters need more than a bag of blend shapes. They need facial controls, speech shapes, coordinated bone motion, playable clips, rig adaptation, and enough inspection tooling to tell you when a character does not actually match your assumptions.
+Loom3 solves a messy integration problem that shows up as soon as a character system moves beyond a demo. Expressive characters do not just need blend shapes. They need facial controls, speech shapes, jaw and eye motion, playable clips, rig adaptation, and enough inspection tooling to tell you when a character does not actually match the rig you thought you had.
 
-That is why the library combines several capabilities that normally end up scattered across separate systems:
-- Semantic facial and speech control: FACS Action Units, visemes, continuum pairs, direct morph control, and coordinated bone rotation/translation.
-- Combined morph and bone shaping: mix weights, composite rotations, and viseme jaw contribution so one visible shape can be built from multiple rig mechanisms.
+That is why Loom3 brings these capabilities together in one runtime:
+- Semantic expression control: FACS Action Units, visemes, continuum pairs, direct morph control, and coordinated bone rotation and translation.
+- Shape building across rig mechanisms: morph targets and bone motion can work together on the same AU or viseme, so the result is the final shape the audience sees, not two disconnected effects.
 - Rig adaptation: built-in presets, preset resolution, profile overrides, name resolution, viseme routing, and skeletal-only preset support.
-- Runtime animation playback: transitions, `AnimationMixer` playback, crossfading, weighting, playback state, snippet playback, and clip building from semantic curves.
+- Runtime animation playback: transitions, `AnimationMixer` playback, crossfading, weighting, snippet playback, and clip building from semantic curves.
 - Inspection and validation: mesh, morph, and bone discovery; preset-fit checks; compatibility scoring; correction suggestions; and full model analysis.
-- Supporting tooling: region helpers, face-center and facing-direction helpers, mesh debugging, and hair physics runtime controls.
+- Production-side helpers: region helpers, face-center and facing-direction helpers, mesh debugging, and hair physics runtime controls.
 
 ## Why That Matters
 
-The value of Loom3 is not just that it has many features. It is that those features line up around one useful goal: turning rig-specific complexity into reusable expressive behavior.
+The point is not just that Loom3 has a lot of features. The point is that those features reinforce each other.
 
 From a user perspective, that means:
-- you animate intent like smile, jaw drop, look left, or speech shape instead of remembering low-level rig names
-- AUs and visemes can produce the final shape through morphs, bones, or both, which is why the result feels more coherent and believable
-- the same control model can be adapted across different characters instead of being rewritten for every rig
-- authored animation, procedural expression, and speech can live in the same runtime instead of competing systems
-- you can validate a model before spending time tuning mappings that were never going to work
+- you animate intent like smile, jaw drop, blink, look left, or speech shape instead of memorizing rig-specific morph names and bone channels
+- the same expressive control can resolve into morphs, bones, or both, which is why AUs and visemes can produce more believable shapes
+- the same control model can survive across different characters instead of being rebuilt for every rig
+- authored clips, procedural expression, and speech can live in the same runtime instead of fighting each other
+- you can validate a character before wasting time tuning mappings that were never going to fit
 
-This is what makes Loom3 more than a face controller. It is a reusable expressive-character layer for Three.js.
+That is what makes Loom3 useful. It turns rig-specific complexity into a reusable expressive-character layer for Three.js.
 
 ## How To Read This README
 

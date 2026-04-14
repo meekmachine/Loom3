@@ -1003,6 +1003,31 @@ export class Loom3 implements LoomLarge {
     });
   }
 
+  private rebuildActiveRuntimeState(): void {
+    this.clearTransitions();
+    this.translations = {};
+    this.initBoneRotations();
+
+    Object.values(this.bones).forEach((entry) => {
+      if (!entry) return;
+      entry.obj.position.copy(entry.basePos as any);
+      entry.obj.quaternion.copy(entry.baseQuat);
+      entry.obj.updateMatrixWorld(false);
+    });
+
+    for (const [auIdStr, value] of Object.entries(this.auValues)) {
+      if (value <= 0) continue;
+      const auId = Number(auIdStr);
+      if (Number.isNaN(auId)) continue;
+      this.setAU(auId, value, this.auBalances[auId]);
+    }
+
+    if (this.model) {
+      this.flushPendingComposites();
+      this.model.updateMatrixWorld(true);
+    }
+  }
+
   // ============================================================================
   // MESH CONTROL
   // ============================================================================
@@ -1296,12 +1321,17 @@ export class Loom3 implements LoomLarge {
 
   setProfile(profile: Profile): void {
     this.config = profile;
+    this.compositeRotations = this.config.compositeRotations || CC4_COMPOSITE_ROTATIONS;
+    this.auToCompositeMap = buildAUToCompositeMap(this.compositeRotations);
     this.mixWeights = { ...profile.auMixDefaults };
     if (this.model) {
+      this.bones = this.resolveBones(this.model);
+      this.missingBoneWarnings.clear();
       this.rebuildMorphTargetsCache();
     }
     this.hairPhysics.refreshMeshSelection();
     this.applyHairPhysicsProfileConfig();
+    this.rebuildActiveRuntimeState();
   }
 
   getProfile(): Profile { return this.config; }
@@ -1657,6 +1687,7 @@ export class Loom3 implements LoomLarge {
 
   private resolveBones(root: Object3D): ResolvedBones {
     const resolved: ResolvedBones = {};
+    const previousBones = this.bones;
 
     const snapshot = (obj: any): NodeBase => ({
       obj,
@@ -1664,6 +1695,20 @@ export class Loom3 implements LoomLarge {
       baseQuat: obj.quaternion.clone(),
       baseEuler: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z, order: obj.rotation.order },
     });
+
+    const snapshotForObject = (obj: Object3D): NodeBase => {
+      const existing = Object.values(previousBones).find((entry) => entry?.obj === obj);
+      if (!existing) {
+        return snapshot(obj);
+      }
+
+      return {
+        obj,
+        basePos: { ...existing.basePos },
+        baseQuat: existing.baseQuat.clone(),
+        baseEuler: { ...existing.baseEuler },
+      };
+    };
 
     // Build suffix regex from config pattern
     const prefix = this.config.bonePrefix || '';
@@ -1714,20 +1759,20 @@ export class Loom3 implements LoomLarge {
     for (const [key, nodeName] of Object.entries(this.config.boneNodes)) {
       const node = findNode(nodeName);
       if (node) {
-        resolved[key] = snapshot(node);
+        resolved[key] = snapshotForObject(node);
       }
     }
 
     if (!resolved.EYE_L && this.config.eyeMeshNodes) {
       const node = findNode(this.config.eyeMeshNodes.LEFT);
       if (node) {
-        resolved.EYE_L = snapshot(node);
+        resolved.EYE_L = snapshotForObject(node);
       }
     }
     if (!resolved.EYE_R && this.config.eyeMeshNodes) {
       const node = findNode(this.config.eyeMeshNodes.RIGHT);
       if (node) {
-        resolved.EYE_R = snapshot(node);
+        resolved.EYE_R = snapshotForObject(node);
       }
     }
 

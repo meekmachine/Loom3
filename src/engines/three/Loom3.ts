@@ -1003,7 +1003,7 @@ export class Loom3 implements LoomLarge {
     });
   }
 
-  private rebuildActiveRuntimeState(): void {
+  private reinitializeRuntimeStateFromCurrentAUs(): void {
     this.clearTransitions();
     this.translations = {};
     this.initBoneRotations();
@@ -1331,7 +1331,7 @@ export class Loom3 implements LoomLarge {
     }
     this.hairPhysics.refreshMeshSelection();
     this.applyHairPhysicsProfileConfig();
-    this.rebuildActiveRuntimeState();
+    this.reinitializeRuntimeStateFromCurrentAUs();
   }
 
   getProfile(): Profile { return this.config; }
@@ -1696,7 +1696,7 @@ export class Loom3 implements LoomLarge {
       baseEuler: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z, order: obj.rotation.order },
     });
 
-    const snapshotForObject = (obj: Object3D): NodeBase => {
+    const snapshotPreservingBasePose = (obj: Object3D): NodeBase => {
       const existing = Object.values(previousBones).find((entry) => entry?.obj === obj);
       if (!existing) {
         return snapshot(obj);
@@ -1759,20 +1759,20 @@ export class Loom3 implements LoomLarge {
     for (const [key, nodeName] of Object.entries(this.config.boneNodes)) {
       const node = findNode(nodeName);
       if (node) {
-        resolved[key] = snapshotForObject(node);
+        resolved[key] = snapshotPreservingBasePose(node);
       }
     }
 
     if (!resolved.EYE_L && this.config.eyeMeshNodes) {
       const node = findNode(this.config.eyeMeshNodes.LEFT);
       if (node) {
-        resolved.EYE_L = snapshotForObject(node);
+        resolved.EYE_L = snapshotPreservingBasePose(node);
       }
     }
     if (!resolved.EYE_R && this.config.eyeMeshNodes) {
       const node = findNode(this.config.eyeMeshNodes.RIGHT);
       if (node) {
-        resolved.EYE_R = snapshotForObject(node);
+        resolved.EYE_R = snapshotPreservingBasePose(node);
       }
     }
 

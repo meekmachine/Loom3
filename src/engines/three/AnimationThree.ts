@@ -15,6 +15,7 @@ import {
   LoopPingPong,
   LoopOnce,
   NormalAnimationBlendMode,
+  PropertyBinding,
   Quaternion,
   Vector3,
 } from 'three';
@@ -34,6 +35,7 @@ import type {
   RotationAxis,
   AnimationSource,
   AnimationBlendMode,
+  AnimationBlendModeFallbackReason,
   AnimationEasing,
 } from '../../core/types';
 import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
@@ -206,8 +208,14 @@ type NormalizedPlaybackState = {
   playbackRate: number;
   weight: number;
   balance: number;
+  requestedBlendMode: AnimationBlendMode;
   blendMode: AnimationBlendMode;
   easing: AnimationEasing;
+};
+
+type AdditiveSupport = {
+  supported: boolean;
+  reason?: AnimationBlendModeFallbackReason;
 };
 
 export class BakedAnimationController {
@@ -221,6 +229,7 @@ export class BakedAnimationController {
   private clipHandles = new Map<string, ClipHandle>();
   private clipSources = new Map<string, AnimationSource>();
   private playbackState = new Map<string, NormalizedPlaybackState>();
+  private additiveSupport = new Map<string, AdditiveSupport>();
   private actionIds = new WeakMap<AnimationAction, string>();
   private actionIdToClip = new Map<string, string>();
 
@@ -254,6 +263,7 @@ export class BakedAnimationController {
       ?? (typeof options?.loop === 'boolean'
         ? (options.loop ? 'repeat' : 'once')
         : (defaults.loop ? 'repeat' : 'once'));
+    const requestedBlendMode = options?.blendMode ?? (clipOptions?.mixerAdditive ? 'additive' : 'replace');
     return {
       source: options?.source ?? defaults.source,
       loop: loopMode !== 'once',
@@ -263,7 +273,8 @@ export class BakedAnimationController {
       playbackRate,
       weight,
       balance: Number.isFinite(options?.balance) ? options?.balance ?? 0 : 0,
-      blendMode: options?.blendMode ?? (clipOptions?.mixerAdditive ? 'additive' : 'replace'),
+      requestedBlendMode,
+      blendMode: requestedBlendMode,
       easing: options?.easing ?? 'linear',
     };
   }
@@ -344,16 +355,126 @@ export class BakedAnimationController {
     }
 
     if (options.blendMode) {
-      next.blendMode = options.blendMode;
+      next.requestedBlendMode = options.blendMode;
     } else if (typeof clipOptions?.mixerAdditive === 'boolean') {
-      next.blendMode = clipOptions.mixerAdditive ? 'additive' : 'replace';
+      next.requestedBlendMode = clipOptions.mixerAdditive ? 'additive' : 'replace';
     }
+    next.blendMode = next.requestedBlendMode;
 
     if (options.easing) {
       next.easing = options.easing;
     }
 
     return next;
+  }
+
+  private analyzeAdditiveSupport(clip: AnimationClip): AdditiveSupport {
+    const model = this.host.getModel();
+    if (!model) {
+      return {
+        supported: false,
+        reason: 'unsafe_baked_additive_tracks',
+      };
+    }
+
+    const safeTransformTargets = new Set(
+      Object.values(this.host.getBones())
+        .map((entry) => entry?.obj)
+        .filter(Boolean)
+    );
+
+    const unsupportedTracks = clip.tracks.filter((track) => {
+      const trackName = typeof track?.name === 'string' ? track.name : '';
+      if (!trackName) {
+        return true;
+      }
+
+      let parsed: ReturnType<typeof PropertyBinding.parseTrackName>;
+      try {
+        parsed = PropertyBinding.parseTrackName(trackName);
+      } catch {
+        return true;
+      }
+
+      if (parsed.propertyName === 'morphTargetInfluences') {
+        return false;
+      }
+
+      if (parsed.propertyName !== 'position' && parsed.propertyName !== 'quaternion') {
+        return true;
+      }
+
+      const targetKey = parsed.objectName === 'bones' && parsed.objectIndex
+        ? parsed.objectIndex
+        : parsed.nodeName;
+      if (!targetKey) {
+        return true;
+      }
+
+      const target = model.getObjectByProperty('uuid', targetKey)
+        ?? PropertyBinding.findNode(model, targetKey);
+      if (!target || target === model || target.parent === null || (target as any).isCamera) {
+        return true;
+      }
+
+      return !safeTransformTargets.has(target);
+    });
+
+    if (unsupportedTracks.length === 0) {
+      return { supported: true };
+    }
+
+    return {
+      supported: false,
+      reason: 'unsafe_baked_additive_tracks',
+    };
+  }
+
+  private getAdditiveSupport(clipName: string, clip?: AnimationClip | null): AdditiveSupport {
+    const cached = this.additiveSupport.get(clipName);
+    if (cached) {
+      return cached;
+    }
+
+    const resolvedClip = clip ?? this.animationClips.find((entry) => entry.name === clipName);
+    if (!resolvedClip) {
+      return { supported: false };
+    }
+
+    const support = this.analyzeAdditiveSupport(resolvedClip);
+    this.additiveSupport.set(clipName, support);
+    return support;
+  }
+
+  private sanitizeBakedBlendMode(
+    clipName: string,
+    state: NormalizedPlaybackState,
+    clip?: AnimationClip | null
+  ): NormalizedPlaybackState {
+    if (state.source !== 'baked' || state.requestedBlendMode !== 'additive') {
+      return {
+        ...state,
+        blendMode: state.requestedBlendMode,
+      };
+    }
+
+    const support = this.getAdditiveSupport(clipName, clip);
+    if (support.supported) {
+      return {
+        ...state,
+        blendMode: 'additive',
+      };
+    }
+
+    console.warn(
+      `[Loom3] Baked clip "${clipName}" does not support additive playback; falling back to replace.` +
+      (support.reason ? ` ${support.reason}.` : '')
+    );
+
+    return {
+      ...state,
+      blendMode: 'replace',
+    };
   }
 
   private resolveStartTime(
@@ -439,6 +560,7 @@ export class BakedAnimationController {
     this.clipHandles.clear();
     this.clipSources.clear();
     this.playbackState.clear();
+    this.additiveSupport.clear();
   }
 
   loadAnimationClips(clips: unknown[]): void {
@@ -452,6 +574,7 @@ export class BakedAnimationController {
 
     for (const clip of this.animationClips) {
       this.clipSources.set(clip.name, 'baked');
+      this.additiveSupport.set(clip.name, this.analyzeAdditiveSupport(clip));
       if (!this.animationActions.has(clip.name) && this.animationMixer) {
         const action = this.animationMixer.clipAction(clip);
         this.animationActions.set(clip.name, action);
@@ -465,6 +588,8 @@ export class BakedAnimationController {
       duration: clip.duration,
       trackCount: clip.tracks.length,
       source: this.clipSources.get(clip.name) ?? 'baked',
+      supportsAdditive: this.getAdditiveSupport(clip.name, clip).supported,
+      additiveModeReason: this.getAdditiveSupport(clip.name, clip).reason,
     }));
   }
 
@@ -505,6 +630,7 @@ export class BakedAnimationController {
     this.animationFinishedCallbacks.delete(clipName);
     this.playbackState.delete(clipName);
     this.clipSources.delete(clipName);
+    this.additiveSupport.delete(clipName);
 
     return true;
   }
@@ -519,9 +645,13 @@ export class BakedAnimationController {
       this.setActionId(action, clipName);
     }
 
-    const playbackState = this.mergePlaybackOptions(
+    const playbackState = this.sanitizeBakedBlendMode(
+      clipName,
+      this.mergePlaybackOptions(
       this.getPlaybackStateSnapshot(clipName, { loop: true, source: 'baked' }),
       options
+      ),
+      action.getClip()
     );
     const crossfadeDuration = options.crossfadeDuration ?? 0;
     const clampWhenFinished = options.clampWhenFinished ?? playbackState.loopMode === 'once';
@@ -704,11 +834,18 @@ export class BakedAnimationController {
   setAnimationBlendMode(clipName: string, blendMode: AnimationBlendMode): void {
     const action = this.getOrCreateBakedAction(clipName);
     if (!action) return;
-    const next = this.getPlaybackStateSnapshot(clipName, {
-      loop: true,
-      source: this.clipSources.get(clipName) ?? 'baked',
-    });
-    next.blendMode = blendMode;
+    const next = this.sanitizeBakedBlendMode(
+      clipName,
+      {
+        ...this.getPlaybackStateSnapshot(clipName, {
+          loop: true,
+          source: this.clipSources.get(clipName) ?? 'baked',
+        }),
+        requestedBlendMode: blendMode,
+        blendMode,
+      },
+      action.getClip()
+    );
     this.applyPlaybackState(action, next);
     this.setPlaybackState(clipName, next);
   }
@@ -735,6 +872,7 @@ export class BakedAnimationController {
 
     const clip = action.getClip();
     const state = this.playbackState.get(clipName);
+    const additiveSupport = this.getAdditiveSupport(clipName, clip);
     const loopMode = state?.loopMode
       ?? (action.loop === LoopPingPong ? 'pingpong' : action.loop === LoopOnce ? 'once' : 'repeat');
     const playbackRate = state?.playbackRate ?? Math.abs(action.getEffectiveTimeScale());
@@ -752,7 +890,10 @@ export class BakedAnimationController {
       reverse,
       weight: state?.weight ?? action.getEffectiveWeight(),
       balance: state?.balance ?? 0,
+      requestedBlendMode: state?.requestedBlendMode ?? state?.blendMode ?? 'replace',
       blendMode: state?.blendMode ?? 'replace',
+      supportsAdditive: additiveSupport.supported,
+      additiveModeReason: additiveSupport.reason,
       easing: state?.easing ?? 'linear',
       loop: loopMode !== 'once',
       loopMode,

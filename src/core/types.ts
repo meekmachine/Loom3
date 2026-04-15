@@ -100,6 +100,9 @@ export type AnimationSource = 'baked' | 'clip' | 'snippet';
 /** Shared blend-mode surface for downstream animation UIs. */
 export type AnimationBlendMode = 'replace' | 'additive';
 
+/** Reason an additive request was coerced to a safer effective blend mode. */
+export type AnimationBlendModeFallbackReason = 'unsafe_baked_additive_tracks';
+
 /** Shared easing labels for downstream animation UIs. */
 export type AnimationEasing = 'linear' | 'easeInOut' | 'easeInOutCubic' | 'easeIn' | 'easeOut';
 
@@ -151,6 +154,10 @@ export interface AnimationClipInfo {
   trackCount: number;
   /** Source of the clip for downstream UI grouping */
   source?: AnimationSource;
+  /** Whether baked additive playback is considered safe for this clip */
+  supportsAdditive?: boolean;
+  /** Reason additive playback is unsafe for this clip, when known */
+  additiveModeReason?: AnimationBlendModeFallbackReason;
 }
 
 /**
@@ -181,8 +188,14 @@ export interface AnimationState {
   weight: number;
   /** Shared balance metadata for downstream UIs */
   balance: number;
+  /** Requested blend mode before any runtime safety coercion. */
+  requestedBlendMode: AnimationBlendMode;
   /** Shared blend metadata for downstream UIs */
   blendMode: AnimationBlendMode;
+  /** Whether additive playback is considered safe for this clip */
+  supportsAdditive?: boolean;
+  /** Reason additive playback is unsafe for this clip, when known */
+  additiveModeReason?: AnimationBlendModeFallbackReason;
   /** Shared easing metadata for downstream UIs */
   easing: AnimationEasing;
   /** Whether the animation is looping */

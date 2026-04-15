@@ -152,29 +152,38 @@ export function mergeRegionsByName(base?: Region[], override?: Region[]): Region
   return Array.from(merged.values());
 }
 
+function getAnnotationRegions(value: unknown): Region[] | undefined {
+  return Array.isArray(value) ? value as Region[] : undefined;
+}
+
+function getLegacyNestedOverrides(config: CharacterConfig): Record<string, unknown> {
+  return isPlainObject(config.profile) ? config.profile as Record<string, unknown> : {};
+}
+
+function getLegacyRuntimeRegions(config: CharacterConfig): Region[] | undefined {
+  return Array.isArray(config.regions) && config.regions.length > 0 ? config.regions : undefined;
+}
+
+function getCanonicalAnnotationOverrides(config: CharacterConfig): Region[] | undefined {
+  return mergeRegionsByName(
+    getAnnotationRegions(getLegacyNestedOverrides(config).annotationRegions),
+    getAnnotationRegions((config as unknown as Record<string, unknown>).annotationRegions),
+  );
+}
+
 export function extractProfileOverrides(config: CharacterConfig): Partial<Profile> {
   const topLevelConfig = config as unknown as Record<string, unknown>;
-  const legacyNestedOverrides = isPlainObject(config.profile)
-    ? config.profile as Record<string, unknown>
-    : {};
+  const legacyNestedOverrides = getLegacyNestedOverrides(config);
+  const canonicalAnnotationOverrides = getCanonicalAnnotationOverrides(config);
+  const legacyRuntimeRegions = getLegacyRuntimeRegions(config);
+  const annotationOverrides = canonicalAnnotationOverrides
+    ?? (legacyRuntimeRegions ? legacyRuntimeRegions.map((region) => cloneRegion(region)) : undefined);
   const overrides: Partial<Profile> = {};
 
   for (const key of PROFILE_OVERRIDE_KEYS) {
     if (key === 'annotationRegions') {
-      const topLevelAnnotationRegions = Array.isArray(topLevelConfig.annotationRegions)
-        ? topLevelConfig.annotationRegions as Region[]
-        : undefined;
-      const legacyAnnotationRegions = Array.isArray(legacyNestedOverrides.annotationRegions)
-        ? legacyNestedOverrides.annotationRegions as Region[]
-        : undefined;
-      const presetOverrideRegions = mergeRegionsByName(legacyAnnotationRegions, topLevelAnnotationRegions);
-      const regions = mergeRegionsByName(
-        presetOverrideRegions,
-        Array.isArray(config.regions) && config.regions.length > 0 ? config.regions : undefined
-      );
-
-      if (regions) {
-        overrides.annotationRegions = regions.map((region) => cloneRegion(region));
+      if (annotationOverrides) {
+        overrides.annotationRegions = annotationOverrides.map((region) => cloneRegion(region));
       }
       continue;
     }
@@ -234,9 +243,9 @@ function orderExtendedRegions(
  *
  * Precedence:
  * 1. preset defaults
- * 2. flattened top-level profile overrides
+ * 2. canonical flattened `annotationRegions` / top-level profile overrides
  * 3. legacy nested `config.profile` overrides (compatibility only)
- * 4. top-level saved `config.regions` overrides by region name
+ * 4. legacy `config.regions` fallback only when canonical annotation overrides are absent
  */
 export function extendCharacterConfigWithPreset(config: CharacterConfig): CharacterConfig {
   const presetType = config.auPresetType;
@@ -244,25 +253,41 @@ export function extendCharacterConfigWithPreset(config: CharacterConfig): Charac
     return config;
   }
 
+  const canonicalAnnotationOverrides = getCanonicalAnnotationOverrides(config);
+  const legacyRuntimeRegions = getLegacyRuntimeRegions(config);
   const profileOverrides = extractProfileOverrides(config);
   const extendedPresetProfile = applyCharacterProfileToPreset(config);
   if (!extendedPresetProfile) {
     return config;
   }
-  const presetRegions = extendedPresetProfile.annotationRegions as Region[] | undefined;
-  const mergedRegions = mergeRegionsByName(presetRegions, config.regions);
-  const normalizedRegions = normalizeRegionTree(
-    mergedRegions,
+  const presetRegionNames = new Set(
+    ((getPreset(presetType).annotationRegions as Region[] | undefined) ?? []).map((region) => region.name)
+  );
+  const resolvedAnnotationRegions = normalizeRegionTree(
+    extendedPresetProfile.annotationRegions as Region[] | undefined,
+    profileOverrides.disabledRegions,
+  );
+  const resolvedRegionNames = new Set((resolvedAnnotationRegions ?? []).map((region) => region.name));
+  const legacyExtraRegions = canonicalAnnotationOverrides && legacyRuntimeRegions
+    ? legacyRuntimeRegions
+        .filter((region) => !presetRegionNames.has(region.name) && !resolvedRegionNames.has(region.name))
+        .map((region) => cloneRegion(region))
+    : undefined;
+  const mergedRegions = normalizeRegionTree(
+    mergeRegionsByName(resolvedAnnotationRegions, legacyExtraRegions),
     profileOverrides.disabledRegions,
   );
   const extendedRegions = orderExtendedRegions(
-    normalizedRegions,
-    [config.regions, profileOverrides.annotationRegions as Region[] | undefined, presetRegions]
+    mergedRegions,
+    canonicalAnnotationOverrides
+      ? [canonicalAnnotationOverrides, resolvedAnnotationRegions, legacyExtraRegions]
+      : [legacyRuntimeRegions, resolvedAnnotationRegions]
   );
 
   return {
     ...config,
     ...extendedPresetProfile,
+    annotationRegions: extendedRegions ?? resolvedAnnotationRegions,
     regions: extendedRegions ?? config.regions,
   };
 }

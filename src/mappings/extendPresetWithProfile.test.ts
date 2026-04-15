@@ -51,6 +51,32 @@ describe('extendPresetWithProfile', () => {
     expect(mouth?.bones).toEqual(['Jaw']);
   });
 
+  it('merges annotation camera offsets by axis instead of replacing the whole vector', () => {
+    const result = extendPresetWithProfile(
+      {
+        ...basePreset,
+        annotationRegions: [
+          {
+            name: 'face',
+            bones: ['Head'],
+            cameraOffset: { x: 1, y: 2, z: 3 },
+          },
+        ],
+      },
+      {
+        annotationRegions: [
+          { name: 'face', cameraOffset: { y: 9 } },
+        ],
+      }
+    );
+
+    expect(result.annotationRegions?.find((region) => region.name === 'face')?.cameraOffset).toEqual({
+      x: 1,
+      y: 9,
+      z: 3,
+    });
+  });
+
   it('carries disabled region names without pruning annotation regions', () => {
     const result = extendPresetWithProfile(
       {

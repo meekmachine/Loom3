@@ -366,7 +366,7 @@ For the current runtime-oriented documentation, including:
 - `cameraOffset`
 - `style.lineDirection`
 - the difference between `cameraAngle: 0` and omitting `cameraAngle`
-- the current LoomLarge runtime note that annotations have not been moved from the demo project into Loom3 yet
+- runtime compatibility and legacy `config.regions` fallback behavior
 
 see [ANNOTATION_CONFIGURATION.md](./ANNOTATION_CONFIGURATION.md).
 

@@ -140,7 +140,8 @@ export class Loom3 implements LoomLarge {
   private mixWeights: Record<number, number> = {};
 
   // Viseme state
-  private visemeValues: number[] = new Array(15).fill(0);
+  private visemeValues: number[] = [];
+  private visemeJawScales: number[] = [];
 
 
   // Viseme jaw amounts
@@ -176,6 +177,7 @@ export class Loom3 implements LoomLarge {
     const basePreset = config.presetType ? getPreset(config.presetType) : CC4_PRESET;
     this.config = extendPresetWithProfile(basePreset, config.profile);
     this.mixWeights = { ...this.config.auMixDefaults };
+    this.syncVisemeRuntimeState();
     this.animation = animation || new AnimationThree();
 
     // Use config's composite rotations or default to CC4
@@ -898,6 +900,7 @@ export class Loom3 implements LoomLarge {
 
     const val = clamp01(value);
     this.visemeValues[visemeIndex] = val;
+    this.visemeJawScales[visemeIndex] = jawScale;
 
     const targets = this.resolvedVisemeTargets[visemeIndex];
     if (targets && targets.length > 0) {
@@ -912,7 +915,7 @@ export class Loom3 implements LoomLarge {
       }
     }
 
-    const jawAmount = Loom3.VISEME_JAW_AMOUNTS[visemeIndex] * val * jawScale;
+    const jawAmount = this.getVisemeJawAmount(visemeIndex) * val * jawScale;
     if (Math.abs(jawScale) > 1e-6 && Math.abs(jawAmount) > 1e-6) {
       this.updateBoneRotation('JAW', 'pitch', jawAmount);
     }
@@ -926,13 +929,14 @@ export class Loom3 implements LoomLarge {
     const morphKey = this.config.visemeKeys[visemeIndex];
     const target = clamp01(to);
     this.visemeValues[visemeIndex] = target;
+    this.visemeJawScales[visemeIndex] = jawScale;
     const visemeMeshNames = this.getMeshNamesForViseme();
 
     const morphHandle = typeof morphKey === 'number'
       ? this.transitionMorphInfluence(morphKey, target, durationMs, visemeMeshNames)
       : this.transitionMorph(morphKey, target, durationMs, visemeMeshNames);
 
-    const jawAmount = Loom3.VISEME_JAW_AMOUNTS[visemeIndex] * target * jawScale;
+    const jawAmount = this.getVisemeJawAmount(visemeIndex) * target * jawScale;
     if (Math.abs(jawScale) <= 1e-6 || Math.abs(jawAmount) <= 1e-6) {
       return morphHandle;
     }
@@ -985,6 +989,9 @@ export class Loom3 implements LoomLarge {
 
   resetToNeutral(): void {
     this.auValues = {};
+    this.visemeValues = new Array(this.config.visemeKeys.length).fill(0);
+    this.visemeJawScales = new Array(this.config.visemeKeys.length).fill(1);
+    this.translations = {};
     this.initBoneRotations();
     this.clearTransitions();
 
@@ -1001,6 +1008,38 @@ export class Loom3 implements LoomLarge {
       entry.obj.position.copy(entry.basePos as any);
       entry.obj.quaternion.copy(entry.baseQuat);
     });
+  }
+
+  private reinitializeRuntimeStateFromCurrentControls(staleMorphTargets: MorphTargetHandle[] = []): void {
+    this.clearTransitions();
+    this.resetMorphTargetHandles(staleMorphTargets);
+    this.translations = {};
+    this.initBoneRotations();
+
+    Object.values(this.bones).forEach((entry) => {
+      if (!entry) return;
+      entry.obj.position.copy(entry.basePos as any);
+      entry.obj.quaternion.copy(entry.baseQuat);
+      entry.obj.updateMatrixWorld(false);
+    });
+
+    for (const [auIdStr, value] of Object.entries(this.auValues)) {
+      if (value <= 0) continue;
+      const auId = Number(auIdStr);
+      if (Number.isNaN(auId)) continue;
+      this.setAU(auId, value, this.auBalances[auId]);
+    }
+
+    for (let visemeIndex = 0; visemeIndex < this.visemeValues.length; visemeIndex += 1) {
+      const value = this.visemeValues[visemeIndex] ?? 0;
+      if (value <= 0) continue;
+      this.setViseme(visemeIndex, value, this.visemeJawScales[visemeIndex] ?? 1);
+    }
+
+    if (this.model) {
+      this.flushPendingComposites();
+      this.model.updateMatrixWorld(true);
+    }
   }
 
   // ============================================================================
@@ -1296,12 +1335,20 @@ export class Loom3 implements LoomLarge {
 
   setProfile(profile: Profile): void {
     this.config = profile;
+    this.compositeRotations = this.config.compositeRotations || CC4_COMPOSITE_ROTATIONS;
+    this.auToCompositeMap = buildAUToCompositeMap(this.compositeRotations);
     this.mixWeights = { ...profile.auMixDefaults };
+    this.syncVisemeRuntimeState();
+    let staleMorphTargets: MorphTargetHandle[] = [];
     if (this.model) {
+      staleMorphTargets = this.collectResolvedExpressionMorphTargets();
+      this.bones = this.resolveBones(this.model);
+      this.missingBoneWarnings.clear();
       this.rebuildMorphTargetsCache();
     }
     this.hairPhysics.refreshMeshSelection();
     this.applyHairPhysicsProfileConfig();
+    this.reinitializeRuntimeStateFromCurrentControls(staleMorphTargets);
   }
 
   getProfile(): Profile { return this.config; }
@@ -1469,6 +1516,48 @@ export class Loom3 implements LoomLarge {
 
   private getMorphIndexCacheKey(index: number, meshNames?: string[]): string {
     return meshNames?.length ? `idx:${index}@${meshNames.join(',')}` : `idx:${index}`;
+  }
+
+  private syncVisemeRuntimeState(): void {
+    const visemeCount = this.config.visemeKeys.length;
+    this.visemeValues = Array.from(
+      { length: visemeCount },
+      (_, index) => this.visemeValues[index] ?? 0
+    );
+    this.visemeJawScales = Array.from(
+      { length: visemeCount },
+      (_, index) => this.visemeJawScales[index] ?? 1
+    );
+  }
+
+  private getVisemeJawAmount(visemeIndex: number): number {
+    return this.config.visemeJawAmounts?.[visemeIndex]
+      ?? Loom3.VISEME_JAW_AMOUNTS[visemeIndex]
+      ?? 0;
+  }
+
+  private collectResolvedExpressionMorphTargets(): MorphTargetHandle[] {
+    const targets: MorphTargetHandle[] = [];
+
+    for (const resolved of this.resolvedAUMorphTargets.values()) {
+      targets.push(...resolved.left, ...resolved.right, ...resolved.center);
+    }
+
+    for (const resolved of this.resolvedVisemeTargets) {
+      if (resolved?.length) {
+        targets.push(...resolved);
+      }
+    }
+
+    return targets;
+  }
+
+  private resetMorphTargetHandles(targets: MorphTargetHandle[]): void {
+    for (const { infl, idx } of targets) {
+      if (idx < infl.length) {
+        infl[idx] = 0;
+      }
+    }
   }
 
   private isMixedAU(id: number): boolean {
@@ -1657,6 +1746,7 @@ export class Loom3 implements LoomLarge {
 
   private resolveBones(root: Object3D): ResolvedBones {
     const resolved: ResolvedBones = {};
+    const previousBones = this.bones;
 
     const snapshot = (obj: any): NodeBase => ({
       obj,
@@ -1664,6 +1754,20 @@ export class Loom3 implements LoomLarge {
       baseQuat: obj.quaternion.clone(),
       baseEuler: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z, order: obj.rotation.order },
     });
+
+    const snapshotPreservingBasePose = (obj: Object3D): NodeBase => {
+      const existing = Object.values(previousBones).find((entry) => entry?.obj === obj);
+      if (!existing) {
+        return snapshot(obj);
+      }
+
+      return {
+        obj,
+        basePos: { ...existing.basePos },
+        baseQuat: existing.baseQuat.clone(),
+        baseEuler: { ...existing.baseEuler },
+      };
+    };
 
     // Build suffix regex from config pattern
     const prefix = this.config.bonePrefix || '';
@@ -1714,20 +1818,20 @@ export class Loom3 implements LoomLarge {
     for (const [key, nodeName] of Object.entries(this.config.boneNodes)) {
       const node = findNode(nodeName);
       if (node) {
-        resolved[key] = snapshot(node);
+        resolved[key] = snapshotPreservingBasePose(node);
       }
     }
 
     if (!resolved.EYE_L && this.config.eyeMeshNodes) {
       const node = findNode(this.config.eyeMeshNodes.LEFT);
       if (node) {
-        resolved.EYE_L = snapshot(node);
+        resolved.EYE_L = snapshotPreservingBasePose(node);
       }
     }
     if (!resolved.EYE_R && this.config.eyeMeshNodes) {
       const node = findNode(this.config.eyeMeshNodes.RIGHT);
       if (node) {
-        resolved.EYE_R = snapshot(node);
+        resolved.EYE_R = snapshotPreservingBasePose(node);
       }
     }
 

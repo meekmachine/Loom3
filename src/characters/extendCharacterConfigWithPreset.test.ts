@@ -290,14 +290,48 @@ describe('extendCharacterConfigWithPreset', () => {
     expect(extended.suffixPattern).toBe('_\\d+$|\\.\\d+$');
   });
 
-  it('uses fish preset annotation regions when saved top-level regions are absent', () => {
+  it('uses fish preset mappings, meshes, and annotation regions when saved overrides are absent', () => {
     const extended = extendCharacterConfigWithPreset(
       createConfig({
         auPresetType: 'fish',
         regions: [],
+        boneNodes: undefined,
+        bonePrefix: undefined,
+        boneSuffix: undefined,
+        suffixPattern: undefined,
+        meshes: undefined,
       })
     );
 
+    expect(extended.bonePrefix).toBe('Bone.');
+    expect(extended.boneSuffix).toBe('_Armature');
+    expect(extended.suffixPattern).toBe('_\\d+$|\\.\\d+$');
+    expect(extended.boneNodes).toMatchObject({
+      HEAD: '001',
+      BODY_FRONT: '002',
+      TAIL_BASE: '005',
+      DORSAL_ROOT: '006',
+    });
+    expect(extended.meshes).toMatchObject({
+      BODY_0: {
+        material: {
+          renderOrder: 20,
+          opacity: 1,
+        },
+      },
+      EYES_0: {
+        material: {
+          renderOrder: 17,
+          opacity: 1,
+        },
+      },
+      Cube_0: {
+        material: {
+          renderOrder: -20,
+          opacity: 0,
+        },
+      },
+    });
     expect(extended.regions.map((region) => region.name)).toEqual([
       'full_body',
       'head',

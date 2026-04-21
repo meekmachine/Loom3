@@ -120,6 +120,16 @@ export type {
 } from './mappings/types';
 
 export { BLENDING_MODES } from './mappings/types';
+export {
+  inferChiralBonePairs,
+  getChiralCounterpartNodeKey,
+} from './mappings/chiralMatching';
+export type {
+  ChiralSide,
+  ChiralBoneNode,
+  ChiralBonePair,
+  ChiralBoneInference,
+} from './mappings/chiralMatching';
 
 // ============================================================================
 // CHARACTER CONFIG (Regions, Markers)

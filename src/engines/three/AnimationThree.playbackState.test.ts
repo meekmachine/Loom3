@@ -11,10 +11,11 @@ import {
 import type { Profile } from '../../mappings/types';
 import { BakedAnimationController, type BakedAnimationHost } from './AnimationThree';
 
-function makeHost(options: { includeHeadBone?: boolean } = {}): {
+function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean } = {}): {
   controller: BakedAnimationController;
   model: Object3D;
   head: Object3D | null;
+  hip: Object3D | null;
 } {
   const model = new Object3D();
   const mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial());
@@ -27,9 +28,15 @@ function makeHost(options: { includeHeadBone?: boolean } = {}): {
     head.name = 'Head';
     model.add(head);
   }
+  const hip = options.includeHipBone ? new Object3D() : null;
+  if (hip) {
+    hip.name = 'CC_Base_Hip';
+    model.add(hip);
+  }
 
-  const bones = head
-    ? {
+  const bones = {
+    ...(head
+      ? {
         HEAD: {
           obj: head,
           basePos: { x: head.position.x, y: head.position.y, z: head.position.z },
@@ -37,12 +44,26 @@ function makeHost(options: { includeHeadBone?: boolean } = {}): {
           baseEuler: { x: head.rotation.x, y: head.rotation.y, z: head.rotation.z, order: head.rotation.order },
         },
       }
-    : {};
+      : {}),
+    ...(hip
+      ? {
+        HIPS: {
+          obj: hip,
+          basePos: { x: hip.position.x, y: hip.position.y, z: hip.position.z },
+          baseQuat: hip.quaternion.clone(),
+          baseEuler: { x: hip.rotation.x, y: hip.rotation.y, z: hip.rotation.z, order: hip.rotation.order },
+        },
+      }
+      : {}),
+  };
 
   const profile: Profile = {
     auToMorphs: {},
     auToBones: {},
-    boneNodes: head ? { HEAD: 'Head' } : {},
+    boneNodes: {
+      ...(head ? { HEAD: 'Head' } : {}),
+      ...(hip ? { HIPS: 'CC_Base_Hip' } : {}),
+    },
     morphToMesh: { face: ['FaceMesh'] },
     visemeKeys: [],
   };
@@ -59,7 +80,7 @@ function makeHost(options: { includeHeadBone?: boolean } = {}): {
     isMixedAU: () => false,
   };
 
-  return { controller: new BakedAnimationController(host), model, head };
+  return { controller: new BakedAnimationController(host), model, head, hip };
 }
 
 function makeTransformClip(model: Object3D, name: string): AnimationClip {
@@ -77,6 +98,18 @@ function makeMorphClip(name: string): AnimationClip {
 function makeSafeBoneClip(head: Object3D, name: string): AnimationClip {
   return new AnimationClip(name, 1, [
     new QuaternionKeyframeTrack(`${head.uuid}.quaternion`, [0, 1], [0, 0, 0, 1, 0, 0, 0, 1]),
+  ]);
+}
+
+function makeBonePositionClip(target: Object3D, name: string): AnimationClip {
+  return new AnimationClip(name, 1, [
+    new NumberKeyframeTrack(`${target.uuid}.position[x]`, [0, 1], [0, 1]),
+  ]);
+}
+
+function makeBoneQuaternionClip(target: Object3D, name: string): AnimationClip {
+  return new AnimationClip(name, 1, [
+    new QuaternionKeyframeTrack(`${target.uuid}.quaternion`, [0, 1], [0, 0, 0, 1, 0, 0, 0, 1]),
   ]);
 }
 
@@ -141,6 +174,44 @@ describe('BakedAnimationController playback state normalization', () => {
     expect(controller.getAnimationClips()[0]).toMatchObject({
       name: 'HeadNod',
       supportsAdditive: true,
+    });
+  });
+
+  it('falls back to replace for resolved bone position tracks even when the bone is whitelisted', () => {
+    const { controller, head } = makeHost({ includeHeadBone: true });
+    expect(head).toBeTruthy();
+    controller.loadAnimationClips([makeBonePositionClip(head!, 'HeadShift')]);
+
+    const handle = controller.playAnimation('HeadShift', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    expect(controller.getAnimationState('HeadShift')).toMatchObject({
+      name: 'HeadShift',
+      requestedBlendMode: 'additive',
+      blendMode: 'replace',
+      supportsAdditive: false,
+      additiveModeReason: 'unsafe_baked_additive_tracks',
+    });
+  });
+
+  it('falls back to replace for root-like bone rotation tracks even when they resolve as bones', () => {
+    const { controller, hip } = makeHost({ includeHipBone: true });
+    expect(hip).toBeTruthy();
+    controller.loadAnimationClips([makeBoneQuaternionClip(hip!, 'HipTurn')]);
+
+    const handle = controller.playAnimation('HipTurn', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    expect(controller.getAnimationState('HipTurn')).toMatchObject({
+      name: 'HipTurn',
+      requestedBlendMode: 'additive',
+      blendMode: 'replace',
+      supportsAdditive: false,
+      additiveModeReason: 'unsafe_baked_additive_tracks',
     });
   });
 

@@ -216,6 +216,7 @@ type NormalizedPlaybackState = {
 type AdditiveSupport = {
   supported: boolean;
   reason?: AnimationBlendModeFallbackReason;
+  unsupportedTracks?: string[];
 };
 
 export class BakedAnimationController {
@@ -235,6 +236,10 @@ export class BakedAnimationController {
 
   constructor(host: BakedAnimationHost) {
     this.host = host;
+  }
+
+  private isRootLikeAdditiveTarget(target: Object3D): boolean {
+    return /(armature|boneroot|root|hip|pelvis)/i.test(target.name || '');
   }
 
   private getActionId(action?: AnimationAction | null): string | undefined {
@@ -404,6 +409,12 @@ export class BakedAnimationController {
         return true;
       }
 
+      // Additive translation moves the rig in world/model space and is not safe
+      // for baked playback, even when the target resolves as a known bone.
+      if (parsed.propertyName === 'position') {
+        return true;
+      }
+
       const targetKey = parsed.objectName === 'bones' && parsed.objectIndex
         ? parsed.objectIndex
         : parsed.nodeName;
@@ -417,7 +428,11 @@ export class BakedAnimationController {
         return true;
       }
 
-      return !safeTransformTargets.has(target);
+      if (!safeTransformTargets.has(target)) {
+        return true;
+      }
+
+      return this.isRootLikeAdditiveTarget(target);
     });
 
     if (unsupportedTracks.length === 0) {
@@ -427,6 +442,9 @@ export class BakedAnimationController {
     return {
       supported: false,
       reason: 'unsafe_baked_additive_tracks',
+      unsupportedTracks: unsupportedTracks
+        .map((track) => (typeof track?.name === 'string' ? track.name : ''))
+        .filter(Boolean),
     };
   }
 
@@ -468,7 +486,10 @@ export class BakedAnimationController {
 
     console.warn(
       `[Loom3] Baked clip "${clipName}" does not support additive playback; falling back to replace.` +
-      (support.reason ? ` ${support.reason}.` : '')
+      (support.reason ? ` ${support.reason}.` : '') +
+      (support.unsupportedTracks?.length
+        ? ` Unsupported tracks: ${support.unsupportedTracks.slice(0, 8).join(', ')}.`
+        : '')
     );
 
     return {

@@ -90,6 +90,9 @@ export type {
   AnimationEasing,
   AnimationPlayOptions,
   AnimationClipInfo,
+  FBXAnimationInput,
+  FBXAnimationImportOptions,
+  FBXAnimationImportResult,
   AnimationState,
   AnimationActionHandle,
   // Snippet-to-clip types

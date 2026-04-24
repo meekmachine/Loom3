@@ -23,6 +23,9 @@ import type {
   TransitionHandle,
   AnimationPlayOptions,
   AnimationClipInfo,
+  FBXAnimationImportOptions,
+  FBXAnimationImportResult,
+  FBXAnimationInput,
   AnimationState,
   AnimationActionHandle,
   CurvesMap,
@@ -48,6 +51,7 @@ import {
   resolveBakedChannelBlendMode,
   type PartitionedBakedClip,
 } from './bakedClipPartitioning';
+import { retargetFbxAnimationClips } from './fbxAnimationImport';
 
 type Transition = {
   key: string;
@@ -570,46 +574,34 @@ export class BakedAnimationController {
     this.playbackState.clear();
   }
 
-  loadAnimationClips(clips: unknown[]): void {
+  private buildClipInfo(clip: AnimationClip): AnimationClipInfo {
+    return {
+      name: clip.name,
+      duration: clip.duration,
+      trackCount: clip.tracks.length,
+      source: this.clipSources.get(clip.name) ?? 'baked',
+      channels: this.getBakedSourceClip(clip.name)?.channels,
+    };
+  }
+
+  private appendAnimationClips(clips: AnimationClip[]): AnimationClipInfo[] {
     const model = this.host.getModel();
     if (!model) {
       console.warn('Loom3: Cannot load animation clips before calling onReady()');
-      return;
+      return [];
     }
-
-    for (const clipName of this.bakedSourceClips.keys()) {
-      this.stopAnimation(clipName);
-    }
-    if (this.animationMixer) {
-      for (const bakedClip of this.bakedSourceClips.values()) {
-        for (const runtimeClip of bakedClip.runtimeClips) {
-          try {
-            this.animationMixer.uncacheAction(runtimeClip.clip);
-          } catch {}
-          try {
-            this.animationMixer.uncacheClip(runtimeClip.clip);
-          } catch {}
-        }
-      }
-    }
-
-    for (const clipName of this.bakedSourceClips.keys()) {
-      this.playbackState.delete(clipName);
-      this.clipSources.delete(clipName);
-    }
-
-    this.bakedSourceClips.clear();
-    this.bakedRuntimeActions.clear();
-    this.bakedActionGroups.clear();
-    this.bakedRuntimeClipToSource.clear();
 
     this.ensureMixer();
-    const partitionedClips = (clips as AnimationClip[]).map((clip) => (
+    const partitionedClips = clips.map((clip) => (
       partitionBakedClip(clip, model, this.host.getBones())
     ));
 
-    this.animationClips = partitionedClips.map((clip) => clip.sourceClip);
+    for (const clip of clips) {
+      this.removeAnimationClip(clip.name);
+    }
+
     for (const bakedClip of partitionedClips) {
+      this.animationClips.push(bakedClip.sourceClip);
       this.bakedSourceClips.set(bakedClip.sourceClip.name, bakedClip);
       this.clipSources.set(bakedClip.sourceClip.name, 'baked');
       for (const runtimeClip of bakedClip.runtimeClips) {
@@ -619,16 +611,47 @@ export class BakedAnimationController {
         });
       }
     }
+
+    return partitionedClips.map((clip) => this.buildClipInfo(clip.sourceClip));
+  }
+
+  loadAnimationClips(clips: unknown[]): void {
+    for (const clip of [...this.animationClips]) {
+      this.removeAnimationClip(clip.name);
+    }
+
+    this.appendAnimationClips(clips as AnimationClip[]);
+  }
+
+  async loadAnimationClipsFromFBX(
+    source: FBXAnimationInput,
+    options: FBXAnimationImportOptions = {}
+  ): Promise<FBXAnimationImportResult> {
+    const model = this.host.getModel();
+    if (!model) {
+      throw new Error('Loom3: Cannot load FBX animation clips before calling onReady()');
+    }
+
+    const imported = await retargetFbxAnimationClips(model, source, options);
+
+    if (options.append === false) {
+      for (const clip of [...this.animationClips]) {
+        this.removeAnimationClip(clip.name);
+      }
+    }
+
+    const loadedClips = this.appendAnimationClips(imported.clips);
+
+    return {
+      clips: imported.clips,
+      loadedClips,
+      sourceClipCount: imported.sourceClipCount,
+      matchedBoneCount: imported.matchedBoneCount,
+    };
   }
 
   getAnimationClips(): AnimationClipInfo[] {
-    return this.animationClips.map(clip => ({
-      name: clip.name,
-      duration: clip.duration,
-      trackCount: clip.tracks.length,
-      source: this.clipSources.get(clip.name) ?? 'baked',
-      channels: this.getBakedSourceClip(clip.name)?.channels,
-    }));
+    return this.animationClips.map((clip) => this.buildClipInfo(clip));
   }
 
   removeAnimationClip(clipName: string): boolean {

@@ -8,6 +8,9 @@ import type {
   TransitionHandle,
   AnimationPlayOptions,
   AnimationClipInfo,
+  FBXAnimationImportOptions,
+  FBXAnimationImportResult,
+  FBXAnimationInput,
   AnimationState,
   AnimationActionHandle,
   ClipOptions,
@@ -189,6 +192,13 @@ export interface Animation {
    * @param clips - Array of AnimationClip objects from GLTF loader
    */
   loadAnimationClips(clips: unknown[]): void;
+
+  /**
+   * Parse, retarget, and register baked animation clips from an FBX file.
+   * The imported clips are sanitized to the current rig before they are added
+   * to the baked animation registry.
+   */
+  loadAnimationClipsFromFBX(source: FBXAnimationInput, options?: FBXAnimationImportOptions): Promise<FBXAnimationImportResult>;
 
   /**
    * Get list of all loaded animation clips.

@@ -154,6 +154,25 @@ export interface AnimationPlayOptions {
   source?: AnimationSource;
 }
 
+/** Supported input types for FBX animation import. */
+export type FBXAnimationInput = ArrayBuffer | ArrayBufferView | Blob;
+
+/** Options for importing and retargeting baked animation clips from an FBX file. */
+export interface FBXAnimationImportOptions {
+  /** Append to the existing baked clip registry (default: true). */
+  append?: boolean;
+  /** Optional override for the imported clip name. */
+  clipName?: string;
+  /** Optional sampling rate override passed into Three.js retargeting. */
+  fps?: number;
+  /** Keep root/hip locomotion instead of forcing the clip to play in place. */
+  inPlace?: boolean;
+  /** Preserve first-frame hip offset when retargeting (default: false). */
+  useFirstFramePosition?: boolean;
+  /** Optional custom resolver from target bone name -> source bone name. */
+  resolveSourceBoneName?: (targetBoneName: string) => string | null;
+}
+
 /**
  * Information about a loaded animation clip.
  */
@@ -168,6 +187,18 @@ export interface AnimationClipInfo {
   source?: AnimationSource;
   /** Derived channel metadata for partitioned baked clips. */
   channels?: BakedClipChannelInfo[];
+}
+
+/** Result returned by Loom3 after importing one or more FBX animation clips. */
+export interface FBXAnimationImportResult {
+  /** Imported clips registered with the baked animation controller. */
+  clips: unknown[];
+  /** Summary info for the registered clips. */
+  loadedClips: AnimationClipInfo[];
+  /** Number of source clips discovered in the FBX scene. */
+  sourceClipCount: number;
+  /** Number of target bones that successfully mapped to source bones. */
+  matchedBoneCount: number;
 }
 
 /**

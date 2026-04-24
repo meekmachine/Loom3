@@ -159,6 +159,21 @@ export {
   resolveFaceCenter,
 } from './regions/regionMapping';
 
+export type {
+  AnnotationValidationCode,
+  AnnotationValidationIssue,
+} from './regions/annotationRegions';
+
+export {
+  cloneAnnotationRegion,
+  mergeAnnotationRegionsByName,
+  mergeAnnotationRegion,
+  removeAnnotationRegionByName,
+  reorderAnnotationRegions,
+  resetAnnotationRegionByName,
+  validateAnnotationRegions,
+} from './regions/annotationRegions';
+
 // ============================================================================
 // PRESETS
 // ============================================================================

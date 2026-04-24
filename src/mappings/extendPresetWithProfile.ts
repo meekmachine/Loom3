@@ -1,4 +1,5 @@
 import type { Profile, AnnotationRegion, HairPhysicsProfileConfig } from './types';
+import { mergeAnnotationRegionsByName } from '../regions/annotationRegions';
 
 type RecordValue = string | number | boolean | object | null | undefined;
 type RecordKey = string | number;
@@ -36,60 +37,6 @@ const mergeRecord = <K extends RecordKey, T extends RecordValue>(
   }
 
   return next;
-};
-
-const mergeAnnotationRegion = (
-  base: AnnotationRegion,
-  override: AnnotationRegion
-): AnnotationRegion => {
-  const merged: AnnotationRegion = {
-    ...base,
-    ...override,
-  };
-
-  merged.bones = override.bones ? [...override.bones] : base.bones ? [...base.bones] : undefined;
-  merged.meshes = override.meshes ? [...override.meshes] : base.meshes ? [...base.meshes] : undefined;
-  merged.objects = override.objects ? [...override.objects] : base.objects ? [...base.objects] : undefined;
-  merged.children = override.children ? [...override.children] : base.children ? [...base.children] : undefined;
-  merged.cameraOffset = override.cameraOffset
-    ? { ...override.cameraOffset }
-    : base.cameraOffset
-      ? { ...base.cameraOffset }
-      : undefined;
-  merged.style = override.style
-    ? {
-        ...base.style,
-        ...override.style,
-        line: override.style.line
-          ? { ...base.style?.line, ...override.style.line }
-          : base.style?.line
-            ? { ...base.style.line }
-            : undefined,
-      }
-    : base.style
-      ? { ...base.style, line: base.style.line ? { ...base.style.line } : undefined }
-      : undefined;
-
-  return merged;
-};
-
-const mergeAnnotationRegions = (
-  base?: AnnotationRegion[],
-  override?: AnnotationRegion[]
-): AnnotationRegion[] | undefined => {
-  if (!base && !override) return undefined;
-  if (!base) return override ? override.map((region) => mergeAnnotationRegion(region, region)) : undefined;
-  const regionMap = new Map<string, AnnotationRegion>();
-  for (const region of base) {
-    regionMap.set(region.name, mergeAnnotationRegion(region, region));
-  }
-  if (override) {
-    for (const region of override) {
-      const existing = regionMap.get(region.name);
-      regionMap.set(region.name, existing ? mergeAnnotationRegion(existing, region) : mergeAnnotationRegion(region, region));
-    }
-  }
-  return Array.from(regionMap.values());
 };
 
 const mergeHairPhysicsConfig = (
@@ -181,7 +128,7 @@ export function extendPresetWithProfile(base: Profile, extension?: Partial<Profi
     continuumLabels: base.continuumLabels || extension.continuumLabels
       ? mergeRecord(base.continuumLabels || {}, extension.continuumLabels || {})
       : undefined,
-    annotationRegions: mergeAnnotationRegions(base.annotationRegions, extension.annotationRegions),
+    annotationRegions: mergeAnnotationRegionsByName(base.annotationRegions, extension.annotationRegions),
     disabledRegions,
     hairPhysics: mergeHairPhysicsConfig(base.hairPhysics, extension.hairPhysics),
   };

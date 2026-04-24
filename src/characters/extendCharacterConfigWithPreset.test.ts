@@ -194,6 +194,26 @@ describe('extendCharacterConfigWithPreset', () => {
     });
   });
 
+  it('preserves explicit custom annotation positions through preset extension', () => {
+    const extended = extendCharacterConfigWithPreset(
+      createConfig({
+        regions: [
+          {
+            name: 'left_eye',
+            customPosition: { x: 1, y: 2, z: 3 },
+          },
+        ],
+      })
+    );
+
+    expect(extended.regions.find((region) => region.name === 'left_eye')).toMatchObject({
+      name: 'left_eye',
+      bones: ['EYE_L'],
+      parent: 'head',
+      customPosition: { x: 1, y: 2, z: 3 },
+    });
+  });
+
   it('drops disabled preset regions after extension and cleans parent-child links', () => {
     const extended = extendCharacterConfigWithPreset(
       createConfig({
@@ -364,6 +384,26 @@ describe('extractProfileOverrides', () => {
     });
     expect(overrides.disabledRegions).toEqual(['mouth']);
     expect(overrides.annotationRegions).toBeUndefined();
+  });
+
+  it('extracts top-level regions as canonical annotation profile overrides including customPosition', () => {
+    const overrides = extractProfileOverrides(
+      createConfig({
+        regions: [
+          {
+            name: 'left_eye',
+            customPosition: { x: 1, y: 2, z: 3 },
+          },
+        ],
+      })
+    );
+
+    expect(overrides.annotationRegions).toEqual([
+      {
+        name: 'left_eye',
+        customPosition: { x: 1, y: 2, z: 3 },
+      },
+    ]);
   });
 });
 

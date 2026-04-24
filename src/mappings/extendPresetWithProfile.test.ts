@@ -37,7 +37,7 @@ describe('extendPresetWithProfile', () => {
   it('merges annotation regions by name', () => {
     const result = extendPresetWithProfile(basePreset, {
       annotationRegions: [
-        { name: 'face', meshes: ['FaceMesh2'], paddingFactor: 1.5 },
+        { name: 'face', meshes: ['FaceMesh2'], paddingFactor: 1.5, customPosition: { x: 1, y: 2, z: 3 } },
         { name: 'mouth', bones: ['Jaw'] },
       ],
     });
@@ -48,6 +48,7 @@ describe('extendPresetWithProfile', () => {
     expect(face?.meshes).toEqual(['FaceMesh2']);
     expect(face?.bones).toEqual(['Head']);
     expect(face?.paddingFactor).toBe(1.5);
+    expect(face?.customPosition).toEqual({ x: 1, y: 2, z: 3 });
     expect(mouth?.bones).toEqual(['Jaw']);
   });
 

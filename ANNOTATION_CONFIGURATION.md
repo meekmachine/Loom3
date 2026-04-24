@@ -1,14 +1,13 @@
 # Annotation Configuration
 
-Loom3 exposes annotation configuration through `annotationRegions` on `Profile`, but the current LoomLarge demo/runtime still reads top-level `CharacterConfig.regions` as the live source of truth.
+Loom3 exposes annotation configuration through `annotationRegions` on `Profile`.
 
-> Note
-> Annotations have not been moved from the demo project into Loom3 yet, but we plan to move them soon.
+For authoring and persistence, **treat `annotationRegions` as the canonical Loom3 shape**.
 
-This means there are two related shapes to know about:
+The current LoomLarge runtime still reads top-level `CharacterConfig.regions` as its live source of truth, so there are still two related shapes to understand:
 
-1. The Loom3 profile shape: `profile.annotationRegions`
-2. The current LoomLarge runtime shape: `config.regions`
+1. The canonical authored shape: `profile.annotationRegions`
+2. The current runtime/back-compat shape: `config.regions`
 
 ## Current Runtime Truth
 
@@ -58,6 +57,20 @@ export const HUMAN_ANNOTATION_OVERRIDES: Partial<Profile> = {
 
 `extendPresetWithProfile()` merges `annotationRegions` by region name, so a profile can override just the fields it needs without copying the full preset region array.
 
+If you are working with a full saved `CharacterConfig`, prefer `extendCharacterConfigWithPreset(...)` to build the runtime `regions` shape from the canonical authored annotation config.
+
+Loom3 also exports package-side annotation authoring helpers:
+
+```ts
+import {
+  mergeAnnotationRegionsByName,
+  removeAnnotationRegionByName,
+  reorderAnnotationRegions,
+  resetAnnotationRegionByName,
+  validateAnnotationRegions,
+} from '@lovelace_lol/loom3';
+```
+
 ## Region Fields
 
 Each annotation region supports these fields:
@@ -102,6 +115,7 @@ interface AnnotationRegion {
   };
   groupId?: string;
   isFallback?: boolean;
+  customPosition?: { x: number; y: number; z: number };
 }
 ```
 
@@ -144,6 +158,14 @@ Final additive offset applied after the camera position is computed.
 - Do not use it as a replacement for semantic left/right camera behavior.
 - In the current runtime it is applied in world space, not in model-local space.
 
+### `customPosition`
+
+Explicit world-space anchor override for the region.
+
+- If set, runtime marker systems can use it instead of a derived geometry center.
+- This is useful when automatic geometry resolution is close but not exact.
+- Because it is explicit authoring data, prefer storing it on `annotationRegions` rather than inventing an app-only side channel.
+
 ## Marker Fields
 
 These fields affect marker presentation, not camera framing:
@@ -182,6 +204,18 @@ Use this when the visible annotation surface is better described by mesh geometr
 
 General object targets. `['*']` means the whole model.
 
+## Region suppression
+
+Profiles can also carry:
+
+```ts
+disabledRegions?: string[];
+```
+
+Use this when a preset region should be suppressed for a specific character while preserving the rest of the preset region tree.
+
+`extendCharacterConfigWithPreset(...)` applies `disabledRegions` through `normalizeRegionTree(...)`, which removes disabled regions and repairs parent/child links in the effective runtime region list.
+
 ## Recommended Authoring Pattern
 
 For common behavior shared by a preset:
@@ -191,8 +225,47 @@ For common behavior shared by a preset:
 
 For the current LoomLarge runtime:
 
-1. Put the active camera/marker settings in top-level `config.regions`.
-2. Treat `profile.annotationRegions` as the intended Loom3-native shape, not the currently consumed demo-app source of truth.
+1. Author and persist the intended camera/marker settings in `profile.annotationRegions`.
+2. Use `extendCharacterConfigWithPreset(...)` to materialize the effective runtime `config.regions` shape.
+3. Treat direct writes to top-level `config.regions` as a runtime/back-compat path, not the preferred authored source of truth.
+
+## Helper usage examples
+
+### Merge an edited region into authored annotation overrides
+
+```ts
+const nextRegions = mergeAnnotationRegionsByName(profile.annotationRegions, [
+  {
+    name: 'left_eye',
+    cameraAngle: 45,
+    customPosition: { x: 0.02, y: 1.61, z: 0.11 },
+  },
+]);
+```
+
+### Remove a custom region override
+
+```ts
+const nextRegions = removeAnnotationRegionByName(profile.annotationRegions, 'visor');
+```
+
+### Restore one region back to preset defaults
+
+```ts
+const resetRegions = resetAnnotationRegionByName(
+  profile.annotationRegions,
+  preset.annotationRegions,
+  'left_eye',
+);
+```
+
+### Validate annotation authoring data before saving
+
+```ts
+const issues = validateAnnotationRegions(profile.annotationRegions, {
+  disabledRegions: profile.disabledRegions,
+});
+```
 
 ## Example: Eye Closeup
 

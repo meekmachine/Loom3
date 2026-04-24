@@ -1,25 +1,57 @@
 import { describe, expect, it } from 'vitest';
 import {
   AnimationClip,
+  BufferGeometry,
   Mesh,
   MeshBasicMaterial,
   NumberKeyframeTrack,
   Object3D,
-  BufferGeometry,
+  QuaternionKeyframeTrack,
 } from 'three';
 import type { Profile } from '../../mappings/types';
 import { BakedAnimationController, type BakedAnimationHost } from './AnimationThree';
 
-function makeHost(): { controller: BakedAnimationController; model: Object3D } {
+function makeHost(options: { includeHeadBone?: boolean; includeCamera?: boolean } = {}): {
+  controller: BakedAnimationController;
+  model: Object3D;
+  head: Object3D | null;
+  camera: Object3D | null;
+} {
   const model = new Object3D();
   const mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial());
   mesh.name = 'FaceMesh';
+  (mesh as { morphTargetInfluences?: number[] }).morphTargetInfluences = [0];
+  (mesh as { morphTargetDictionary?: Record<string, number> }).morphTargetDictionary = { smile: 0 };
   model.add(mesh);
+
+  const head = options.includeHeadBone ? new Object3D() : null;
+  if (head) {
+    head.name = 'Head';
+    model.add(head);
+  }
+
+  const camera = options.includeCamera ? new Object3D() : null;
+  if (camera) {
+    camera.name = 'PreviewCamera';
+    (camera as { isCamera?: boolean }).isCamera = true;
+    model.add(camera);
+  }
+
+  const bones = head
+    ? {
+        HEAD: {
+          obj: head,
+          basePos: { x: head.position.x, y: head.position.y, z: head.position.z },
+          baseQuat: head.quaternion.clone(),
+          baseEuler: { x: head.rotation.x, y: head.rotation.y, z: head.rotation.z, order: head.rotation.order },
+        },
+      }
+    : {};
 
   const profile: Profile = {
     auToMorphs: {},
     auToBones: {},
-    boneNodes: {},
+    boneNodes: head ? { HEAD: 'Head' } : {},
     morphToMesh: { face: ['FaceMesh'] },
     visemeKeys: [],
   };
@@ -28,7 +60,7 @@ function makeHost(): { controller: BakedAnimationController; model: Object3D } {
     getModel: () => model,
     getMeshes: () => [mesh],
     getMeshByName: (name: string) => (name === 'FaceMesh' ? mesh : undefined),
-    getBones: () => ({} as any),
+    getBones: () => bones as any,
     getConfig: () => profile,
     getCompositeRotations: () => [],
     computeSideValues: (base: number) => ({ left: base, right: base }),
@@ -36,19 +68,39 @@ function makeHost(): { controller: BakedAnimationController; model: Object3D } {
     isMixedAU: () => false,
   };
 
-  return { controller: new BakedAnimationController(host), model };
+  return { controller: new BakedAnimationController(host), model, head, camera };
 }
 
-function makeClip(model: Object3D, name: string): AnimationClip {
+function makeTransformClip(model: Object3D, name: string): AnimationClip {
   return new AnimationClip(name, 1, [
     new NumberKeyframeTrack(`${model.uuid}.position[x]`, [0, 1], [0, 1]),
   ]);
 }
 
+function makeMorphClip(name: string): AnimationClip {
+  return new AnimationClip(name, 1, [
+    new NumberKeyframeTrack('FaceMesh.morphTargetInfluences[0]', [0, 1], [0, 1]),
+  ]);
+}
+
+function makeMixedClip(model: Object3D, head: Object3D, name: string): AnimationClip {
+  return new AnimationClip(name, 1, [
+    new NumberKeyframeTrack('FaceMesh.morphTargetInfluences[0]', [0, 1], [0, 1]),
+    new QuaternionKeyframeTrack(`${head.uuid}.quaternion`, [0, 1], [0, 0, 0, 1, 0, 0, 0, 1]),
+    new NumberKeyframeTrack(`${model.uuid}.position[x]`, [0, 1], [0, 1]),
+  ]);
+}
+
+function makeSceneClip(camera: Object3D, name: string): AnimationClip {
+  return new AnimationClip(name, 1, [
+    new NumberKeyframeTrack(`${camera.uuid}.position[x]`, [0, 1], [0, 1]),
+  ]);
+}
+
 describe('BakedAnimationController playback state normalization', () => {
   it('normalizes baked clip options into the shared animation state surface', () => {
-    const { controller, model } = makeHost();
-    controller.loadAnimationClips([makeClip(model, 'Idle')]);
+    const { controller } = makeHost();
+    controller.loadAnimationClips([makeMorphClip('Idle')]);
 
     const handle = controller.playAnimation('Idle', {
       playbackRate: 1.5,
@@ -75,18 +127,69 @@ describe('BakedAnimationController playback state normalization', () => {
       loop: true,
       loopMode: 'pingpong',
       repeatCount: 3,
+      requestedBlendMode: 'additive',
       blendMode: 'additive',
       balance: 0.25,
       easing: 'easeInOut',
+      channels: [
+        { channel: 'face', trackCount: 1, playable: true, blendMode: 'additive' },
+      ],
     });
     expect(state?.actionId).toBeTruthy();
     expect(state?.time).toBeCloseTo(0.7, 5);
-    expect(controller.getAnimationClips()[0]?.source).toBe('baked');
+    expect(controller.getAnimationClips()[0]).toMatchObject({
+      source: 'baked',
+      channels: [
+        { channel: 'face', trackCount: 1, playable: true, blendMode: 'additive' },
+      ],
+    });
+  });
+
+  it('partitions mixed baked clips into face and body runtime channels', () => {
+    const { controller, model, head } = makeHost({ includeHeadBone: true });
+    expect(head).toBeTruthy();
+    controller.loadAnimationClips([makeMixedClip(model, head!, 'HeadAndBody')]);
+
+    const handle = controller.playAnimation('HeadAndBody', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    expect(controller.getAnimationClips()[0]).toMatchObject({
+      name: 'HeadAndBody',
+      channels: [
+        { channel: 'face', trackCount: 2, playable: true, blendMode: 'additive' },
+        { channel: 'body', trackCount: 1, playable: true, blendMode: 'replace' },
+      ],
+    });
+    expect(controller.getAnimationState('HeadAndBody')).toMatchObject({
+      name: 'HeadAndBody',
+      requestedBlendMode: 'additive',
+      blendMode: 'additive',
+      channels: [
+        { channel: 'face', trackCount: 2, playable: true, blendMode: 'additive' },
+        { channel: 'body', trackCount: 1, playable: true, blendMode: 'replace' },
+      ],
+    });
+  });
+
+  it('surfaces scene-only partitions without creating a Loom3-playable action', () => {
+    const { controller, camera } = makeHost({ includeCamera: true });
+    expect(camera).toBeTruthy();
+    controller.loadAnimationClips([makeSceneClip(camera!, 'SceneOnly')]);
+
+    expect(controller.getAnimationClips()[0]).toMatchObject({
+      name: 'SceneOnly',
+      channels: [
+        { channel: 'scene', trackCount: 1, playable: false, blendMode: undefined },
+      ],
+    });
+    expect(controller.playAnimation('SceneOnly')).toBeNull();
   });
 
   it('applies the same normalized aliases to clip-backed playback', () => {
     const { controller, model } = makeHost();
-    const clip = makeClip(model, 'Wave');
+    const clip = makeTransformClip(model, 'Wave');
 
     const handle = controller.playClip(clip, {
       source: 'snippet',
@@ -108,12 +211,29 @@ describe('BakedAnimationController playback state normalization', () => {
       weight: 1.25,
       loop: false,
       loopMode: 'once',
+      requestedBlendMode: 'replace',
     });
   });
 
-  it('respects baked startTime and replays after stop without losing the action', () => {
+  it('keeps body-only baked clips on replace when additive is requested', () => {
     const { controller, model } = makeHost();
-    controller.loadAnimationClips([makeClip(model, 'Idle')]);
+    controller.loadAnimationClips([makeTransformClip(model, 'BodyOnly')]);
+
+    controller.playAnimation('BodyOnly', { blendMode: 'additive' });
+
+    expect(controller.getAnimationState('BodyOnly')).toMatchObject({
+      name: 'BodyOnly',
+      requestedBlendMode: 'additive',
+      blendMode: 'replace',
+      channels: [
+        { channel: 'body', trackCount: 1, playable: true, blendMode: 'replace' },
+      ],
+    });
+  });
+
+  it('respects baked startTime and replays after stop without losing the source-level state', () => {
+    const { controller } = makeHost();
+    controller.loadAnimationClips([makeMorphClip('Idle')]);
 
     const firstHandle = controller.playAnimation('Idle', { startTime: 0.7 });
     expect(firstHandle).toBeTruthy();
@@ -132,10 +252,10 @@ describe('BakedAnimationController playback state normalization', () => {
   });
 
   it('removes baked clips from subsequent list and playback queries', () => {
-    const { controller, model } = makeHost();
+    const { controller } = makeHost();
     controller.loadAnimationClips([
-      makeClip(model, 'Idle'),
-      makeClip(model, 'Wave'),
+      makeMorphClip('Idle'),
+      makeMorphClip('Wave'),
     ]);
 
     const handle = controller.playAnimation('Idle');
@@ -150,8 +270,8 @@ describe('BakedAnimationController playback state normalization', () => {
 
   it('starts reverse once playback from the clip end for baked and clip-backed actions', () => {
     const { controller, model } = makeHost();
-    const clip = makeClip(model, 'Wave');
-    controller.loadAnimationClips([makeClip(model, 'Idle')]);
+    const clip = makeTransformClip(model, 'Wave');
+    controller.loadAnimationClips([makeMorphClip('Idle')]);
 
     controller.playAnimation('Idle', {
       loopMode: 'once',

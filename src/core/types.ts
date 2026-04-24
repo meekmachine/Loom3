@@ -100,6 +100,21 @@ export type AnimationSource = 'baked' | 'clip' | 'snippet';
 /** Shared blend-mode surface for downstream animation UIs. */
 export type AnimationBlendMode = 'replace' | 'additive';
 
+/** Runtime channel classes derived from one authored baked source clip. */
+export type BakedClipChannel = 'face' | 'body' | 'scene';
+
+/** Metadata describing one derived baked runtime channel. */
+export interface BakedClipChannelInfo {
+  /** Logical channel key surfaced to downstream UIs. */
+  channel: BakedClipChannel;
+  /** Number of tracks routed into this channel. */
+  trackCount: number;
+  /** Whether Loom3 can play this channel directly. */
+  playable: boolean;
+  /** Effective/default blend mode for this channel when playable. */
+  blendMode?: AnimationBlendMode;
+}
+
 /** Shared easing labels for downstream animation UIs. */
 export type AnimationEasing = 'linear' | 'easeInOut' | 'easeInOutCubic' | 'easeIn' | 'easeOut';
 
@@ -151,6 +166,8 @@ export interface AnimationClipInfo {
   trackCount: number;
   /** Source of the clip for downstream UI grouping */
   source?: AnimationSource;
+  /** Derived channel metadata for partitioned baked clips. */
+  channels?: BakedClipChannelInfo[];
 }
 
 /**
@@ -181,8 +198,12 @@ export interface AnimationState {
   weight: number;
   /** Shared balance metadata for downstream UIs */
   balance: number;
+  /** Requested source-level blend mode before per-channel routing. */
+  requestedBlendMode: AnimationBlendMode;
   /** Shared blend metadata for downstream UIs */
   blendMode: AnimationBlendMode;
+  /** Derived channel metadata for partitioned baked clips. */
+  channels?: BakedClipChannelInfo[];
   /** Shared easing metadata for downstream UIs */
   easing: AnimationEasing;
   /** Whether the animation is looping */

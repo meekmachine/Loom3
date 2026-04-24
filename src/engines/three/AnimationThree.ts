@@ -34,12 +34,20 @@ import type {
   RotationAxis,
   AnimationSource,
   AnimationBlendMode,
+  BakedClipChannel,
+  BakedClipChannelInfo,
   AnimationEasing,
 } from '../../core/types';
 import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import type { Profile } from '../../mappings/types';
 import type { ResolvedBones } from './types';
 import { getSideScale, resolveCurveBalance } from './balanceUtils';
+import {
+  partitionBakedClip,
+  resolveBakedAggregateBlendMode,
+  resolveBakedChannelBlendMode,
+  type PartitionedBakedClip,
+} from './bakedClipPartitioning';
 
 type Transition = {
   key: string;
@@ -206,8 +214,17 @@ type NormalizedPlaybackState = {
   playbackRate: number;
   weight: number;
   balance: number;
+  requestedBlendMode: AnimationBlendMode;
   blendMode: AnimationBlendMode;
   easing: AnimationEasing;
+};
+
+type BakedActionGroup = {
+  actionId: string;
+  channelActions: Map<BakedClipChannel, AnimationAction>;
+  pendingFinishedChannels: Set<BakedClipChannel>;
+  finishedPromise: Promise<void>;
+  resolveFinished: () => void;
 };
 
 export class BakedAnimationController {
@@ -215,6 +232,10 @@ export class BakedAnimationController {
   private animationMixer: AnimationMixer | null = null;
   private mixerFinishedListenerAttached = false;
   private animationClips: AnimationClip[] = [];
+  private bakedSourceClips = new Map<string, PartitionedBakedClip>();
+  private bakedRuntimeActions = new Map<string, AnimationAction>();
+  private bakedActionGroups = new Map<string, BakedActionGroup>();
+  private bakedRuntimeClipToSource = new Map<string, { sourceClipName: string; channel: BakedClipChannel }>();
   private animationActions = new Map<string, AnimationAction>();
   private animationFinishedCallbacks = new Map<string, () => void>();
   private clipActions = new Map<string, AnimationAction>();
@@ -254,6 +275,7 @@ export class BakedAnimationController {
       ?? (typeof options?.loop === 'boolean'
         ? (options.loop ? 'repeat' : 'once')
         : (defaults.loop ? 'repeat' : 'once'));
+    const requestedBlendMode = options?.blendMode ?? (clipOptions?.mixerAdditive ? 'additive' : 'replace');
     return {
       source: options?.source ?? defaults.source,
       loop: loopMode !== 'once',
@@ -263,7 +285,8 @@ export class BakedAnimationController {
       playbackRate,
       weight,
       balance: Number.isFinite(options?.balance) ? options?.balance ?? 0 : 0,
-      blendMode: options?.blendMode ?? (clipOptions?.mixerAdditive ? 'additive' : 'replace'),
+      requestedBlendMode,
+      blendMode: requestedBlendMode,
       easing: options?.easing ?? 'linear',
     };
   }
@@ -344,16 +367,66 @@ export class BakedAnimationController {
     }
 
     if (options.blendMode) {
-      next.blendMode = options.blendMode;
+      next.requestedBlendMode = options.blendMode;
     } else if (typeof clipOptions?.mixerAdditive === 'boolean') {
-      next.blendMode = clipOptions.mixerAdditive ? 'additive' : 'replace';
+      next.requestedBlendMode = clipOptions.mixerAdditive ? 'additive' : 'replace';
     }
+    next.blendMode = next.requestedBlendMode;
 
     if (options.easing) {
       next.easing = options.easing;
     }
 
     return next;
+  }
+
+  private isBakedSourceClip(clipName: string): boolean {
+    return this.bakedSourceClips.has(clipName);
+  }
+
+  private getBakedSourceClip(clipName: string): PartitionedBakedClip | undefined {
+    return this.bakedSourceClips.get(clipName);
+  }
+
+  private getBakedChannelInfo(
+    clipName: string,
+    playbackState?: NormalizedPlaybackState
+  ): BakedClipChannelInfo[] | undefined {
+    const bakedClip = this.getBakedSourceClip(clipName);
+    if (!bakedClip) {
+      return undefined;
+    }
+
+    const requestedBlendMode = playbackState?.requestedBlendMode ?? 'replace';
+    return bakedClip.channels.map((channel) => ({
+      ...channel,
+      blendMode: resolveBakedChannelBlendMode(channel.channel, requestedBlendMode),
+    }));
+  }
+
+  private getBakedAggregateBlendMode(
+    clipName: string,
+    playbackState?: NormalizedPlaybackState
+  ): AnimationBlendMode {
+    const channels = this.getBakedChannelInfo(clipName, playbackState);
+    if (!channels) {
+      return playbackState?.requestedBlendMode ?? playbackState?.blendMode ?? 'replace';
+    }
+    return resolveBakedAggregateBlendMode(
+      channels,
+      playbackState?.requestedBlendMode ?? 'replace'
+    );
+  }
+
+  private applyPlaybackStateToBakedAction(
+    action: AnimationAction,
+    state: NormalizedPlaybackState,
+    channel: BakedClipChannel
+  ): void {
+    this.applyPlaybackState(action, {
+      ...state,
+      blendMode: resolveBakedChannelBlendMode(channel, state.requestedBlendMode) ?? 'replace',
+    });
   }
 
   private resolveStartTime(
@@ -370,22 +443,74 @@ export class BakedAnimationController {
     return 0;
   }
 
-  private getOrCreateBakedAction(clipName: string): AnimationAction | null {
-    const existing = this.animationActions.get(clipName);
+  private getOrCreateBakedRuntimeAction(
+    sourceClipName: string,
+    channel: BakedClipChannel
+  ): AnimationAction | null {
+    const bakedClip = this.getBakedSourceClip(sourceClipName);
+    const runtimeClip = bakedClip?.runtimeClips.find((entry) => entry.channel === channel)?.clip;
+    if (!runtimeClip) {
+      return null;
+    }
+
+    const existing = this.bakedRuntimeActions.get(runtimeClip.name);
     if (existing) {
       return existing;
     }
+
     this.ensureMixer();
     if (!this.animationMixer) {
       return null;
     }
-    const clip = this.animationClips.find((entry) => entry.name === clipName);
-    if (!clip || (this.clipSources.get(clipName) ?? 'baked') !== 'baked') {
+
+    const action = this.animationMixer.clipAction(runtimeClip);
+    this.bakedRuntimeActions.set(runtimeClip.name, action);
+    return action;
+  }
+
+  private getRepresentativeBakedAction(clipName: string): AnimationAction | null {
+    const group = this.bakedActionGroups.get(clipName);
+    if (!group) {
       return null;
     }
-    const action = this.animationMixer.clipAction(clip);
-    this.animationActions.set(clipName, action);
-    return action;
+    return group.channelActions.values().next().value ?? null;
+  }
+
+  private createBakedActionGroup(
+    clipName: string,
+    playbackState: NormalizedPlaybackState
+  ): BakedActionGroup | null {
+    const bakedClip = this.getBakedSourceClip(clipName);
+    if (!bakedClip) {
+      return null;
+    }
+
+    const channelActions = new Map<BakedClipChannel, AnimationAction>();
+    for (const runtimeClip of bakedClip.runtimeClips) {
+      const action = this.getOrCreateBakedRuntimeAction(clipName, runtimeClip.channel);
+      if (action) {
+        channelActions.set(runtimeClip.channel, action);
+      }
+    }
+
+    if (channelActions.size === 0) {
+      return null;
+    }
+
+    let resolveFinished = () => {};
+    const finishedPromise = new Promise<void>((resolve) => {
+      resolveFinished = resolve;
+    });
+
+    return {
+      actionId: makeActionId(),
+      channelActions,
+      pendingFinishedChannels: playbackState.loopMode === 'once'
+        ? new Set(channelActions.keys())
+        : new Set<BakedClipChannel>(),
+      finishedPromise,
+      resolveFinished,
+    };
   }
 
   private getMeshNamesForAU(auId: number, config: Profile, explicitMeshNames?: string[]): string[] {
@@ -433,6 +558,10 @@ export class BakedAnimationController {
       this.animationMixer = null;
     }
     this.animationClips = [];
+    this.bakedSourceClips.clear();
+    this.bakedRuntimeActions.clear();
+    this.bakedActionGroups.clear();
+    this.bakedRuntimeClipToSource.clear();
     this.animationActions.clear();
     this.animationFinishedCallbacks.clear();
     this.clipActions.clear();
@@ -442,19 +571,52 @@ export class BakedAnimationController {
   }
 
   loadAnimationClips(clips: unknown[]): void {
-    if (!this.host.getModel()) {
+    const model = this.host.getModel();
+    if (!model) {
       console.warn('Loom3: Cannot load animation clips before calling onReady()');
       return;
     }
 
-    this.ensureMixer();
-    this.animationClips = clips as AnimationClip[];
+    for (const clipName of this.bakedSourceClips.keys()) {
+      this.stopAnimation(clipName);
+    }
+    if (this.animationMixer) {
+      for (const bakedClip of this.bakedSourceClips.values()) {
+        for (const runtimeClip of bakedClip.runtimeClips) {
+          try {
+            this.animationMixer.uncacheAction(runtimeClip.clip);
+          } catch {}
+          try {
+            this.animationMixer.uncacheClip(runtimeClip.clip);
+          } catch {}
+        }
+      }
+    }
 
-    for (const clip of this.animationClips) {
-      this.clipSources.set(clip.name, 'baked');
-      if (!this.animationActions.has(clip.name) && this.animationMixer) {
-        const action = this.animationMixer.clipAction(clip);
-        this.animationActions.set(clip.name, action);
+    for (const clipName of this.bakedSourceClips.keys()) {
+      this.playbackState.delete(clipName);
+      this.clipSources.delete(clipName);
+    }
+
+    this.bakedSourceClips.clear();
+    this.bakedRuntimeActions.clear();
+    this.bakedActionGroups.clear();
+    this.bakedRuntimeClipToSource.clear();
+
+    this.ensureMixer();
+    const partitionedClips = (clips as AnimationClip[]).map((clip) => (
+      partitionBakedClip(clip, model, this.host.getBones())
+    ));
+
+    this.animationClips = partitionedClips.map((clip) => clip.sourceClip);
+    for (const bakedClip of partitionedClips) {
+      this.bakedSourceClips.set(bakedClip.sourceClip.name, bakedClip);
+      this.clipSources.set(bakedClip.sourceClip.name, 'baked');
+      for (const runtimeClip of bakedClip.runtimeClips) {
+        this.bakedRuntimeClipToSource.set(runtimeClip.clip.name, {
+          sourceClipName: bakedClip.sourceClip.name,
+          channel: runtimeClip.channel,
+        });
       }
     }
   }
@@ -465,44 +627,40 @@ export class BakedAnimationController {
       duration: clip.duration,
       trackCount: clip.tracks.length,
       source: this.clipSources.get(clip.name) ?? 'baked',
+      channels: this.getBakedSourceClip(clip.name)?.channels,
     }));
   }
 
   removeAnimationClip(clipName: string): boolean {
-    const clip = this.animationClips.find((entry) => entry.name === clipName);
-    if (!clip || (this.clipSources.get(clipName) ?? 'baked') !== 'baked') {
+    const bakedClip = this.getBakedSourceClip(clipName);
+    if (!bakedClip) {
       return false;
     }
-
-    const relatedActions = new Set<AnimationAction>();
-    const bakedAction = this.animationActions.get(clipName);
-    const clipAction = this.clipActions.get(clipName);
-    if (bakedAction) relatedActions.add(bakedAction);
-    if (clipAction) relatedActions.add(clipAction);
 
     this.stopAnimation(clipName);
 
     if (this.animationMixer) {
-      for (const action of relatedActions) {
+      for (const runtimeClip of bakedClip.runtimeClips) {
+        const action = this.bakedRuntimeActions.get(runtimeClip.clip.name);
         try {
-          this.animationMixer.uncacheAction(clip);
+          this.animationMixer.uncacheAction(runtimeClip.clip);
         } catch {}
         try {
-          this.animationMixer.uncacheClip(clip);
+          this.animationMixer.uncacheClip(runtimeClip.clip);
         } catch {}
+        this.bakedRuntimeActions.delete(runtimeClip.clip.name);
+        this.bakedRuntimeClipToSource.delete(runtimeClip.clip.name);
         const actionId = this.getActionId(action);
-        if (actionId) {
+        if (actionId && action) {
           this.actionIdToClip.delete(actionId);
+          this.actionIds.delete(action);
         }
-        this.actionIds.delete(action);
       }
     }
 
     this.animationClips = this.animationClips.filter((entry) => entry.name !== clipName);
-    this.animationActions.delete(clipName);
-    this.clipActions.delete(clipName);
-    this.clipHandles.delete(clipName);
-    this.animationFinishedCallbacks.delete(clipName);
+    this.bakedSourceClips.delete(clipName);
+    this.bakedActionGroups.delete(clipName);
     this.playbackState.delete(clipName);
     this.clipSources.delete(clipName);
 
@@ -510,52 +668,57 @@ export class BakedAnimationController {
   }
 
   playAnimation(clipName: string, options: AnimationPlayOptions = {}): AnimationActionHandle | null {
-    const action = this.getOrCreateBakedAction(clipName);
-    if (!action) {
+    const bakedClip = this.getBakedSourceClip(clipName);
+    if (!bakedClip) {
       console.warn(`Loom3: Animation clip "${clipName}" not found`);
       return null;
-    }
-    if (!this.getActionId(action)) {
-      this.setActionId(action, clipName);
     }
 
     const playbackState = this.mergePlaybackOptions(
       this.getPlaybackStateSnapshot(clipName, { loop: true, source: 'baked' }),
       options
     );
+    playbackState.blendMode = this.getBakedAggregateBlendMode(clipName, playbackState);
+    const actionGroup = this.createBakedActionGroup(clipName, playbackState);
+    if (!actionGroup) {
+      console.warn(`Loom3: Animation clip "${clipName}" has no character-runtime channels to play`);
+      return null;
+    }
+
     const crossfadeDuration = options.crossfadeDuration ?? 0;
     const clampWhenFinished = options.clampWhenFinished ?? playbackState.loopMode === 'once';
-    const startTime = this.resolveStartTime(action.getClip().duration, playbackState, options.startTime);
+    const startTime = this.resolveStartTime(bakedClip.sourceClip.duration, playbackState, options.startTime);
 
-    this.applyPlaybackState(action, playbackState);
-    action.clampWhenFinished = clampWhenFinished;
+    for (const [channel, action] of actionGroup.channelActions) {
+      this.applyPlaybackStateToBakedAction(action, playbackState, channel);
+      action.clampWhenFinished = clampWhenFinished;
 
-    if (crossfadeDuration > 0) {
-      action.reset();
-      action.fadeIn(crossfadeDuration);
-    } else {
-      action.reset();
+      if (crossfadeDuration > 0) {
+        action.reset();
+        action.fadeIn(crossfadeDuration);
+      } else {
+        action.reset();
+      }
+      action.time = startTime;
+      action.play();
     }
-    action.time = startTime;
 
-    action.play();
-
-    this.animationActions.set(clipName, action);
+    this.bakedActionGroups.set(clipName, actionGroup);
     this.setPlaybackState(clipName, playbackState);
-
-    let resolveFinished: () => void;
-    const finishedPromise = new Promise<void>((resolve) => {
-      resolveFinished = resolve;
-    });
-
-    if (playbackState.loopMode === 'once') {
-      this.animationFinishedCallbacks.set(clipName, () => resolveFinished());
-    }
-
-    return this.createAnimationHandle(clipName, action, finishedPromise);
+    return this.createBakedAnimationHandle(clipName, actionGroup);
   }
 
   stopAnimation(clipName: string): void {
+    const bakedGroup = this.bakedActionGroups.get(clipName);
+    if (bakedGroup) {
+      for (const action of bakedGroup.channelActions.values()) {
+        action.stop();
+        try { action.paused = false; } catch {}
+      }
+      this.bakedActionGroups.delete(clipName);
+      return;
+    }
+
     const action = this.animationActions.get(clipName);
     if (action) {
       const isBaked = (this.clipSources.get(clipName) ?? 'baked') === 'baked';
@@ -599,6 +762,7 @@ export class BakedAnimationController {
 
   stopAllAnimations(): void {
     for (const clipName of new Set([
+      ...this.bakedActionGroups.keys(),
       ...this.animationActions.keys(),
       ...this.clipActions.keys(),
     ])) {
@@ -607,6 +771,14 @@ export class BakedAnimationController {
   }
 
   pauseAnimation(clipName: string): void {
+    const bakedGroup = this.bakedActionGroups.get(clipName);
+    if (bakedGroup) {
+      for (const action of bakedGroup.channelActions.values()) {
+        action.paused = true;
+      }
+      return;
+    }
+
     const action = this.animationActions.get(clipName);
     if (action) {
       action.paused = true;
@@ -614,6 +786,14 @@ export class BakedAnimationController {
   }
 
   resumeAnimation(clipName: string): void {
+    const bakedGroup = this.bakedActionGroups.get(clipName);
+    if (bakedGroup) {
+      for (const action of bakedGroup.channelActions.values()) {
+        action.paused = false;
+      }
+      return;
+    }
+
     const action = this.animationActions.get(clipName);
     if (action) {
       action.paused = false;
@@ -621,6 +801,13 @@ export class BakedAnimationController {
   }
 
   pauseAllAnimations(): void {
+    for (const group of this.bakedActionGroups.values()) {
+      for (const action of group.channelActions.values()) {
+        if (action.isRunning()) {
+          action.paused = true;
+        }
+      }
+    }
     for (const action of this.animationActions.values()) {
       if (action.isRunning()) {
         action.paused = true;
@@ -629,6 +816,13 @@ export class BakedAnimationController {
   }
 
   resumeAllAnimations(): void {
+    for (const group of this.bakedActionGroups.values()) {
+      for (const action of group.channelActions.values()) {
+        if (action.paused) {
+          action.paused = false;
+        }
+      }
+    }
     for (const action of this.animationActions.values()) {
       if (action.paused) {
         action.paused = false;
@@ -637,11 +831,27 @@ export class BakedAnimationController {
   }
 
   setAnimationSpeed(clipName: string, speed: number): void {
-    const action = this.getOrCreateBakedAction(clipName);
-    if (action) {
+    if (this.isBakedSourceClip(clipName)) {
       const next = this.getPlaybackStateSnapshot(clipName, {
         loop: true,
         source: this.clipSources.get(clipName) ?? 'baked',
+      });
+      next.playbackRate = Number.isFinite(speed) ? Math.max(0, Math.abs(speed)) : 1.0;
+      const bakedGroup = this.bakedActionGroups.get(clipName);
+      if (bakedGroup) {
+        for (const [channel, action] of bakedGroup.channelActions) {
+          this.applyPlaybackStateToBakedAction(action, next, channel);
+        }
+      }
+      this.setPlaybackState(clipName, next);
+      return;
+    }
+
+    const action = this.animationActions.get(clipName);
+    if (action) {
+      const next = this.getPlaybackStateSnapshot(clipName, {
+        loop: true,
+        source: this.clipSources.get(clipName) ?? 'clip',
       });
       next.playbackRate = Number.isFinite(speed) ? Math.max(0, Math.abs(speed)) : 1.0;
       this.applyPlaybackState(action, next);
@@ -650,11 +860,27 @@ export class BakedAnimationController {
   }
 
   setAnimationIntensity(clipName: string, intensity: number): void {
-    const action = this.getOrCreateBakedAction(clipName);
-    if (action) {
+    if (this.isBakedSourceClip(clipName)) {
       const next = this.getPlaybackStateSnapshot(clipName, {
         loop: true,
         source: this.clipSources.get(clipName) ?? 'baked',
+      });
+      next.weight = Number.isFinite(intensity) ? Math.max(0, intensity) : 1.0;
+      const bakedGroup = this.bakedActionGroups.get(clipName);
+      if (bakedGroup) {
+        for (const [channel, action] of bakedGroup.channelActions) {
+          this.applyPlaybackStateToBakedAction(action, next, channel);
+        }
+      }
+      this.setPlaybackState(clipName, next);
+      return;
+    }
+
+    const action = this.animationActions.get(clipName);
+    if (action) {
+      const next = this.getPlaybackStateSnapshot(clipName, {
+        loop: true,
+        source: this.clipSources.get(clipName) ?? 'clip',
       });
       next.weight = Number.isFinite(intensity) ? Math.max(0, intensity) : 1.0;
       action.setEffectiveWeight(next.weight);
@@ -663,58 +889,121 @@ export class BakedAnimationController {
   }
 
   setAnimationLoopMode(clipName: string, loopMode: 'repeat' | 'once' | 'pingpong'): void {
-    const action = this.getOrCreateBakedAction(clipName);
-    if (!action) return;
     const next = this.getPlaybackStateSnapshot(clipName, {
       loop: true,
-      source: this.clipSources.get(clipName) ?? 'baked',
+      source: this.clipSources.get(clipName) ?? (this.isBakedSourceClip(clipName) ? 'baked' : 'clip'),
     });
     next.loopMode = loopMode;
     next.loop = loopMode !== 'once';
+
+    if (this.isBakedSourceClip(clipName)) {
+      const bakedGroup = this.bakedActionGroups.get(clipName);
+      if (bakedGroup) {
+        for (const [channel, action] of bakedGroup.channelActions) {
+          this.applyPlaybackStateToBakedAction(action, next, channel);
+        }
+      }
+      this.setPlaybackState(clipName, next);
+      return;
+    }
+
+    const action = this.animationActions.get(clipName);
+    if (!action) return;
     this.applyPlaybackState(action, next);
     this.setPlaybackState(clipName, next);
   }
 
   setAnimationRepeatCount(clipName: string, repeatCount?: number): void {
-    const action = this.getOrCreateBakedAction(clipName);
-    if (!action) return;
     const next = this.getPlaybackStateSnapshot(clipName, {
       loop: true,
-      source: this.clipSources.get(clipName) ?? 'baked',
+      source: this.clipSources.get(clipName) ?? (this.isBakedSourceClip(clipName) ? 'baked' : 'clip'),
     });
     next.repeatCount = typeof repeatCount === 'number' && Number.isFinite(repeatCount)
       ? Math.max(0, repeatCount)
       : undefined;
+
+    if (this.isBakedSourceClip(clipName)) {
+      const bakedGroup = this.bakedActionGroups.get(clipName);
+      if (bakedGroup) {
+        for (const [channel, action] of bakedGroup.channelActions) {
+          this.applyPlaybackStateToBakedAction(action, next, channel);
+        }
+      }
+      this.setPlaybackState(clipName, next);
+      return;
+    }
+
+    const action = this.animationActions.get(clipName);
+    if (!action) return;
     this.applyPlaybackState(action, next);
     this.setPlaybackState(clipName, next);
   }
 
   setAnimationReverse(clipName: string, reverse: boolean): void {
-    const action = this.getOrCreateBakedAction(clipName);
-    if (!action) return;
     const next = this.getPlaybackStateSnapshot(clipName, {
       loop: true,
-      source: this.clipSources.get(clipName) ?? 'baked',
+      source: this.clipSources.get(clipName) ?? (this.isBakedSourceClip(clipName) ? 'baked' : 'clip'),
     });
     next.reverse = !!reverse;
+
+    if (this.isBakedSourceClip(clipName)) {
+      const bakedGroup = this.bakedActionGroups.get(clipName);
+      if (bakedGroup) {
+        for (const [channel, action] of bakedGroup.channelActions) {
+          this.applyPlaybackStateToBakedAction(action, next, channel);
+        }
+      }
+      this.setPlaybackState(clipName, next);
+      return;
+    }
+
+    const action = this.animationActions.get(clipName);
+    if (!action) return;
     this.applyPlaybackState(action, next);
     this.setPlaybackState(clipName, next);
   }
 
   setAnimationBlendMode(clipName: string, blendMode: AnimationBlendMode): void {
-    const action = this.getOrCreateBakedAction(clipName);
-    if (!action) return;
     const next = this.getPlaybackStateSnapshot(clipName, {
       loop: true,
-      source: this.clipSources.get(clipName) ?? 'baked',
+      source: this.clipSources.get(clipName) ?? (this.isBakedSourceClip(clipName) ? 'baked' : 'clip'),
     });
+    next.requestedBlendMode = blendMode;
+
+    if (this.isBakedSourceClip(clipName)) {
+      next.blendMode = this.getBakedAggregateBlendMode(clipName, next);
+      const bakedGroup = this.bakedActionGroups.get(clipName);
+      if (bakedGroup) {
+        for (const [channel, action] of bakedGroup.channelActions) {
+          this.applyPlaybackStateToBakedAction(action, next, channel);
+        }
+      }
+      this.setPlaybackState(clipName, next);
+      return;
+    }
+
     next.blendMode = blendMode;
+    const action = this.animationActions.get(clipName);
+    if (!action) return;
     this.applyPlaybackState(action, next);
     this.setPlaybackState(clipName, next);
   }
 
   seekAnimation(clipName: string, time: number): void {
-    const action = this.getOrCreateBakedAction(clipName) ?? this.animationActions.get(clipName);
+    const bakedGroup = this.bakedActionGroups.get(clipName);
+    if (bakedGroup) {
+      const duration = this.getBakedSourceClip(clipName)?.sourceClip.duration ?? 0;
+      const clamped = Math.max(0, Math.min(duration, Number.isFinite(time) ? time : 0));
+      for (const action of bakedGroup.channelActions.values()) {
+        action.time = clamped;
+      }
+      try {
+        this.animationMixer?.update(0);
+      } catch {}
+      return;
+    }
+
+    const action = this.animationActions.get(clipName);
     if (!action) return;
     const duration = action.getClip().duration;
     action.time = Math.max(0, Math.min(duration, Number.isFinite(time) ? time : 0));
@@ -730,6 +1019,47 @@ export class BakedAnimationController {
   }
 
   getAnimationState(clipName: string): AnimationState | null {
+    const bakedClip = this.getBakedSourceClip(clipName);
+    if (bakedClip) {
+      const state = this.playbackState.get(clipName);
+      const action = this.getRepresentativeBakedAction(clipName);
+      if (!state && !action) {
+        return null;
+      }
+      const loopMode = state?.loopMode
+        ?? (action?.loop === LoopPingPong ? 'pingpong' : action?.loop === LoopOnce ? 'once' : 'repeat');
+      const playbackRate = state?.playbackRate ?? Math.abs(action?.getEffectiveTimeScale?.() ?? 1);
+      const reverse = state?.reverse ?? ((action?.getEffectiveTimeScale?.() ?? 1) < 0);
+      const pausedValues = this.bakedActionGroups.get(clipName)
+        ? Array.from(this.bakedActionGroups.get(clipName)!.channelActions.values()).map((entry) => entry.paused)
+        : [];
+
+      return {
+        name: bakedClip.sourceClip.name,
+        actionId: this.bakedActionGroups.get(clipName)?.actionId,
+        source: state?.source ?? this.clipSources.get(clipName) ?? 'baked',
+        isPlaying: this.bakedActionGroups.get(clipName)
+          ? Array.from(this.bakedActionGroups.get(clipName)!.channelActions.values()).some((entry) => entry.isRunning() && !entry.paused)
+          : false,
+        isPaused: pausedValues.length > 0 ? pausedValues.every(Boolean) : false,
+        time: action?.time ?? 0,
+        duration: bakedClip.sourceClip.duration,
+        speed: playbackRate,
+        playbackRate,
+        reverse,
+        weight: state?.weight ?? action?.getEffectiveWeight?.() ?? 1,
+        balance: state?.balance ?? 0,
+        requestedBlendMode: state?.requestedBlendMode ?? 'replace',
+        blendMode: this.getBakedAggregateBlendMode(clipName, state),
+        channels: this.getBakedChannelInfo(clipName, state),
+        easing: state?.easing ?? 'linear',
+        loop: loopMode !== 'once',
+        loopMode,
+        repeatCount: state?.repeatCount,
+        isLooping: loopMode !== 'once',
+      };
+    }
+
     const action = this.animationActions.get(clipName);
     if (!action) return null;
 
@@ -752,7 +1082,9 @@ export class BakedAnimationController {
       reverse,
       weight: state?.weight ?? action.getEffectiveWeight(),
       balance: state?.balance ?? 0,
+      requestedBlendMode: state?.requestedBlendMode ?? state?.blendMode ?? 'replace',
       blendMode: state?.blendMode ?? 'replace',
+      channels: state?.source === 'baked' ? this.getBakedChannelInfo(clipName, state) : undefined,
       easing: state?.easing ?? 'linear',
       loop: loopMode !== 'once',
       loopMode,
@@ -763,6 +1095,12 @@ export class BakedAnimationController {
 
   getPlayingAnimations(): AnimationState[] {
     const playing: AnimationState[] = [];
+    for (const name of this.bakedActionGroups.keys()) {
+      const state = this.getAnimationState(name);
+      if (state?.isPlaying) {
+        playing.push(state);
+      }
+    }
     for (const [name, action] of this.animationActions) {
       if (action.isRunning()) {
         const state = this.getAnimationState(name);
@@ -773,6 +1111,13 @@ export class BakedAnimationController {
   }
 
   crossfadeTo(clipName: string, duration = 0.3, options: AnimationPlayOptions = {}): AnimationActionHandle | null {
+    for (const group of this.bakedActionGroups.values()) {
+      for (const action of group.channelActions.values()) {
+        if (action.isRunning()) {
+          action.fadeOut(duration);
+        }
+      }
+    }
     for (const action of this.animationActions.values()) {
       if (action.isRunning()) {
         action.fadeOut(duration);
@@ -1450,6 +1795,14 @@ export class BakedAnimationController {
       this.animationMixer.addEventListener('finished', (event: any) => {
         const action = event.action as AnimationAction;
         const clip = action.getClip();
+        const bakedRuntime = this.bakedRuntimeClipToSource.get(clip.name);
+        if (bakedRuntime) {
+          const group = this.bakedActionGroups.get(bakedRuntime.sourceClipName);
+          if (group && group.pendingFinishedChannels.delete(bakedRuntime.channel) && group.pendingFinishedChannels.size === 0) {
+            group.resolveFinished();
+          }
+          return;
+        }
         const callback = this.animationFinishedCallbacks.get(clip.name);
         if (callback) {
           callback();
@@ -1478,6 +1831,24 @@ export class BakedAnimationController {
       getState: () => this.getAnimationState(clipName)!,
       crossfadeTo: (targetClip: string, dur?: number) => this.crossfadeTo(targetClip, dur),
       finished: finishedPromise,
+    };
+  }
+
+  private createBakedAnimationHandle(
+    clipName: string,
+    group: BakedActionGroup
+  ): AnimationActionHandle {
+    return {
+      actionId: group.actionId,
+      stop: () => this.stopAnimation(clipName),
+      pause: () => this.pauseAnimation(clipName),
+      resume: () => this.resumeAnimation(clipName),
+      setSpeed: (speed: number) => this.setAnimationSpeed(clipName, speed),
+      setWeight: (weight: number) => this.setAnimationIntensity(clipName, weight),
+      seekTo: (time: number) => this.seekAnimation(clipName, time),
+      getState: () => this.getAnimationState(clipName)!,
+      crossfadeTo: (targetClip: string, dur?: number) => this.crossfadeTo(targetClip, dur),
+      finished: group.finishedPromise,
     };
   }
 }

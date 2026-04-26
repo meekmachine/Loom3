@@ -57,14 +57,38 @@ describe('mergeRegionsByName', () => {
       },
     ]);
   });
+
+  it('merges nested camera offsets by axis instead of replacing the whole vector', () => {
+    const merged = mergeRegionsByName(
+      [
+        {
+          name: 'head',
+          cameraOffset: { x: 1, y: 2, z: 3 },
+        },
+      ],
+      [
+        {
+          name: 'head',
+          cameraOffset: { y: 9 },
+        },
+      ]
+    );
+
+    expect(merged).toEqual([
+      {
+        name: 'head',
+        cameraOffset: { x: 1, y: 9, z: 3 },
+      },
+    ]);
+  });
 });
 
 describe('extendCharacterConfigWithPreset', () => {
-  it('lets saved top-level regions override preset defaults by region name', () => {
+  it('lets saved annotationRegions override preset defaults by region name', () => {
     const presetRegions = getPresetWithProfile('cc4').annotationRegions ?? [];
     const extended = extendCharacterConfigWithPreset(
       createConfig({
-        regions: presetRegions.map((region) =>
+        annotationRegions: presetRegions.map((region) =>
           region.name === 'left_eye'
             ? { ...region, cameraAngle: 45, paddingFactor: 0.5 }
             : region.name === 'right_eye'
@@ -98,9 +122,13 @@ describe('extendCharacterConfigWithPreset', () => {
       paddingFactor: 0.5,
     });
     expect(rightEye?.cameraAngle).toBe(315);
+    expect(extended.annotationRegions?.find((region) => region.name === 'left_eye')).toMatchObject({
+      cameraAngle: 45,
+      paddingFactor: 0.5,
+    });
   });
 
-  it('merges saved top-level regions over preset regions while preserving preset geometry', () => {
+  it('treats saved top-level regions as a legacy fallback when annotationRegions are absent', () => {
     const presetRightEye = getPresetWithProfile('cc4').annotationRegions?.find(
       (region) => region.name === 'right_eye'
     );
@@ -164,7 +192,7 @@ describe('extendCharacterConfigWithPreset', () => {
     ]);
   });
 
-  it('still honors legacy nested profile annotation overrides during migration', () => {
+  it('prefers canonical annotationRegions over legacy regions while preserving legacy extras', () => {
     const extended = extendCharacterConfigWithPreset(
       createConfig({
         profile: {
@@ -175,22 +203,29 @@ describe('extendCharacterConfigWithPreset', () => {
         },
         regions: [
           { name: 'left_eye', cameraAngle: 45, paddingFactor: 0.5 },
+          { name: 'hat', objects: ['HatMesh'], paddingFactor: 1.4 },
         ],
       })
     );
 
     const leftEye = extended.regions.find((region) => region.name === 'left_eye');
     const mouth = extended.regions.find((region) => region.name === 'mouth');
+    const hat = extended.regions.find((region) => region.name === 'hat');
 
     expect(leftEye).toMatchObject({
       name: 'left_eye',
       bones: ['EYE_L'],
-      paddingFactor: 0.5,
-      cameraAngle: 45,
+      paddingFactor: 1.1,
+      cameraAngle: 30,
       parent: 'head',
     });
     expect(mouth?.style).toMatchObject({
       lineDirection: 'camera',
+    });
+    expect(hat).toMatchObject({
+      name: 'hat',
+      objects: ['HatMesh'],
+      paddingFactor: 1.4,
     });
   });
 
@@ -364,6 +399,24 @@ describe('extractProfileOverrides', () => {
     });
     expect(overrides.disabledRegions).toEqual(['mouth']);
     expect(overrides.annotationRegions).toBeUndefined();
+  });
+
+  it('prefers canonical annotationRegions over legacy runtime regions during extraction', () => {
+    const overrides = extractProfileOverrides(
+      createConfig({
+        annotationRegions: [
+          { name: 'left_eye', cameraAngle: 30, paddingFactor: 1.1 },
+        ],
+        regions: [
+          { name: 'left_eye', cameraAngle: 45, paddingFactor: 0.5 },
+          { name: 'hat', objects: ['HatMesh'], paddingFactor: 1.4 },
+        ],
+      })
+    );
+
+    expect(overrides.annotationRegions).toEqual([
+      { name: 'left_eye', cameraAngle: 30, paddingFactor: 1.1 },
+    ]);
   });
 });
 

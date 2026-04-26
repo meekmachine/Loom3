@@ -96,6 +96,8 @@ export type {
   CurvePoint,
   CurvesMap,
   ClipOptions,
+  ClipEvent,
+  ClipEventListener,
   ClipHandle,
   Snippet,
 } from './core/types';

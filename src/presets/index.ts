@@ -49,6 +49,9 @@ export function getPreset(presetType: PresetType | string | undefined) {
   }
 }
 
+// Backwards-compatible alias retained for LoomLarge consumers.
+export const resolvePreset = getPreset;
+
 /**
  * Get a preset, then extend it with an optional profile.
  */
@@ -58,3 +61,6 @@ export function getPresetWithProfile(
 ): Profile {
   return extendPresetWithProfile(getPreset(presetType), profile);
 }
+
+// Backwards-compatible alias retained for LoomLarge consumers.
+export const resolvePresetWithOverrides = getPresetWithProfile;

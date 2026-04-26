@@ -27,6 +27,7 @@ import type {
   AnimationActionHandle,
   CurvesMap,
   ClipOptions,
+  ClipEventListener,
   ClipHandle,
   Snippet,
   BoneKey,

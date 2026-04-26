@@ -382,11 +382,13 @@ export class BakedAnimationController {
       };
     }
 
+    const bones = this.host.getBones();
     const safeTransformTargets = new Set(
-      Object.values(this.host.getBones())
+      Object.values(bones)
         .map((entry) => entry?.obj)
         .filter(Boolean)
     );
+    const jawTarget = bones.JAW?.obj;
 
     const unsupportedTracks = clip.tracks.filter((track) => {
       const trackName = typeof track?.name === 'string' ? track.name : '';
@@ -429,6 +431,12 @@ export class BakedAnimationController {
       }
 
       if (!safeTransformTargets.has(target)) {
+        return true;
+      }
+
+      // Baked jaw tracks are authored as absolute mouth poses, so additive
+      // playback compounds them against the current pose instead of applying a delta.
+      if (jawTarget && target === jawTarget) {
         return true;
       }
 

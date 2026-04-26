@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   AnimationClip,
+  Quaternion,
+  Vector3,
   Mesh,
   MeshBasicMaterial,
   NumberKeyframeTrack,
@@ -11,11 +13,14 @@ import {
 import type { Profile } from '../../mappings/types';
 import { BakedAnimationController, type BakedAnimationHost } from './AnimationThree';
 
-function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean } = {}): {
+const Z_AXIS = new Vector3(0, 0, 1);
+
+function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean; includeJawBone?: boolean } = {}): {
   controller: BakedAnimationController;
   model: Object3D;
   head: Object3D | null;
   hip: Object3D | null;
+  jaw: Object3D | null;
 } {
   const model = new Object3D();
   const mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial());
@@ -32,6 +37,11 @@ function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean
   if (hip) {
     hip.name = 'CC_Base_Hip';
     model.add(hip);
+  }
+  const jaw = options.includeJawBone ? new Object3D() : null;
+  if (jaw) {
+    jaw.name = 'Jaw';
+    model.add(jaw);
   }
 
   const bones = {
@@ -55,6 +65,16 @@ function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean
         },
       }
       : {}),
+    ...(jaw
+      ? {
+        JAW: {
+          obj: jaw,
+          basePos: { x: jaw.position.x, y: jaw.position.y, z: jaw.position.z },
+          baseQuat: jaw.quaternion.clone(),
+          baseEuler: { x: jaw.rotation.x, y: jaw.rotation.y, z: jaw.rotation.z, order: jaw.rotation.order },
+        },
+      }
+      : {}),
   };
 
   const profile: Profile = {
@@ -63,6 +83,7 @@ function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean
     boneNodes: {
       ...(head ? { HEAD: 'Head' } : {}),
       ...(hip ? { HIPS: 'CC_Base_Hip' } : {}),
+      ...(jaw ? { JAW: 'Jaw' } : {}),
     },
     morphToMesh: { face: ['FaceMesh'] },
     visemeKeys: [],
@@ -80,7 +101,7 @@ function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean
     isMixedAU: () => false,
   };
 
-  return { controller: new BakedAnimationController(host), model, head, hip };
+  return { controller: new BakedAnimationController(host), model, head, hip, jaw };
 }
 
 function makeTransformClip(model: Object3D, name: string): AnimationClip {
@@ -110,6 +131,18 @@ function makeBonePositionClip(target: Object3D, name: string): AnimationClip {
 function makeBoneQuaternionClip(target: Object3D, name: string): AnimationClip {
   return new AnimationClip(name, 1, [
     new QuaternionKeyframeTrack(`${target.uuid}.quaternion`, [0, 1], [0, 0, 0, 1, 0, 0, 0, 1]),
+  ]);
+}
+
+function makeJawQuaternionClip(target: Object3D, name: string, startDeg: number, endDeg: number): AnimationClip {
+  const start = new Quaternion().setFromAxisAngle(Z_AXIS, (startDeg * Math.PI) / 180);
+  const end = new Quaternion().setFromAxisAngle(Z_AXIS, (endDeg * Math.PI) / 180);
+  return new AnimationClip(name, 1, [
+    new QuaternionKeyframeTrack(
+      `${target.uuid}.quaternion`,
+      [0, 1],
+      [start.x, start.y, start.z, start.w, end.x, end.y, end.z, end.w]
+    ),
   ]);
 }
 
@@ -208,6 +241,28 @@ describe('BakedAnimationController playback state normalization', () => {
     expect(handle).toBeTruthy();
     expect(controller.getAnimationState('HipTurn')).toMatchObject({
       name: 'HipTurn',
+      requestedBlendMode: 'additive',
+      blendMode: 'replace',
+      supportsAdditive: false,
+      additiveModeReason: 'unsafe_baked_additive_tracks',
+    });
+  });
+
+  it('falls back to replace for jaw rotation tracks so additive playback does not double-open the mouth', () => {
+    const { controller, jaw } = makeHost({ includeJawBone: true });
+    expect(jaw).toBeTruthy();
+    jaw!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeJawQuaternionClip(jaw!, 'JawOpen', 10, 20)]);
+
+    const handle = controller.playAnimation('JawOpen', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    controller.seekAnimation('JawOpen', 0);
+    expect((jaw!.rotation.z * 180) / Math.PI).toBeCloseTo(10, 3);
+    expect(controller.getAnimationState('JawOpen')).toMatchObject({
+      name: 'JawOpen',
       requestedBlendMode: 'additive',
       blendMode: 'replace',
       supportsAdditive: false,

@@ -249,6 +249,11 @@ export interface AnnotationRegion {
   };
   groupId?: string;
   isFallback?: boolean;
+  customPosition?: {
+    x: number;
+    y: number;
+    z: number;
+  };
 }
 
 /**

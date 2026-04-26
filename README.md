@@ -350,6 +350,21 @@ const loom = new Loom3({
 
 `annotationRegions` is the Loom3 field for camera/marker region defaults and profile overrides.
 
+For authoring and persistence, treat `annotationRegions` as the canonical Loom3 surface. Top-level `CharacterConfig.regions` remains the runtime/back-compat shape consumed by the current LoomLarge camera stack.
+
+Loom3 now also exports package-side annotation helpers so downstream editors do not need to duplicate region merge or validation logic:
+
+```typescript
+import {
+  extendCharacterConfigWithPreset,
+  mergeAnnotationRegionsByName,
+  removeAnnotationRegionByName,
+  reorderAnnotationRegions,
+  resetAnnotationRegionByName,
+  validateAnnotationRegions,
+} from '@lovelace_lol/loom3';
+```
+
 If your app fetches a full saved `CharacterConfig` from Firestore or another backend, use `extendCharacterConfigWithPreset(...)` to build the runtime shape before handing that config to camera/marker tooling:
 
 ```typescript
@@ -359,14 +374,32 @@ const savedConfig = await fetchCharacterConfig();
 const runtimeConfig = extendCharacterConfigWithPreset(savedConfig);
 ```
 
+If you need to patch or validate annotation authoring data before saving it, prefer the shared helpers over ad hoc app-side merge code:
+
+```typescript
+const nextRegions = mergeAnnotationRegionsByName(savedProfile.annotationRegions, [
+  {
+    name: 'left_eye',
+    cameraAngle: 45,
+    customPosition: { x: 0.02, y: 1.61, z: 0.11 },
+  },
+]);
+
+const issues = validateAnnotationRegions(nextRegions, {
+  disabledRegions: savedProfile.disabledRegions,
+});
+```
+
 For the current runtime-oriented documentation, including:
 
 - `paddingFactor`
 - `cameraAngle`
 - `cameraOffset`
+- `customPosition`
+- `disabledRegions`
 - `style.lineDirection`
 - the difference between `cameraAngle: 0` and omitting `cameraAngle`
-- the current LoomLarge runtime note that annotations have not been moved from the demo project into Loom3 yet
+- the current LoomLarge runtime compatibility note around top-level `regions`
 
 see [ANNOTATION_CONFIGURATION.md](./ANNOTATION_CONFIGURATION.md).
 

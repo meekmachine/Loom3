@@ -1,6 +1,10 @@
 import type { Profile } from '../mappings/types';
 import { extendPresetWithProfile } from '../mappings/extendPresetWithProfile';
 import { getPreset } from '../presets';
+import {
+  cloneAnnotationRegion,
+  mergeAnnotationRegionsByName,
+} from '../regions/annotationRegions';
 import { normalizeRegionTree } from '../regions/normalizeRegionTree';
 import type { CharacterConfig, Region } from './types';
 
@@ -39,10 +43,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function cloneArray<T>(value: T[] | undefined): T[] | undefined {
-  return value ? value.map((entry) => cloneValue(entry) as T) : undefined;
-}
-
 function cloneValue<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((entry) => cloneValue(entry)) as T;
@@ -76,80 +76,8 @@ function mergeProfileOverrideValue<T>(base: T | undefined, override: T | undefin
   return cloneValue(override);
 }
 
-function cloneVector3(
-  value?: { x?: number; y?: number; z?: number }
-): { x?: number; y?: number; z?: number } | undefined {
-  return value ? { ...value } : undefined;
-}
-
-function cloneRegion(region: Region): Region {
-  return {
-    ...region,
-    bones: cloneArray(region.bones),
-    meshes: cloneArray(region.meshes),
-    objects: cloneArray(region.objects),
-    children: cloneArray(region.children),
-    cameraOffset: cloneVector3(region.cameraOffset),
-    customPosition: region.customPosition ? { ...region.customPosition } : undefined,
-    style: region.style
-      ? {
-          ...region.style,
-          line: region.style.line ? { ...region.style.line } : undefined,
-        }
-      : undefined,
-  };
-}
-
-function mergeRegion(base: Region, override: Region): Region {
-  return {
-    ...base,
-    ...override,
-    bones: override.bones !== undefined ? [...override.bones] : base.bones ? [...base.bones] : undefined,
-    meshes: override.meshes !== undefined ? [...override.meshes] : base.meshes ? [...base.meshes] : undefined,
-    objects: override.objects !== undefined ? [...override.objects] : base.objects ? [...base.objects] : undefined,
-    children: override.children !== undefined ? [...override.children] : base.children ? [...base.children] : undefined,
-    cameraOffset: override.cameraOffset
-      ? { ...base.cameraOffset, ...override.cameraOffset }
-      : cloneVector3(base.cameraOffset),
-    customPosition: override.customPosition
-      ? { ...override.customPosition }
-      : base.customPosition
-        ? { ...base.customPosition }
-        : undefined,
-    style: override.style
-      ? {
-          ...base.style,
-          ...override.style,
-          line: override.style.line
-            ? { ...base.style?.line, ...override.style.line }
-            : base.style?.line
-              ? { ...base.style.line }
-              : undefined,
-        }
-      : base.style
-        ? {
-            ...base.style,
-            line: base.style.line ? { ...base.style.line } : undefined,
-          }
-        : undefined,
-  };
-}
-
 export function mergeRegionsByName(base?: Region[], override?: Region[]): Region[] | undefined {
-  if (!base && !override) return undefined;
-
-  const merged = new Map<string, Region>();
-
-  for (const region of base ?? []) {
-    merged.set(region.name, cloneRegion(region));
-  }
-
-  for (const region of override ?? []) {
-    const existing = merged.get(region.name);
-    merged.set(region.name, existing ? mergeRegion(existing, region) : cloneRegion(region));
-  }
-
-  return Array.from(merged.values());
+  return mergeAnnotationRegionsByName(base, override);
 }
 
 export function extractProfileOverrides(config: CharacterConfig): Partial<Profile> {
@@ -174,7 +102,7 @@ export function extractProfileOverrides(config: CharacterConfig): Partial<Profil
       );
 
       if (regions) {
-        overrides.annotationRegions = regions.map((region) => cloneRegion(region));
+        overrides.annotationRegions = regions.map((region) => cloneAnnotationRegion(region));
       }
       continue;
     }

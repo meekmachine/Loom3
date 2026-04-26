@@ -25,6 +25,9 @@ import type {
   RotationsState,
   AnimationPlayOptions,
   AnimationClipInfo,
+  FBXAnimationInput,
+  FBXAnimationImportOptions,
+  FBXAnimationImportResult,
   AnimationState,
   AnimationActionHandle,
   CurvesMap,
@@ -1915,6 +1918,13 @@ export class Loom3 implements LoomLarge {
 
   loadAnimationClips(clips: unknown[]): void {
     this.bakedAnimations.loadAnimationClips(clips);
+  }
+
+  async loadAnimationClipsFromFBX(
+    source: FBXAnimationInput,
+    options: FBXAnimationImportOptions = {}
+  ): Promise<FBXAnimationImportResult> {
+    return this.bakedAnimations.loadAnimationClipsFromFBX(source, options);
   }
 
   getAnimationClips(): AnimationClipInfo[] {

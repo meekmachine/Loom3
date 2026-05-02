@@ -581,24 +581,28 @@ export class BakedAnimationController {
       return null;
     }
 
-    const model = this.host.getModel();
-    if (!model) {
-      return null;
-    }
     const additiveClip = new AnimationClip(
-      `${clip.name}__loom3_additive_filtered`,
+      support.keepTracks.length > 0
+        ? `${clip.name}__loom3_additive_filtered`
+        : `${clip.name}__loom3_additive_noop`,
       clip.duration,
       support.keepTracks.map((track) => track.clone())
     );
-    const referenceTracks = support.keepTracks
-      .map((track) => this.createAdditiveReferenceTrack(track, model))
-      .filter((track): track is KeyframeTrack => !!track);
-    const referenceClip = new AnimationClip(
-      `${clip.name}__loom3_additive_reference`,
-      0,
-      referenceTracks
-    );
-    AnimationUtils.makeClipAdditive(additiveClip, 0, referenceClip);
+    if (support.keepTracks.length > 0) {
+      const model = this.host.getModel();
+      if (!model) {
+        return null;
+      }
+      const referenceTracks = support.keepTracks
+        .map((track) => this.createAdditiveReferenceTrack(track, model))
+        .filter((track): track is KeyframeTrack => !!track);
+      const referenceClip = new AnimationClip(
+        `${clip.name}__loom3_additive_reference`,
+        0,
+        referenceTracks
+      );
+      AnimationUtils.makeClipAdditive(additiveClip, 0, referenceClip);
+    }
     this.additiveClipCache.set(clipName, additiveClip);
     return additiveClip;
   }

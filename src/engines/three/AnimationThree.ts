@@ -540,18 +540,8 @@ export class BakedAnimationController {
       ignoredTracks.push(trackName);
     }
 
-    if (keepTracks.length > 0) {
-      return {
-        supported: true,
-        keepTracks,
-        ignoredTracks,
-      };
-    }
-
     return {
-      supported: false,
-      reason: 'unsafe_baked_additive_tracks',
-      unsupportedTracks: ignoredTracks,
+      supported: true,
       keepTracks,
       ignoredTracks,
     };
@@ -587,7 +577,7 @@ export class BakedAnimationController {
     }
 
     const support = this.getAdditiveSupport(clipName, clip);
-    if (!support.supported || support.keepTracks.length === 0) {
+    if (!support.supported) {
       return null;
     }
 

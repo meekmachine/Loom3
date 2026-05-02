@@ -240,33 +240,35 @@ describe('BakedAnimationController playback state normalization', () => {
     expect(controller.getAnimationClips()[0]?.supportsAdditive).toBe(true);
   });
 
-  it('falls back to replace for resolved head bone rotation tracks', () => {
+  it('allows additive baked playback while filtering resolved head bone rotation tracks', () => {
     const { controller, head } = makeHost({ includeHeadBone: true });
     expect(head).toBeTruthy();
-    controller.loadAnimationClips([makeSafeBoneClip(head!, 'HeadNod')]);
+    head!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeQuaternionPoseClip(head!, 'HeadNod', 10, 20)]);
 
     const handle = controller.playAnimation('HeadNod', {
       blendMode: 'additive',
     });
 
     expect(handle).toBeTruthy();
+    controller.seekAnimation('HeadNod', 1);
+    expect((head!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
     expect(controller.getAnimationState('HeadNod')).toMatchObject({
       name: 'HeadNod',
       requestedBlendMode: 'additive',
-      blendMode: 'replace',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      blendMode: 'additive',
+      supportsAdditive: true,
     });
     expect(controller.getAnimationClips()[0]).toMatchObject({
       name: 'HeadNod',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      supportsAdditive: true,
     });
   });
 
-  it('falls back to replace for resolved bone position tracks even when the bone is whitelisted', () => {
+  it('allows additive baked playback while filtering resolved bone position tracks', () => {
     const { controller, head } = makeHost({ includeHeadBone: true });
     expect(head).toBeTruthy();
+    head!.position.x = 3;
     controller.loadAnimationClips([makeBonePositionClip(head!, 'HeadShift')]);
 
     const handle = controller.playAnimation('HeadShift', {
@@ -274,50 +276,55 @@ describe('BakedAnimationController playback state normalization', () => {
     });
 
     expect(handle).toBeTruthy();
+    controller.seekAnimation('HeadShift', 1);
+    expect(head!.position.x).toBeCloseTo(3, 3);
     expect(controller.getAnimationState('HeadShift')).toMatchObject({
       name: 'HeadShift',
       requestedBlendMode: 'additive',
-      blendMode: 'replace',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      blendMode: 'additive',
+      supportsAdditive: true,
     });
   });
 
-  it('falls back to replace for root-like bone rotation tracks even when they resolve as bones', () => {
+  it('allows additive baked playback while filtering hip bone rotation tracks', () => {
     const { controller, hip } = makeHost({ includeHipBone: true });
     expect(hip).toBeTruthy();
-    controller.loadAnimationClips([makeBoneQuaternionClip(hip!, 'HipTurn')]);
+    hip!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeQuaternionPoseClip(hip!, 'HipTurn', 10, 20)]);
 
     const handle = controller.playAnimation('HipTurn', {
       blendMode: 'additive',
     });
 
     expect(handle).toBeTruthy();
+    controller.seekAnimation('HipTurn', 1);
+    expect((hip!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
     expect(controller.getAnimationState('HipTurn')).toMatchObject({
       name: 'HipTurn',
       requestedBlendMode: 'additive',
-      blendMode: 'replace',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      blendMode: 'additive',
+      supportsAdditive: true,
     });
   });
 
-  it('falls back to replace for resolved foot bone rotation tracks', () => {
+  it('allows additive baked playback while filtering foot bone rotation tracks', () => {
     const { controller, foot } = makeHost({ includeFootBone: true });
     expect(foot).toBeTruthy();
-    controller.loadAnimationClips([makeBoneQuaternionClip(foot!, 'FootLift')]);
+    foot!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeQuaternionPoseClip(foot!, 'FootLift', 10, 20)]);
 
     const handle = controller.playAnimation('FootLift', {
       blendMode: 'additive',
     });
 
     expect(handle).toBeTruthy();
+    controller.seekAnimation('FootLift', 1);
+    expect((foot!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
     expect(controller.getAnimationState('FootLift')).toMatchObject({
       name: 'FootLift',
       requestedBlendMode: 'additive',
-      blendMode: 'replace',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      blendMode: 'additive',
+      supportsAdditive: true,
     });
   });
 
@@ -523,8 +530,9 @@ describe('BakedAnimationController playback state normalization', () => {
     expect(controller.getAnimationState('Wave')?.time).toBeCloseTo(1, 5);
   });
 
-  it('falls back to replace when additive is requested for baked transform clips', () => {
+  it('allows additive no-op playback when every baked track is filtered', () => {
     const { controller, model } = makeHost();
+    model.position.x = 3;
     controller.loadAnimationClips([makeTransformClip(model, 'Idle')]);
 
     const handle = controller.playAnimation('Idle', {
@@ -532,17 +540,17 @@ describe('BakedAnimationController playback state normalization', () => {
     });
 
     expect(handle).toBeTruthy();
+    controller.seekAnimation('Idle', 1);
+    expect(model.position.x).toBeCloseTo(3, 3);
     expect(controller.getAnimationState('Idle')).toMatchObject({
       name: 'Idle',
       requestedBlendMode: 'additive',
-      blendMode: 'replace',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      blendMode: 'additive',
+      supportsAdditive: true,
     });
     expect(controller.getAnimationClips()[0]).toMatchObject({
       name: 'Idle',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      supportsAdditive: true,
     });
   });
 
@@ -593,9 +601,8 @@ describe('BakedAnimationController playback state normalization', () => {
     expect(controller.getAnimationState('SmileWithJaw')).toMatchObject({
       name: 'SmileWithJaw',
       requestedBlendMode: 'additive',
-      blendMode: 'replace',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      blendMode: 'additive',
+      supportsAdditive: true,
     });
   });
 });

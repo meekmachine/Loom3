@@ -193,6 +193,7 @@ export interface BakedAnimationHost {
   computeSideValues: (base: number, balance?: number) => { left: number; right: number };
   getAUMixWeight: (auId: number) => number;
   isMixedAU: (auId: number) => boolean;
+  reapplyProceduralState?: () => void;
 }
 
 // Lightweight unique id for mixer actions/handles
@@ -241,10 +242,6 @@ export class BakedAnimationController {
 
   constructor(host: BakedAnimationHost) {
     this.host = host;
-  }
-
-  private isRootLikeAdditiveTarget(target: Object3D): boolean {
-    return /(armature|boneroot|root|hip|pelvis)/i.test(target.name || '');
   }
 
   private getActionId(action?: AnimationAction | null): string | undefined {
@@ -324,6 +321,69 @@ export class BakedAnimationController {
     for (const clipName of Array.from(this.additiveClipCache.keys())) {
       this.clearFilteredAdditiveClip(clipName);
     }
+  }
+
+  private getMorphTrackBaseValue(
+    target: Object3D | null,
+    propertyIndex: string | number | undefined
+  ): number {
+    if (!target) {
+      return 0;
+    }
+
+    const meshTarget = target as Mesh & {
+      morphTargetInfluences?: number[];
+      morphTargetDictionary?: Record<string, number>;
+    };
+    const influences = meshTarget.morphTargetInfluences;
+    if (!influences) {
+      return 0;
+    }
+
+    let morphIndex: number | undefined;
+    if (typeof propertyIndex === 'number' && Number.isInteger(propertyIndex)) {
+      morphIndex = propertyIndex;
+    } else if (typeof propertyIndex === 'string') {
+      if (/^\d+$/.test(propertyIndex)) {
+        morphIndex = Number(propertyIndex);
+      } else {
+        morphIndex = meshTarget.morphTargetDictionary?.[propertyIndex];
+      }
+    }
+
+    if (morphIndex === undefined) {
+      return 0;
+    }
+
+    return influences[morphIndex] ?? 0;
+  }
+
+  private createAdditiveReferenceTrack(
+    track: KeyframeTrack,
+    model: Object3D
+  ): KeyframeTrack | null {
+    const trackName = typeof track?.name === 'string' ? track.name : '';
+    if (!trackName) {
+      return null;
+    }
+
+    let parsed: ReturnType<typeof PropertyBinding.parseTrackName>;
+    try {
+      parsed = PropertyBinding.parseTrackName(trackName);
+    } catch {
+      return null;
+    }
+
+    const target = this.resolveTrackTarget(model, parsed);
+    if (parsed.propertyName === 'morphTargetInfluences') {
+      return new NumberKeyframeTrack(
+        track.name,
+        [0],
+        [this.getMorphTrackBaseValue(target, parsed.propertyIndex)]
+      );
+    }
+
+    return null;
   }
 
   private normalizePlaybackOptions(
@@ -445,8 +505,7 @@ export class BakedAnimationController {
   }
 
   private analyzeAdditiveSupport(clip: AnimationClip): AdditiveSupport {
-    const model = this.host.getModel();
-    if (!model) {
+    if (!this.host.getModel()) {
       return {
         supported: false,
         reason: 'unsafe_baked_additive_tracks',
@@ -455,13 +514,6 @@ export class BakedAnimationController {
       };
     }
 
-    const bones = this.host.getBones();
-    const safeTransformTargets = new Set(
-      Object.values(bones)
-        .map((entry) => entry?.obj)
-        .filter(Boolean)
-    );
-    const jawTarget = bones.JAW?.obj;
     const keepTracks: KeyframeTrack[] = [];
     const ignoredTracks: string[] = [];
 
@@ -485,33 +537,7 @@ export class BakedAnimationController {
         continue;
       }
 
-      if (parsed.propertyName !== 'quaternion') {
-        ignoredTracks.push(trackName);
-        continue;
-      }
-
-      const target = this.resolveTrackTarget(model, parsed);
-      if (!target || target === model || target.parent === null || (target as any).isCamera) {
-        ignoredTracks.push(trackName);
-        continue;
-      }
-
-      if (!safeTransformTargets.has(target)) {
-        ignoredTracks.push(trackName);
-        continue;
-      }
-
-      if (jawTarget && target === jawTarget) {
-        ignoredTracks.push(trackName);
-        continue;
-      }
-
-      if (this.isRootLikeAdditiveTarget(target)) {
-        ignoredTracks.push(trackName);
-        continue;
-      }
-
-      keepTracks.push(track);
+      ignoredTracks.push(trackName);
     }
 
     if (keepTracks.length > 0) {
@@ -565,12 +591,24 @@ export class BakedAnimationController {
       return null;
     }
 
+    const model = this.host.getModel();
+    if (!model) {
+      return null;
+    }
     const additiveClip = new AnimationClip(
       `${clip.name}__loom3_additive_filtered`,
       clip.duration,
       support.keepTracks.map((track) => track.clone())
     );
-    AnimationUtils.makeClipAdditive(additiveClip);
+    const referenceTracks = support.keepTracks
+      .map((track) => this.createAdditiveReferenceTrack(track, model))
+      .filter((track): track is KeyframeTrack => !!track);
+    const referenceClip = new AnimationClip(
+      `${clip.name}__loom3_additive_reference`,
+      0,
+      referenceTracks
+    );
+    AnimationUtils.makeClipAdditive(additiveClip, 0, referenceClip);
     this.additiveClipCache.set(clipName, additiveClip);
     return additiveClip;
   }
@@ -665,6 +703,23 @@ export class BakedAnimationController {
     return action;
   }
 
+  private hasActiveAdditivePlayback(): boolean {
+    for (const [clipName, action] of this.animationActions) {
+      const state = this.playbackState.get(clipName);
+      if (state?.blendMode !== 'additive') {
+        continue;
+      }
+      if (!action.isRunning() || action.paused) {
+        continue;
+      }
+      if (action.getEffectiveWeight() <= 1e-6) {
+        continue;
+      }
+      return true;
+    }
+    return false;
+  }
+
   private getMeshNamesForAU(auId: number, config: Profile, explicitMeshNames?: string[]): string[] {
     if (explicitMeshNames && explicitMeshNames.length > 0) {
       return explicitMeshNames;
@@ -700,6 +755,9 @@ export class BakedAnimationController {
   update(dtSeconds: number): void {
     if (this.animationMixer) {
       this.animationMixer.update(dtSeconds);
+      if (this.hasActiveAdditivePlayback()) {
+        this.host.reapplyProceduralState?.();
+      }
     }
   }
 
@@ -1028,6 +1086,9 @@ export class BakedAnimationController {
     action.time = Math.max(0, Math.min(duration, Number.isFinite(time) ? time : 0));
     try {
       this.animationMixer?.update(0);
+      if (state.blendMode === 'additive') {
+        this.host.reapplyProceduralState?.();
+      }
     } catch {}
   }
 

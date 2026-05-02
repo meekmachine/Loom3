@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AnimationClip,
+  Bone,
   Quaternion,
   Vector3,
   Mesh,
@@ -240,7 +241,7 @@ describe('BakedAnimationController playback state normalization', () => {
     expect(controller.getAnimationClips()[0]?.supportsAdditive).toBe(true);
   });
 
-  it('allows additive baked playback while filtering resolved head bone rotation tracks', () => {
+  it('converts resolved head bone rotation tracks to additive deltas', () => {
     const { controller, head } = makeHost({ includeHeadBone: true });
     expect(head).toBeTruthy();
     head!.rotation.z = (5 * Math.PI) / 180;
@@ -252,7 +253,7 @@ describe('BakedAnimationController playback state normalization', () => {
 
     expect(handle).toBeTruthy();
     controller.seekAnimation('HeadNod', 1);
-    expect((head!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
+    expect((head!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
     expect(controller.getAnimationState('HeadNod')).toMatchObject({
       name: 'HeadNod',
       requestedBlendMode: 'additive',
@@ -265,7 +266,7 @@ describe('BakedAnimationController playback state normalization', () => {
     });
   });
 
-  it('allows additive baked playback while filtering resolved bone position tracks', () => {
+  it('converts resolved bone position tracks to additive deltas', () => {
     const { controller, head } = makeHost({ includeHeadBone: true });
     expect(head).toBeTruthy();
     head!.position.x = 3;
@@ -277,7 +278,7 @@ describe('BakedAnimationController playback state normalization', () => {
 
     expect(handle).toBeTruthy();
     controller.seekAnimation('HeadShift', 1);
-    expect(head!.position.x).toBeCloseTo(3, 3);
+    expect(head!.position.x).toBeCloseTo(4, 3);
     expect(controller.getAnimationState('HeadShift')).toMatchObject({
       name: 'HeadShift',
       requestedBlendMode: 'additive',
@@ -286,7 +287,7 @@ describe('BakedAnimationController playback state normalization', () => {
     });
   });
 
-  it('allows additive baked playback while filtering hip bone rotation tracks', () => {
+  it('converts hip bone rotation tracks to additive deltas', () => {
     const { controller, hip } = makeHost({ includeHipBone: true });
     expect(hip).toBeTruthy();
     hip!.rotation.z = (5 * Math.PI) / 180;
@@ -298,7 +299,7 @@ describe('BakedAnimationController playback state normalization', () => {
 
     expect(handle).toBeTruthy();
     controller.seekAnimation('HipTurn', 1);
-    expect((hip!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
+    expect((hip!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
     expect(controller.getAnimationState('HipTurn')).toMatchObject({
       name: 'HipTurn',
       requestedBlendMode: 'additive',
@@ -307,7 +308,7 @@ describe('BakedAnimationController playback state normalization', () => {
     });
   });
 
-  it('allows additive baked playback while filtering foot bone rotation tracks', () => {
+  it('converts foot bone rotation tracks to additive deltas', () => {
     const { controller, foot } = makeHost({ includeFootBone: true });
     expect(foot).toBeTruthy();
     foot!.rotation.z = (5 * Math.PI) / 180;
@@ -319,7 +320,7 @@ describe('BakedAnimationController playback state normalization', () => {
 
     expect(handle).toBeTruthy();
     controller.seekAnimation('FootLift', 1);
-    expect((foot!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
+    expect((foot!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
     expect(controller.getAnimationState('FootLift')).toMatchObject({
       name: 'FootLift',
       requestedBlendMode: 'additive',
@@ -328,7 +329,30 @@ describe('BakedAnimationController playback state normalization', () => {
     });
   });
 
-  it('keeps safe morph tracks additive while filtering jaw rotation tracks', () => {
+  it('converts unmapped Three bone tracks instead of dropping the whole baked clip', () => {
+    const { controller, model } = makeHost();
+    const leg = new Bone();
+    leg.name = 'UnmappedLeg';
+    model.add(leg);
+    leg.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeQuaternionPoseClip(leg, 'LegLift', 10, 20)]);
+
+    const handle = controller.playAnimation('LegLift', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    controller.seekAnimation('LegLift', 1);
+    expect((leg.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
+    expect(controller.getAnimationState('LegLift')).toMatchObject({
+      name: 'LegLift',
+      requestedBlendMode: 'additive',
+      blendMode: 'additive',
+      supportsAdditive: true,
+    });
+  });
+
+  it('keeps morph tracks additive while converting jaw rotation tracks to additive deltas', () => {
     const { controller, mesh, jaw } = makeHost({ includeJawBone: true });
     expect(jaw).toBeTruthy();
     jaw!.rotation.z = (5 * Math.PI) / 180;
@@ -340,7 +364,7 @@ describe('BakedAnimationController playback state normalization', () => {
 
     expect(handle).toBeTruthy();
     controller.seekAnimation('SmileWithJaw', 1);
-    expect((jaw!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
+    expect((jaw!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
     expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(1, 3);
     expect(controller.getAnimationState('SmileWithJaw')).toMatchObject({
       name: 'SmileWithJaw',
@@ -371,7 +395,7 @@ describe('BakedAnimationController playback state normalization', () => {
     });
   });
 
-  it('keeps morph tracks additive while filtering head bone rotation tracks', () => {
+  it('keeps morph tracks additive while converting head bone rotation tracks to additive deltas', () => {
     const { controller, mesh, head } = makeHost({ includeHeadBone: true });
     expect(head).toBeTruthy();
     head!.rotation.z = (5 * Math.PI) / 180;
@@ -383,7 +407,7 @@ describe('BakedAnimationController playback state normalization', () => {
 
     expect(handle).toBeTruthy();
     controller.seekAnimation('SmileWithHeadTurn', 1);
-    expect((head!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
+    expect((head!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
     expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(1, 3);
     expect(controller.getAnimationState('SmileWithHeadTurn')).toMatchObject({
       name: 'SmileWithHeadTurn',
@@ -393,7 +417,7 @@ describe('BakedAnimationController playback state normalization', () => {
     });
   });
 
-  it('keeps morph tracks additive while filtering foot bone rotation tracks', () => {
+  it('keeps morph tracks additive while converting foot bone rotation tracks to additive deltas', () => {
     const { controller, mesh, foot } = makeHost({ includeFootBone: true });
     expect(foot).toBeTruthy();
     foot!.rotation.z = (5 * Math.PI) / 180;
@@ -407,7 +431,7 @@ describe('BakedAnimationController playback state normalization', () => {
     controller.seekAnimation('SmileWithFootLift', 0);
     expect((foot!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
     controller.seekAnimation('SmileWithFootLift', 1);
-    expect((foot!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
+    expect((foot!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
     expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(1, 3);
     expect(controller.getAnimationState('SmileWithFootLift')).toMatchObject({
       name: 'SmileWithFootLift',
@@ -574,7 +598,7 @@ describe('BakedAnimationController playback state normalization', () => {
       supportsAdditive: true,
     });
     expect(controller.getAnimationState('SmileWithJaw')?.actionId).not.toBe(replaceActionId);
-    expect((jaw!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
+    expect((jaw!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
     expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(1, 3);
   });
 

@@ -12,6 +12,7 @@ import {
   KeyframeTrack,
   NumberKeyframeTrack,
   QuaternionKeyframeTrack,
+  VectorKeyframeTrack,
   AdditiveAnimationBlendMode,
   LoopRepeat,
   LoopPingPong,
@@ -201,6 +202,7 @@ const makeActionId = () => `act_${Math.random().toString(36).slice(2, 8)}_${Date
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
+const ADDITIVE_BONE_TRANSFORM_PROPERTIES = new Set(['position', 'quaternion', 'rotation', 'scale']);
 
 type NormalizedPlaybackState = {
   source: AnimationSource;
@@ -358,6 +360,36 @@ export class BakedAnimationController {
     return influences[morphIndex] ?? 0;
   }
 
+  private canCreateFirstFrameReferenceTrack(track: KeyframeTrack): boolean {
+    const valueSize = track.getValueSize();
+    if (!Number.isFinite(valueSize) || valueSize <= 0 || track.values.length < valueSize) {
+      return false;
+    }
+
+    return track.ValueTypeName === 'number'
+      || track.ValueTypeName === 'quaternion'
+      || track.ValueTypeName === 'vector';
+  }
+
+  private createFirstFrameReferenceTrack(track: KeyframeTrack): KeyframeTrack | null {
+    const valueSize = track.getValueSize();
+    if (!this.canCreateFirstFrameReferenceTrack(track)) {
+      return null;
+    }
+
+    const values = Array.from(track.values.slice(0, valueSize));
+    if (track.ValueTypeName === 'number') {
+      return new NumberKeyframeTrack(track.name, [0], values);
+    }
+    if (track.ValueTypeName === 'quaternion') {
+      return new QuaternionKeyframeTrack(track.name, [0], values);
+    }
+    if (track.ValueTypeName === 'vector') {
+      return new VectorKeyframeTrack(track.name, [0], values);
+    }
+    return null;
+  }
+
   private createAdditiveReferenceTrack(
     track: KeyframeTrack,
     model: Object3D
@@ -383,7 +415,8 @@ export class BakedAnimationController {
       );
     }
 
-    return null;
+    // Baked transform tracks are absolute; subtract the clip's first key before additive blending.
+    return this.createFirstFrameReferenceTrack(track);
   }
 
   private normalizePlaybackOptions(
@@ -505,7 +538,8 @@ export class BakedAnimationController {
   }
 
   private analyzeAdditiveSupport(clip: AnimationClip): AdditiveSupport {
-    if (!this.host.getModel()) {
+    const model = this.host.getModel();
+    if (!model) {
       return {
         supported: false,
         reason: 'unsafe_baked_additive_tracks',
@@ -514,6 +548,12 @@ export class BakedAnimationController {
       };
     }
 
+    const bones = this.host.getBones();
+    const resolvedBoneTargets = new Set(
+      Object.values(bones)
+        .map((entry) => entry?.obj)
+        .filter(Boolean)
+    );
     const keepTracks: KeyframeTrack[] = [];
     const ignoredTracks: string[] = [];
 
@@ -532,7 +572,27 @@ export class BakedAnimationController {
         continue;
       }
 
-      if (parsed.propertyName === 'morphTargetInfluences') {
+      if (
+        parsed.propertyName === 'morphTargetInfluences'
+        && track.ValueTypeName === 'number'
+        && this.canCreateFirstFrameReferenceTrack(track)
+      ) {
+        keepTracks.push(track);
+        continue;
+      }
+
+      const target = this.resolveTrackTarget(model, parsed);
+      if (!target || target === model || target.parent === null || (target as any).isCamera) {
+        ignoredTracks.push(trackName);
+        continue;
+      }
+
+      const isBoneTarget = resolvedBoneTargets.has(target) || !!(target as any).isBone;
+      if (
+        isBoneTarget
+        && ADDITIVE_BONE_TRANSFORM_PROPERTIES.has(parsed.propertyName)
+        && this.canCreateFirstFrameReferenceTrack(track)
+      ) {
         keepTracks.push(track);
         continue;
       }

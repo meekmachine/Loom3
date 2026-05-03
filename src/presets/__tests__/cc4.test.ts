@@ -5,6 +5,9 @@ import {
   CC4_PRESET,
   COMPOSITE_ROTATIONS,
   CONTINUUM_PAIRS_MAP,
+  CC4_MAPPING_SECTIONS,
+  CC4_VISEME_SYSTEM_ID,
+  CC4_VISEME_SLOTS,
   VISEME_JAW_AMOUNTS,
   VISEME_KEYS,
   isMixedAU,
@@ -326,6 +329,19 @@ describe('CC4 Preset', () => {
       expect(VISEME_JAW_AMOUNTS[4]).toBeCloseTo(0.2);
       expect(VISEME_JAW_AMOUNTS[2]).toBeCloseTo(0);
       expect(VISEME_JAW_AMOUNTS[14]).toBeCloseTo(0.5);
+    });
+
+    it('should expose the CC4 direct set as a profile-defined viseme system', () => {
+      expect(CC4_PRESET.visemeSystemId).toBe(CC4_VISEME_SYSTEM_ID);
+      expect(CC4_VISEME_SLOTS).toHaveLength(VISEME_KEYS.length);
+      expect(CC4_PRESET.visemeSlots?.map((slot) => slot.label)).toEqual(VISEME_KEYS);
+      expect(CC4_PRESET.visemeSlots?.[0].providerIds?.azure).toContain(4);
+    });
+
+    it('should own mapping section order in the preset', () => {
+      expect(CC4_PRESET.mappingSections).toBe(CC4_MAPPING_SECTIONS);
+      expect(CC4_MAPPING_SECTIONS.map((section) => section.id)).toContain('Visemes');
+      expect(CC4_MAPPING_SECTIONS.find((section) => section.id === 'Visemes')?.meshCategory).toBe('viseme');
     });
   });
 

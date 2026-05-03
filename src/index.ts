@@ -114,6 +114,15 @@ export type {
   HairMorphTargetMapping,
   HairMorphTargetValueMapping,
   HairMorphAxis,
+  VisemeSlot,
+  VisemeSlotFeatures,
+  VisemeBinding,
+  VisemeBindingTarget,
+  MappingEditorSection,
+  MappingEditorModel,
+  MorphCandidate,
+  MorphCandidateMatch,
+  MorphCandidateReason,
   MorphCategory,
   MeshCategory,
   BlendingMode,
@@ -122,6 +131,23 @@ export type {
 } from './mappings/types';
 
 export { BLENDING_MODES } from './mappings/types';
+
+export {
+  buildMappingEditorModel,
+  compileVisemeKeys,
+  getMeshNamesForAUProfile,
+  getMeshNamesForVisemeProfile,
+  getProfileVisemeSlots,
+  getVisemeJawAmounts,
+  getVisemeSlotIndex,
+  mapProviderVisemeToSlot,
+  resolveVisemeMeshCategory,
+} from './mappings/visemeSystem';
+
+export type {
+  ProviderVisemeEvent,
+  ProviderVisemeMatch,
+} from './mappings/visemeSystem';
 
 // ============================================================================
 // CHARACTER CONFIG (Regions, Markers)
@@ -186,6 +212,9 @@ export {
   CC4_EYE_MESH_NODES,
   CC4_MESHES,
   VISEME_KEYS,
+  CC4_VISEME_SYSTEM_ID,
+  CC4_VISEME_SLOTS,
+  CC4_MAPPING_SECTIONS,
   VISEME_JAW_AMOUNTS,
   MORPH_TO_MESH,
   AU_INFO,

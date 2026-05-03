@@ -6,7 +6,7 @@
  * and AU metadata that we painstakingly worked through.
  */
 
-import type { Profile, MeshCategory, BlendingMode, MeshMaterialSettings, MeshInfo, MorphCategory, MorphTargetsBySide } from '../mappings/types';
+import type { Profile, MeshCategory, BlendingMode, MeshMaterialSettings, MeshInfo, MorphCategory, MorphTargetsBySide, VisemeSlot, MappingEditorSection } from '../mappings/types';
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
 
 // ============================================================================
@@ -569,6 +569,162 @@ export const VISEME_JAW_AMOUNTS: number[] = [
   0.50, // 14: W_OO
 ];
 
+export const CC4_VISEME_SYSTEM_ID = 'cc4-arkit-15';
+
+export const CC4_VISEME_SLOTS: VisemeSlot[] = [
+  {
+    id: 'ae',
+    label: 'AE',
+    order: 0,
+    providerIds: { azure: [4], sapi: [4] },
+    phonemes: ['AE', 'EH', 'EY', 'UH'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(ae|eh|ey)([_ .-]|$)'],
+    features: { jawOpen: 0.75, lipSpread: 0.35 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[0],
+  },
+  {
+    id: 'ah',
+    label: 'Ah',
+    order: 1,
+    providerIds: { azure: [1, 2, 9, 11, 12], sapi: [1, 2, 9, 11, 12] },
+    phonemes: ['AA', 'AE', 'AH', 'AX', 'AW', 'AY', 'HH'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(ah|aa|aah|open)([_ .-]|$)'],
+    features: { jawOpen: 0.8 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[1],
+  },
+  {
+    id: 'b-m-p',
+    label: 'B_M_P',
+    order: 2,
+    providerIds: { azure: [0, 21], sapi: [0, 21] },
+    phonemes: ['B', 'M', 'P'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(b[_ .-]?m[_ .-]?p|bmp|closed|sil|rest)([_ .-]|$)'],
+    features: { jawOpen: 0, lipClosed: 1 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[2],
+  },
+  {
+    id: 'ch-j',
+    label: 'Ch_J',
+    order: 3,
+    providerIds: { azure: [16], sapi: [16] },
+    phonemes: ['CH', 'JH', 'SH', 'ZH'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(ch|j|sh|zh)([_ .-]|$)'],
+    features: { jawOpen: 0.3, fricative: 0.6 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[3],
+  },
+  {
+    id: 'ee',
+    label: 'EE',
+    order: 4,
+    providerIds: { azure: [6], sapi: [6] },
+    phonemes: ['IY', 'IH', 'IX', 'Y'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(ee|iy|y)([_ .-]|$)'],
+    features: { jawOpen: 0.2, lipSpread: 0.8 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[4],
+  },
+  {
+    id: 'er',
+    label: 'Er',
+    order: 5,
+    providerIds: { azure: [5], sapi: [5] },
+    phonemes: ['ER'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(er)([_ .-]|$)'],
+    features: { jawOpen: 0.35, lipRound: 0.35 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[5],
+  },
+  {
+    id: 'f-v',
+    label: 'F_V',
+    order: 6,
+    providerIds: { azure: [18], sapi: [18] },
+    phonemes: ['F', 'V'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(f[_ .-]?v|fv)([_ .-]|$)'],
+    features: { jawOpen: 0.1, fricative: 1 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[6],
+  },
+  {
+    id: 'ih',
+    label: 'Ih',
+    order: 7,
+    providerIds: { azure: [6], sapi: [6] },
+    phonemes: ['IH', 'IX'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(ih|ix)([_ .-]|$)'],
+    features: { jawOpen: 0.2, lipSpread: 0.55 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[7],
+  },
+  {
+    id: 'k-g-h-ng',
+    label: 'K_G_H_NG',
+    order: 8,
+    providerIds: { azure: [20], sapi: [20] },
+    phonemes: ['K', 'G', 'NG'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(k[_ .-]?g[_ .-]?h?[_ .-]?ng|kg|ng)([_ .-]|$)'],
+    features: { jawOpen: 0.35 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[8],
+  },
+  {
+    id: 'oh',
+    label: 'Oh',
+    order: 9,
+    providerIds: { azure: [3, 8, 10], sapi: [3, 8, 10] },
+    phonemes: ['AO', 'OW', 'OY'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(oh|ao|ow|oy)([_ .-]|$)'],
+    features: { jawOpen: 0.6, lipRound: 0.8 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[9],
+  },
+  {
+    id: 'r',
+    label: 'R',
+    order: 10,
+    providerIds: { azure: [13], sapi: [13] },
+    phonemes: ['R'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(r)([_ .-]|$)'],
+    features: { jawOpen: 0.35, lipRound: 0.5 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[10],
+  },
+  {
+    id: 's-z',
+    label: 'S_Z',
+    order: 11,
+    providerIds: { azure: [15], sapi: [15] },
+    phonemes: ['S', 'Z'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(s[_ .-]?z|sz)([_ .-]|$)'],
+    features: { jawOpen: 0.1, fricative: 1 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[11],
+  },
+  {
+    id: 't-l-d-n',
+    label: 'T_L_D_N',
+    order: 12,
+    providerIds: { azure: [14, 19], sapi: [14, 19] },
+    phonemes: ['T', 'L', 'D', 'N'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(t[_ .-]?l[_ .-]?d[_ .-]?n|tldn|l)([_ .-]|$)'],
+    features: { jawOpen: 0.3, tongueTip: 1 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[12],
+  },
+  {
+    id: 'th',
+    label: 'Th',
+    order: 13,
+    providerIds: { azure: [17], sapi: [17] },
+    phonemes: ['TH', 'DH'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(th|dh)([_ .-]|$)'],
+    features: { jawOpen: 0.15, tongueTip: 0.8, fricative: 0.8 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[13],
+  },
+  {
+    id: 'w-oo',
+    label: 'W_OO',
+    order: 14,
+    providerIds: { azure: [7], sapi: [7] },
+    phonemes: ['W', 'UW'],
+    matchers: ['(^|[_ .-])(v|viseme)?[_ .-]?(w[_ .-]?oo|woo|uw|oo)([_ .-]|$)'],
+    features: { jawOpen: 0.5, lipRound: 1 },
+    defaultJawAmount: VISEME_JAW_AMOUNTS[14],
+  },
+];
+
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -955,6 +1111,24 @@ export const AU_FACEPART_TO_MESH_CATEGORY: Record<string, MorphCategory> = {
   Tongue: 'tongue',
 };
 
+export const CC4_MAPPING_SECTIONS: MappingEditorSection[] = [
+  { id: 'Forehead', label: 'Forehead', kind: 'au', order: 0, meshCategory: 'face', facePart: 'Forehead' },
+  { id: 'Eyelids', label: 'Eyelids', kind: 'au', order: 1, meshCategory: 'eye', facePart: 'Eyelids' },
+  { id: 'Eyes', label: 'Eyes', kind: 'au', order: 2, meshCategory: 'eye', facePart: 'Eyes' },
+  { id: 'Cheeks', label: 'Cheeks', kind: 'au', order: 3, meshCategory: 'face', facePart: 'Cheeks' },
+  { id: 'Nose', label: 'Nose', kind: 'au', order: 4, meshCategory: 'face', facePart: 'Nose' },
+  { id: 'Mouth', label: 'Mouth', kind: 'au', order: 5, meshCategory: 'face', facePart: 'Mouth' },
+  { id: 'Chin', label: 'Chin', kind: 'au', order: 6, meshCategory: 'face', facePart: 'Chin' },
+  { id: 'Jaw', label: 'Jaw', kind: 'au', order: 7, meshCategory: 'face', facePart: 'Jaw' },
+  { id: 'Tongue', label: 'Tongue', kind: 'au', order: 8, meshCategory: 'tongue', facePart: 'Tongue' },
+  { id: 'Head', label: 'Head', kind: 'au', order: 9, meshCategory: 'face', facePart: 'Head' },
+  { id: 'Joint Controls', label: 'Joint Controls', kind: 'au', order: 10, meshCategory: 'face', facePart: 'Joint Controls' },
+  { id: 'Eye', label: 'Eye', kind: 'au', order: 11, meshCategory: 'eye', facePart: 'Eye' },
+  { id: 'Hair', label: 'Hair', kind: 'hair', order: 12, meshCategory: 'hair' },
+  { id: 'Visemes', label: 'Visemes', kind: 'viseme', order: 13, meshCategory: 'viseme' },
+  { id: 'Unmapped', label: 'Unmapped', kind: 'unmapped', order: 14, meshCategory: 'face' },
+];
+
 // ============================================================================
 // HAIR PHYSICS DEFAULTS
 // ============================================================================
@@ -1010,7 +1184,10 @@ export const CC4_PRESET: Profile = {
   suffixPattern: CC4_SUFFIX_PATTERN,
   morphToMesh: MORPH_TO_MESH,
   auFacePartToMeshCategory: AU_FACEPART_TO_MESH_CATEGORY,
+  mappingSections: CC4_MAPPING_SECTIONS,
   visemeKeys: VISEME_KEYS,
+  visemeSystemId: CC4_VISEME_SYSTEM_ID,
+  visemeSlots: CC4_VISEME_SLOTS,
   visemeMeshCategory: 'viseme',
   visemeJawAmounts: VISEME_JAW_AMOUNTS,
   auMixDefaults: AU_MIX_DEFAULTS,

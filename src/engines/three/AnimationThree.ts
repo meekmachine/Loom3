@@ -41,6 +41,7 @@ import type {
 } from '../../core/types';
 import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import type { Profile } from '../../mappings/types';
+import { getMeshNamesForAUProfile, getMeshNamesForVisemeProfile } from '../../mappings/visemeSystem';
 import type { ResolvedBones } from './types';
 import { getSideScale, resolveCurveBalance } from './balanceUtils';
 import {
@@ -728,12 +729,7 @@ export class BakedAnimationController {
       return this.host.getMeshNamesForAU(auId) || [];
     }
 
-    const facePart = config.auInfo?.[String(auId)]?.facePart;
-    if (facePart) {
-      const category = config.auFacePartToMeshCategory?.[facePart];
-      if (category) return config.morphToMesh?.[category] || [];
-    }
-    return config.morphToMesh?.face || [];
+    return getMeshNamesForAUProfile(config, auId);
   }
 
   private getMeshNamesForViseme(config: Profile, explicitMeshNames?: string[]): string[] {
@@ -745,10 +741,7 @@ export class BakedAnimationController {
       return this.host.getMeshNamesForViseme() || [];
     }
 
-    const category = config.visemeMeshCategory || (config.morphToMesh?.viseme ? 'viseme' : 'face');
-    const visemeMeshes = config.morphToMesh?.[category];
-    if (visemeMeshes && visemeMeshes.length > 0) return visemeMeshes;
-    return config.morphToMesh?.face || [];
+    return getMeshNamesForVisemeProfile(config);
   }
 
   update(dtSeconds: number): void {
@@ -1982,7 +1975,7 @@ export class BakedAnimationController {
     meshNames?: string[]
   ): void {
     const config = this.host.getConfig();
-    const hasExplicitMeshes = !!(meshNames && meshNames.length > 0);
+    const hasExplicitMeshes = meshNames !== undefined;
     const targetMeshNames = hasExplicitMeshes ? meshNames : (config.morphToMesh?.face || []);
     const targetMeshes = targetMeshNames.length
       ? targetMeshNames.map((name) => this.host.getMeshByName(name)).filter(Boolean) as Mesh[]
@@ -2022,7 +2015,7 @@ export class BakedAnimationController {
   ): void {
     if (!Number.isInteger(morphIndex) || morphIndex < 0) return;
     const config = this.host.getConfig();
-    const hasExplicitMeshes = !!(meshNames && meshNames.length > 0);
+    const hasExplicitMeshes = meshNames !== undefined;
     const targetMeshNames = hasExplicitMeshes ? meshNames : (config.morphToMesh?.face || []);
     const targetMeshes = targetMeshNames.length
       ? targetMeshNames.map((name) => this.host.getMeshByName(name)).filter(Boolean) as Mesh[]

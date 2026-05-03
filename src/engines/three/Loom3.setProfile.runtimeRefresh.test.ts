@@ -227,4 +227,38 @@ describe('Loom3 setProfile runtime refresh', () => {
     expect(visemeMesh.morphTargetInfluences?.[0]).toBe(1);
     expect(Math.abs(engine.getBones().JAW.rotation[2])).toBeGreaterThan(8.5);
   });
+
+  it('drives profile-defined viseme slots by id', () => {
+    const { model } = makeHeadJawRig();
+    const visemeMesh = makeMorphMesh('VisemeMesh', { Mouth_Aah: 0 });
+    model.add(visemeMesh);
+
+    const engine = new Loom3({
+      profile: makeProfile({
+        auToBones: {
+          26: [{ node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 30 }],
+        },
+        boneNodes: { JAW: 'Jaw' },
+        morphToMesh: { face: [], viseme: ['VisemeMesh'] },
+        visemeKeys: ['Mouth_Aah'],
+        visemeMeshCategory: 'viseme',
+        visemeSlots: [{ id: 'aa', label: 'AA', order: 0, defaultJawAmount: 0.5 }],
+        compositeRotations: [
+          {
+            node: 'JAW',
+            pitch: { aus: [], axis: 'rz' },
+            yaw: null,
+            roll: null,
+          },
+        ],
+      }),
+    });
+
+    engine.onReady({ model, meshes: [visemeMesh] });
+    engine.setVisemeById('aa', 1);
+    engine.setVisemeById('missing', 1);
+    engine.update(1 / 60);
+
+    expect(visemeMesh.morphTargetInfluences?.[0]).toBe(1);
+  });
 });

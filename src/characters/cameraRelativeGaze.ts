@@ -18,17 +18,15 @@ function clampOffset(value: number): number {
 }
 
 function toModelLocalDirection(
-  model: THREE.Object3D | null,
+  model: THREE.Object3D,
   worldDirection: THREE.Vector3
 ): THREE.Vector3 {
   const localDirection = worldDirection.clone();
 
-  if (model) {
-    model.updateMatrixWorld(true);
-    const worldQuaternion = new THREE.Quaternion();
-    model.getWorldQuaternion(worldQuaternion);
-    localDirection.applyQuaternion(worldQuaternion.invert());
-  }
+  model.updateWorldMatrix(true, false);
+  const worldQuaternion = new THREE.Quaternion();
+  model.getWorldQuaternion(worldQuaternion);
+  localDirection.applyQuaternion(worldQuaternion.invert());
 
   return localDirection.normalize();
 }
@@ -50,8 +48,6 @@ export function computeCameraRelativeGazeOffset(
   const epsilon = options.epsilon ?? DEFAULT_EPSILON;
   const yawWeight = options.yawWeight ?? DEFAULT_YAW_WEIGHT;
   const pitchWeight = options.pitchWeight ?? DEFAULT_PITCH_WEIGHT;
-
-  model.updateMatrixWorld(true);
 
   const worldOffset = new THREE.Vector3().subVectors(cameraPosition, targetPosition);
   if (worldOffset.lengthSq() < epsilon) {

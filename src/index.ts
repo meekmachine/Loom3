@@ -100,6 +100,9 @@ export type {
   ClipEventListener,
   ClipHandle,
   Snippet,
+  MorphTargetAttributeData,
+  MorphTargetDelta,
+  AddMorphTargetOptions,
 } from './core/types';
 
 // ============================================================================

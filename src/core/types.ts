@@ -91,6 +91,40 @@ export interface Loom3Config {
 }
 
 // ============================================================================
+// RUNTIME MORPH TARGET AUTHORING
+// ============================================================================
+
+export type MorphTargetAttributeData = Float32Array | number[];
+
+export interface MorphTargetDelta {
+  /** Mesh name from the loaded Three.js scene. */
+  meshName: string;
+  /** Morph target name to add to morphTargetDictionary. */
+  name: string;
+  /** POSITION deltas, usually XYZ values relative to the base mesh. */
+  position: MorphTargetAttributeData;
+  /** Optional NORMAL deltas. */
+  normal?: MorphTargetAttributeData;
+  /** Optional TANGENT deltas. */
+  tangent?: MorphTargetAttributeData;
+  /** Whether deltas are relative to base attributes. Defaults to true. */
+  relative?: boolean;
+}
+
+export interface AddMorphTargetOptions {
+  /** Replace an existing morph target with the same name. */
+  replace?: boolean;
+  /** Initialize the new or replaced influence value to zero. Defaults to true. */
+  resetInfluence?: boolean;
+  /**
+   * Replace and dispose the BufferGeometry instead of mutating it in place.
+   * Defaults to true because Three.js does not support mutating morph attributes
+   * after a geometry has rendered.
+   */
+  forceGeometryReplacement?: boolean;
+}
+
+// ============================================================================
 // BAKED ANIMATION TYPES (Three.js AnimationMixer support)
 // ============================================================================
 

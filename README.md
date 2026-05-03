@@ -1356,6 +1356,25 @@ const targets = loom.resolveMorphTargets('Mouth_Smile_L', ['CC_Base_Body']);
 const value = targets.length > 0 ? (targets[0].infl[targets[0].idx] ?? 0) : 0;
 ```
 
+### Adding runtime morph targets
+
+Generated or sidecar morph targets can be registered after a model loads. Deltas use the same relative `POSITION` format as glTF morph targets: one XYZ delta per base mesh vertex. Optional `normal` and `tangent` deltas can be supplied when available.
+
+```typescript
+const index = loom.addMorphTarget({
+  meshName: 'CC_Base_Body',
+  name: 'BodyType_Muscular',
+  position: bodyTypeMuscularDeltas,
+});
+
+loom.setMorphInfluence(index, 0.6, ['CC_Base_Body']);
+loom.setMorph('BodyType_Muscular', 0.6, ['CC_Base_Body']);
+```
+
+By default, Loom3 replaces and disposes the mesh `BufferGeometry` before appending morph attributes. This is intentional: Three.js does not support mutating `geometry.morphAttributes` in place after a geometry has rendered. For pre-render authoring paths, pass `{ forceGeometryReplacement: false }`.
+
+If you need a named slot before real deltas are available, use `ensureMorphInfluence(meshName, morphName)`. It creates a zero-delta target and returns the assigned `morphTargetInfluences` index. After external code changes morph dictionaries or geometry, call `refreshMorphTargets()` so AU, viseme, hair, and clip-building caches see the updated targets.
+
 ### Morph caching
 
 Loom3 caches morph target lookups for performance. The first time you access a morph, it searches all meshes and caches the index. Subsequent accesses are O(1).
@@ -2128,6 +2147,7 @@ This is a compact reference for the public surface exported by `@lovelace_lol/lo
 - Lifecycle: `onReady()`, `update()`, `start()`, `stop()`, `dispose()`.
 - Preset state: `setProfile()`, `getProfile()`.
 - Control APIs: `setAU()`, `transitionAU()`, `setContinuum()`, `transitionContinuum()`, `setMorph()`, `transitionMorph()`, `setViseme()`, `transitionViseme()`.
+- Runtime morph authoring: `addMorphTarget()`, `addMorphTargets()`, `ensureMorphInfluence()`, `refreshMorphTargets()`.
 - Transition state: `pause()`, `resume()`, `getPaused()`, `clearTransitions()`, `getActiveTransitionCount()`, `resetToNeutral()`.
 
 ### Presets and profiles

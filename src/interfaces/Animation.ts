@@ -15,6 +15,8 @@ import type {
   CompositeRotation,
   CurvePoint,
   AnimationBlendMode,
+  MorphTargetDelta,
+  AddMorphTargetOptions,
 } from '../core/types';
 
 /** Loop mode for mixer clips */
@@ -107,6 +109,29 @@ export interface Animation {
    * @param meshNames - Optional specific meshes to target
    */
   transitionMorphInfluence(index: number, to: number, durationMs?: number, meshNames?: string[]): TransitionHandle;
+
+  /**
+   * Add or replace a runtime morph target on a mesh.
+   * Returns the morphTargetInfluences index assigned to the target.
+   */
+  addMorphTarget(target: MorphTargetDelta, options?: AddMorphTargetOptions): number;
+
+  /**
+   * Add multiple runtime morph targets and return their assigned indices keyed
+   * by "meshName:name".
+   */
+  addMorphTargets(targets: MorphTargetDelta[], options?: AddMorphTargetOptions): Record<string, number>;
+
+  /**
+   * Ensure a named morph influence slot exists on the mesh.
+   * If the target is missing, a zero-delta morph target is created.
+   */
+  ensureMorphInfluence(meshName: string, morphName: string): number;
+
+  /**
+   * Rebuild runtime morph caches after external geometry or dictionary changes.
+   */
+  refreshMorphTargets(meshNames?: string[]): void;
 
   // ============================================================================
   // VISEME

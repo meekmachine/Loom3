@@ -7,6 +7,7 @@
  */
 
 import {
+  BufferAttribute,
   Quaternion,
   Vector3,
   Box3,
@@ -32,9 +33,11 @@ import type {
   ClipHandle,
   Snippet,
   CompositeRotation,
-    RotationAxis,
-    AnimationBlendMode,
-  } from '../../core/types';
+  RotationAxis,
+  AnimationBlendMode,
+  MorphTargetDelta,
+  AddMorphTargetOptions,
+} from '../../core/types';
 import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import { AnimationThree, BakedAnimationController } from './AnimationThree';
 import { getSideScale } from './balanceUtils';
@@ -234,14 +237,11 @@ export class Loom3 implements LoomLarge {
     this.morphKeyCache.clear();
     this.morphIndexCache.clear();
 
-    // Build mesh lookup
+    // Build mesh lookup. Keep all named meshes addressable so runtime morph
+    // authoring can add the first morph target to a previously static mesh.
     model.traverse((obj: any) => {
       if (obj.isMesh && obj.name) {
-        const infl = obj.morphTargetInfluences;
-        const dict = obj.morphTargetDictionary;
-        if ((Array.isArray(infl) && infl.length > 0) || (dict && Object.keys(dict).length > 0)) {
-          this.meshByName.set(obj.name, obj);
-        }
+        this.meshByName.set(obj.name, obj);
       }
     });
 
@@ -723,6 +723,65 @@ export class Loom3 implements LoomLarge {
   // ============================================================================
   // MORPH CONTROL
   // ============================================================================
+
+  addMorphTarget(target: MorphTargetDelta, options: AddMorphTargetOptions = {}): number {
+    const staleMorphTargets = this.collectResolvedExpressionMorphTargets();
+    const index = this.applyMorphTargetDelta(target, options);
+    this.refreshMorphTargets([target.meshName]);
+    this.reinitializeRuntimeStateFromCurrentControls(staleMorphTargets);
+    return index;
+  }
+
+  addMorphTargets(targets: MorphTargetDelta[], options: AddMorphTargetOptions = {}): Record<string, number> {
+    const staleMorphTargets = this.collectResolvedExpressionMorphTargets();
+    const result: Record<string, number> = {};
+
+    for (const target of targets) {
+      const index = this.applyMorphTargetDelta(target, options);
+      result[`${target.meshName}:${target.name}`] = index;
+    }
+
+    this.refreshMorphTargets(Array.from(new Set(targets.map((target) => target.meshName))));
+    this.reinitializeRuntimeStateFromCurrentControls(staleMorphTargets);
+    return result;
+  }
+
+  ensureMorphInfluence(meshName: string, morphName: string): number {
+    const mesh = this.requireNamedMesh(meshName);
+    const dict = this.getMeshMorphDictionary(mesh);
+    const existing = dict[morphName];
+    if (existing !== undefined) return existing;
+
+    const position = mesh.geometry.getAttribute('position');
+    if (!position) {
+      throw new Error(`Cannot create morph target "${morphName}" on mesh "${meshName}": geometry has no position attribute.`);
+    }
+
+    return this.addMorphTarget({
+      meshName,
+      name: morphName,
+      position: new Float32Array(position.count * position.itemSize),
+      relative: true,
+    });
+  }
+
+  refreshMorphTargets(_meshNames?: string[]): void {
+    this.morphKeyCache.clear();
+    this.morphIndexCache.clear();
+
+    if (this.model) {
+      this.meshByName.clear();
+      this.model.traverse((obj: any) => {
+        if (obj.isMesh && obj.name) {
+          this.meshByName.set(obj.name, obj);
+        }
+      });
+      this.meshes = collectMorphMeshes(this.model);
+    }
+
+    this.rebuildMorphTargetsCache();
+    this.hairPhysics.refreshMeshSelection();
+  }
 
   /**
    * Set a morph target value.
@@ -1508,6 +1567,188 @@ export class Loom3 implements LoomLarge {
       if (idx < infl.length) return infl[idx] ?? 0;
     }
     return 0;
+  }
+
+  private applyMorphTargetDelta(target: MorphTargetDelta, options: AddMorphTargetOptions): number {
+    const mesh = this.requireNamedMesh(target.meshName);
+    const sourceGeometry = mesh.geometry;
+    const position = sourceGeometry.getAttribute('position');
+    if (!position) {
+      throw new Error(`Cannot add morph target "${target.name}" to mesh "${target.meshName}": geometry has no position attribute.`);
+    }
+    if (!target.name || !target.name.trim()) {
+      throw new Error(`Cannot add morph target to mesh "${target.meshName}": target name is required.`);
+    }
+
+    const replace = options.replace === true;
+    const resetInfluence = options.resetInfluence !== false;
+    const forceGeometryReplacement = options.forceGeometryReplacement !== false;
+    const previousInfluences = mesh.morphTargetInfluences ? [...mesh.morphTargetInfluences] : [];
+    const previousDictionary = this.getMeshMorphDictionary(mesh);
+    const existingIndex = previousDictionary[target.name];
+
+    if (existingIndex !== undefined && !replace) {
+      throw new Error(`Morph target "${target.name}" already exists on mesh "${target.meshName}". Pass replace: true to overwrite it.`);
+    }
+
+    const geometry = forceGeometryReplacement ? sourceGeometry.clone() : sourceGeometry;
+    const dictionary = { ...previousDictionary };
+    const usedIndices = Object.values(dictionary).filter(Number.isInteger);
+    const existingAttributeTargetCount = Math.max(
+      0,
+      ...Object.values(geometry.morphAttributes).map((attributes) => attributes?.length ?? 0)
+    );
+    const nextIndex = Math.max(existingAttributeTargetCount, usedIndices.length ? Math.max(...usedIndices) + 1 : 0);
+    const index = existingIndex ?? nextIndex;
+    dictionary[target.name] = index;
+
+    this.setMorphAttributeAtIndex(geometry, 'position', target.position, position.itemSize, position.count, index, target.name);
+
+    const normal = geometry.getAttribute('normal');
+    if (target.normal) {
+      this.setMorphAttributeAtIndex(geometry, 'normal', target.normal, normal?.itemSize ?? 3, position.count, index, target.name);
+    } else {
+      this.setZeroMorphAttributeAtIndex(geometry, 'normal', normal?.itemSize ?? 3, position.count, index, target.name);
+    }
+
+    const tangent = geometry.getAttribute('tangent');
+    if (target.tangent) {
+      this.setMorphAttributeAtIndex(geometry, 'tangent', target.tangent, tangent?.itemSize ?? 4, position.count, index, target.name);
+    } else {
+      this.setZeroMorphAttributeAtIndex(geometry, 'tangent', tangent?.itemSize ?? 4, position.count, index, target.name);
+    }
+    const color = geometry.getAttribute('color');
+    const existingColorMorph = geometry.morphAttributes.color?.find(Boolean);
+    this.setZeroMorphAttributeAtIndex(
+      geometry,
+      'color',
+      color?.itemSize ?? existingColorMorph?.itemSize ?? 3,
+      position.count,
+      index,
+      target.name
+    );
+
+    geometry.morphTargetsRelative = target.relative !== false;
+    (geometry as any).morphTargetDictionary = dictionary;
+
+    if (forceGeometryReplacement) {
+      mesh.geometry = geometry;
+      sourceGeometry.dispose();
+    }
+
+    const influenceLength = Math.max(previousInfluences.length, index + 1);
+    const influences = previousInfluences.slice(0, influenceLength);
+    while (influences.length < influenceLength) {
+      influences.push(0);
+    }
+    if (resetInfluence) {
+      influences[index] = 0;
+    }
+
+    mesh.morphTargetDictionary = dictionary;
+    mesh.morphTargetInfluences = influences;
+    this.addRuntimeMorphMesh(mesh);
+
+    if (!this.config.morphToMesh?.face?.length) {
+      this.config.morphToMesh = {
+        ...this.config.morphToMesh,
+        face: [mesh.name],
+      };
+    }
+
+    return index;
+  }
+
+  private requireNamedMesh(meshName: string): Mesh {
+    const mesh = this.meshByName.get(meshName);
+    if (mesh) return mesh;
+
+    if (this.model) {
+      let found: Mesh | null = null;
+      this.model.traverse((obj: any) => {
+        if (!found && obj.isMesh && obj.name === meshName) {
+          found = obj as Mesh;
+        }
+      });
+      if (found) {
+        this.meshByName.set(meshName, found);
+        return found;
+      }
+    }
+
+    throw new Error(`Mesh "${meshName}" was not found in the current model.`);
+  }
+
+  private getMeshMorphDictionary(mesh: Mesh): Record<string, number> {
+    const meshDictionary = mesh.morphTargetDictionary as Record<string, number> | undefined;
+    const geometryDictionary = (mesh.geometry as any).morphTargetDictionary as Record<string, number> | undefined;
+    const dictionary = meshDictionary || geometryDictionary || {};
+    mesh.morphTargetDictionary = dictionary;
+    (mesh.geometry as any).morphTargetDictionary = dictionary;
+    return dictionary;
+  }
+
+  private setMorphAttributeAtIndex(
+    geometry: Mesh['geometry'],
+    semantic: string,
+    data: Float32Array | number[],
+    itemSize: number,
+    vertexCount: number,
+    index: number,
+    name: string
+  ): void {
+    const expectedLength = vertexCount * itemSize;
+    if (data.length !== expectedLength) {
+      throw new Error(
+        `Morph target "${name}" ${semantic} data has ${data.length} values; expected ${expectedLength} ` +
+        `(${vertexCount} vertices * itemSize ${itemSize}).`
+      );
+    }
+
+    const attributes = geometry.morphAttributes[semantic] ? [...geometry.morphAttributes[semantic]] : [];
+    while (attributes.length < index) {
+      const empty = new BufferAttribute(new Float32Array(expectedLength), itemSize);
+      (empty as any).name = `morph_${attributes.length}`;
+      attributes.push(empty);
+    }
+
+    const values = data instanceof Float32Array ? new Float32Array(data) : Float32Array.from(data);
+    const attribute = new BufferAttribute(values, itemSize);
+    (attribute as any).name = name;
+    attributes[index] = attribute;
+    geometry.morphAttributes[semantic] = attributes;
+  }
+
+  private setZeroMorphAttributeAtIndex(
+    geometry: Mesh['geometry'],
+    semantic: string,
+    itemSize: number,
+    vertexCount: number,
+    index: number,
+    name: string
+  ): void {
+    if (!geometry.morphAttributes[semantic]?.length) return;
+
+    const expectedLength = vertexCount * itemSize;
+    const attributes = [...geometry.morphAttributes[semantic]];
+    while (attributes.length < index) {
+      const empty = new BufferAttribute(new Float32Array(expectedLength), itemSize);
+      (empty as any).name = `morph_${attributes.length}`;
+      attributes.push(empty);
+    }
+
+    const empty = new BufferAttribute(new Float32Array(expectedLength), itemSize);
+    (empty as any).name = name;
+    attributes[index] = empty;
+    geometry.morphAttributes[semantic] = attributes;
+  }
+
+  private addRuntimeMorphMesh(mesh: Mesh): void {
+    const key = mesh.name || (mesh as any).uuid;
+    const exists = this.meshes.some((candidate) => (candidate.name || (candidate as any).uuid) === key);
+    if (!exists) {
+      this.meshes.push(mesh);
+    }
   }
 
   private getMorphKeyCacheKey(key: string, meshNames?: string[]): string {

@@ -139,8 +139,10 @@ function extractMorphs(meshes: THREE.Mesh[]): MorphInfo[] {
     const geo = mesh.geometry;
     if (!geo.morphAttributes) continue;
 
-    // Get morph target dictionary if available
-    const dict = (geo as any).morphTargetDictionary as Record<string, number> | undefined;
+    // GLTFLoader stores the dictionary on Mesh; runtime-authored targets also
+    // mirror it onto geometry for tooling that reads there.
+    const dict = mesh.morphTargetDictionary ||
+      ((geo as any).morphTargetDictionary as Record<string, number> | undefined);
 
     if (dict) {
       for (const [name, index] of Object.entries(dict)) {

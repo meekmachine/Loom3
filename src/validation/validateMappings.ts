@@ -421,6 +421,36 @@ export function validateMappingConfig(config: Profile): MappingConsistencyResult
     visemeSeen.add(key);
   }
 
+  const morphCategories = new Set(Object.keys(config.morphToMesh || {}));
+  if (config.visemeMeshCategory && !morphCategories.has(config.visemeMeshCategory)) {
+    push(
+      'error',
+      'VISEME_MESH_CATEGORY_MISSING',
+      `visemeMeshCategory "${config.visemeMeshCategory}" is not present in morphToMesh`,
+      { category: config.visemeMeshCategory }
+    );
+  }
+
+  for (const [facePart, category] of Object.entries(config.auFacePartToMeshCategory || {})) {
+    if (!morphCategories.has(category)) {
+      push(
+        'error',
+        'AU_MESH_CATEGORY_MISSING',
+        `AU facePart "${facePart}" routes to missing morphToMesh category "${category}"`,
+        { facePart, category }
+      );
+    }
+  }
+
+  if (config.visemeJawAmounts && config.visemeJawAmounts.length !== (config.visemeKeys || []).length) {
+    push(
+      'warning',
+      'VISEME_JAW_AMOUNT_LENGTH_MISMATCH',
+      'visemeJawAmounts length does not match visemeKeys length',
+      { visemeKeys: (config.visemeKeys || []).length, visemeJawAmounts: config.visemeJawAmounts.length }
+    );
+  }
+
   // Validate auMixDefaults
   if (config.auMixDefaults) {
     for (const key of Object.keys(config.auMixDefaults)) {

@@ -45,6 +45,12 @@ import { HairPhysicsController, type HairPhysicsConfig, type HairPhysicsConfigUp
 import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS } from '../../presets/cc4';
 import { getPreset } from '../../presets';
 import { extendPresetWithProfile } from '../../mappings/extendPresetWithProfile';
+import {
+  getMeshNamesForAUProfile,
+  getMeshNamesForVisemeProfile,
+  getVisemeJawAmounts,
+  getVisemeSlotIndex,
+} from '../../mappings/visemeSystem';
 import type { NodeBase, ResolvedBones } from './types';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
@@ -1004,6 +1010,20 @@ export class Loom3 implements LoomLarge {
     return this.combineHandles([morphHandle, jawHandle]);
   }
 
+  setVisemeById(slotId: string, value: number, jawScale = 1.0): void {
+    const index = getVisemeSlotIndex(this.config, slotId);
+    if (index < 0) return;
+    this.setViseme(index, value, jawScale);
+  }
+
+  transitionVisemeById(slotId: string, to: number, durationMs = 80, jawScale = 1.0): TransitionHandle {
+    const index = getVisemeSlotIndex(this.config, slotId);
+    if (index < 0) {
+      return { promise: Promise.resolve(), pause: () => {}, resume: () => {}, cancel: () => {} };
+    }
+    return this.transitionViseme(index, to, durationMs, jawScale);
+  }
+
   // ============================================================================
   // MIX WEIGHT CONTROL
   // ============================================================================
@@ -1417,22 +1437,11 @@ export class Loom3 implements LoomLarge {
    * Routing is driven by `auFacePartToMeshCategory` in profile config.
    */
   getMeshNamesForAU(auId: number): string[] {
-    const m = this.config.morphToMesh;
-    const info = this.config.auInfo?.[String(auId)];
-    const facePart = info?.facePart;
-    if (facePart) {
-      const category = this.config.auFacePartToMeshCategory?.[facePart];
-      if (category) {
-        return m?.[category] || [];
-      }
-    }
-    return m?.face || [];
+    return getMeshNamesForAUProfile(this.config, auId);
   }
 
   getMeshNamesForViseme(): string[] {
-    const m = this.config.morphToMesh;
-    const category = this.config.visemeMeshCategory || (m?.viseme ? 'viseme' : 'face');
-    return m?.[category] || m?.face || [];
+    return getMeshNamesForVisemeProfile(this.config);
   }
 
   // ============================================================================
@@ -1772,7 +1781,8 @@ export class Loom3 implements LoomLarge {
   }
 
   private getVisemeJawAmount(visemeIndex: number): number {
-    return this.config.visemeJawAmounts?.[visemeIndex]
+    return getVisemeJawAmounts(this.config)?.[visemeIndex]
+      ?? this.config.visemeJawAmounts?.[visemeIndex]
       ?? Loom3.VISEME_JAW_AMOUNTS[visemeIndex]
       ?? 0;
   }

@@ -150,6 +150,16 @@ export interface Animation {
    */
   transitionViseme(visemeIndex: number, to: number, durationMs?: number, jawScale?: number): TransitionHandle;
 
+  /**
+   * Set viseme value by profile-defined slot id.
+   */
+  setVisemeById?(slotId: string, value: number, jawScale?: number): void;
+
+  /**
+   * Transition viseme value smoothly by profile-defined slot id.
+   */
+  transitionVisemeById?(slotId: string, to: number, durationMs?: number, jawScale?: number): TransitionHandle;
+
   // ============================================================================
   // MIX WEIGHT
   // ============================================================================

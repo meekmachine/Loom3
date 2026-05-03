@@ -112,6 +112,32 @@ describe('validateMappingConfig', () => {
     const result = validateMappingConfig(config);
     expect(result.warnings.some((issue) => issue.code === 'AU_INFO_MISSING')).toBe(true);
   });
+
+  it('flags missing viseme and AU mesh routing categories', () => {
+    const config: Profile = {
+      ...createBaseConfig(),
+      morphToMesh: { face: ['FaceMesh'] },
+      visemeMeshCategory: 'missingViseme',
+      auFacePartToMeshCategory: { Eyes: 'missingEye' },
+    };
+
+    const result = validateMappingConfig(config);
+
+    expect(result.errors.some((issue) => issue.code === 'VISEME_MESH_CATEGORY_MISSING')).toBe(true);
+    expect(result.errors.some((issue) => issue.code === 'AU_MESH_CATEGORY_MISSING')).toBe(true);
+  });
+
+  it('warns when viseme jaw amounts do not match viseme key count', () => {
+    const config: Profile = {
+      ...createBaseConfig(),
+      visemeKeys: ['AA', 'BMP'],
+      visemeJawAmounts: [0.5],
+    };
+
+    const result = validateMappingConfig(config);
+
+    expect(result.warnings.some((issue) => issue.code === 'VISEME_JAW_AMOUNT_LENGTH_MISMATCH')).toBe(true);
+  });
 });
 
 describe('validateMappings', () => {

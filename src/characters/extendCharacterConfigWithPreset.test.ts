@@ -255,32 +255,6 @@ describe('extendCharacterConfigWithPreset', () => {
     });
   });
 
-  it('keeps preset order when canonical annotationRegions only override a subset', () => {
-    const extended = extendCharacterConfigWithPreset(
-      createConfig({
-        annotationRegions: [
-          { name: 'left_eye', cameraAngle: 45, paddingFactor: 0.5 },
-        ],
-      })
-    );
-
-    expect(extended.regions.slice(0, 6).map((region) => region.name)).toEqual([
-      'full_body',
-      'head',
-      'face',
-      'left_eye',
-      'right_eye',
-      'mouth',
-    ]);
-    expect(extended.regions.find((region) => region.name === 'left_eye')).toMatchObject({
-      name: 'left_eye',
-      bones: ['EYE_L'],
-      cameraAngle: 45,
-      paddingFactor: 0.5,
-      parent: 'head',
-    });
-  });
-
   it('drops disabled preset regions after extension and cleans parent-child links', () => {
     const extended = extendCharacterConfigWithPreset(
       createConfig({

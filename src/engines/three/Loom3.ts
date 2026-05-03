@@ -196,6 +196,7 @@ export class Loom3 implements LoomLarge {
       computeSideValues: (base, balance) => this.computeSideValues(base, balance),
       getAUMixWeight: (auId) => this.getAUMixWeight(auId),
       isMixedAU: (auId) => this.isMixedAU(auId),
+      reapplyProceduralState: () => this.reapplyProceduralStateAfterBakedUpdate(),
     });
 
     this.hairPhysics = new HairPhysicsController({
@@ -1040,6 +1041,36 @@ export class Loom3 implements LoomLarge {
       this.flushPendingComposites();
       this.model.updateMatrixWorld(true);
     }
+  }
+
+  private reapplyProceduralStateAfterBakedUpdate(): void {
+    if (!this.model) {
+      return;
+    }
+
+    let hasActiveOverrides = false;
+
+    for (const [auIdStr, value] of Object.entries(this.auValues)) {
+      if (value <= 0) continue;
+      const auId = Number(auIdStr);
+      if (Number.isNaN(auId)) continue;
+      hasActiveOverrides = true;
+      this.setAU(auId, value, this.auBalances[auId]);
+    }
+
+    for (let visemeIndex = 0; visemeIndex < this.visemeValues.length; visemeIndex += 1) {
+      const value = this.visemeValues[visemeIndex] ?? 0;
+      if (value <= 0) continue;
+      hasActiveOverrides = true;
+      this.setViseme(visemeIndex, value, this.visemeJawScales[visemeIndex] ?? 1);
+    }
+
+    if (!hasActiveOverrides) {
+      return;
+    }
+
+    this.flushPendingComposites();
+    this.model.updateMatrixWorld(true);
   }
 
   // ============================================================================

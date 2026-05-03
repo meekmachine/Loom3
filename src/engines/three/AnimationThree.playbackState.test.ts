@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   AnimationClip,
+  Bone,
+  Quaternion,
+  Vector3,
   Mesh,
   MeshBasicMaterial,
   NumberKeyframeTrack,
@@ -11,11 +14,22 @@ import {
 import type { Profile } from '../../mappings/types';
 import { BakedAnimationController, type BakedAnimationHost } from './AnimationThree';
 
-function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean } = {}): {
+const Z_AXIS = new Vector3(0, 0, 1);
+
+function makeHost(options: {
+  includeHeadBone?: boolean;
+  includeHipBone?: boolean;
+  includeJawBone?: boolean;
+  includeFootBone?: boolean;
+  reapplyProceduralState?: () => void;
+} = {}): {
   controller: BakedAnimationController;
   model: Object3D;
+  mesh: Mesh;
   head: Object3D | null;
   hip: Object3D | null;
+  jaw: Object3D | null;
+  foot: Object3D | null;
 } {
   const model = new Object3D();
   const mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial());
@@ -32,6 +46,16 @@ function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean
   if (hip) {
     hip.name = 'CC_Base_Hip';
     model.add(hip);
+  }
+  const jaw = options.includeJawBone ? new Object3D() : null;
+  if (jaw) {
+    jaw.name = 'Jaw';
+    model.add(jaw);
+  }
+  const foot = options.includeFootBone ? new Object3D() : null;
+  if (foot) {
+    foot.name = 'L_Foot';
+    model.add(foot);
   }
 
   const bones = {
@@ -55,6 +79,26 @@ function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean
         },
       }
       : {}),
+    ...(jaw
+      ? {
+        JAW: {
+          obj: jaw,
+          basePos: { x: jaw.position.x, y: jaw.position.y, z: jaw.position.z },
+          baseQuat: jaw.quaternion.clone(),
+          baseEuler: { x: jaw.rotation.x, y: jaw.rotation.y, z: jaw.rotation.z, order: jaw.rotation.order },
+        },
+      }
+      : {}),
+    ...(foot
+      ? {
+        FOOT_L: {
+          obj: foot,
+          basePos: { x: foot.position.x, y: foot.position.y, z: foot.position.z },
+          baseQuat: foot.quaternion.clone(),
+          baseEuler: { x: foot.rotation.x, y: foot.rotation.y, z: foot.rotation.z, order: foot.rotation.order },
+        },
+      }
+      : {}),
   };
 
   const profile: Profile = {
@@ -63,6 +107,8 @@ function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean
     boneNodes: {
       ...(head ? { HEAD: 'Head' } : {}),
       ...(hip ? { HIPS: 'CC_Base_Hip' } : {}),
+      ...(jaw ? { JAW: 'Jaw' } : {}),
+      ...(foot ? { FOOT_L: 'L_Foot' } : {}),
     },
     morphToMesh: { face: ['FaceMesh'] },
     visemeKeys: [],
@@ -78,9 +124,10 @@ function makeHost(options: { includeHeadBone?: boolean; includeHipBone?: boolean
     computeSideValues: (base: number) => ({ left: base, right: base }),
     getAUMixWeight: () => 1,
     isMixedAU: () => false,
+    reapplyProceduralState: options.reapplyProceduralState,
   };
 
-  return { controller: new BakedAnimationController(host), model, head, hip };
+  return { controller: new BakedAnimationController(host), model, mesh, head, hip, jaw, foot };
 }
 
 function makeTransformClip(model: Object3D, name: string): AnimationClip {
@@ -95,9 +142,27 @@ function makeMorphClip(name: string): AnimationClip {
   ]);
 }
 
+function makeMorphPoseClip(name: string, start: number, end: number): AnimationClip {
+  return new AnimationClip(name, 1, [
+    new NumberKeyframeTrack('FaceMesh.morphTargetInfluences[0]', [0, 1], [start, end]),
+  ]);
+}
+
 function makeSafeBoneClip(head: Object3D, name: string): AnimationClip {
   return new AnimationClip(name, 1, [
     new QuaternionKeyframeTrack(`${head.uuid}.quaternion`, [0, 1], [0, 0, 0, 1, 0, 0, 0, 1]),
+  ]);
+}
+
+function makeQuaternionPoseClip(target: Object3D, name: string, startDeg: number, endDeg: number): AnimationClip {
+  const start = new Quaternion().setFromAxisAngle(Z_AXIS, (startDeg * Math.PI) / 180);
+  const end = new Quaternion().setFromAxisAngle(Z_AXIS, (endDeg * Math.PI) / 180);
+  return new AnimationClip(name, 1, [
+    new QuaternionKeyframeTrack(
+      `${target.uuid}.quaternion`,
+      [0, 1],
+      [start.x, start.y, start.z, start.w, end.x, end.y, end.z, end.w]
+    ),
   ]);
 }
 
@@ -110,6 +175,27 @@ function makeBonePositionClip(target: Object3D, name: string): AnimationClip {
 function makeBoneQuaternionClip(target: Object3D, name: string): AnimationClip {
   return new AnimationClip(name, 1, [
     new QuaternionKeyframeTrack(`${target.uuid}.quaternion`, [0, 1], [0, 0, 0, 1, 0, 0, 0, 1]),
+  ]);
+}
+
+function makeJawQuaternionClip(target: Object3D, name: string, startDeg: number, endDeg: number): AnimationClip {
+  return makeQuaternionPoseClip(target, name, startDeg, endDeg);
+}
+
+function makeMixedMorphJawClip(target: Object3D, name: string, startDeg: number, endDeg: number): AnimationClip {
+  return makeMixedMorphQuaternionClip(target, name, startDeg, endDeg);
+}
+
+function makeMixedMorphQuaternionClip(target: Object3D, name: string, startDeg: number, endDeg: number): AnimationClip {
+  const start = new Quaternion().setFromAxisAngle(Z_AXIS, (startDeg * Math.PI) / 180);
+  const end = new Quaternion().setFromAxisAngle(Z_AXIS, (endDeg * Math.PI) / 180);
+  return new AnimationClip(name, 1, [
+    new NumberKeyframeTrack('FaceMesh.morphTargetInfluences[0]', [0, 1], [0, 1]),
+    new QuaternionKeyframeTrack(
+      `${target.uuid}.quaternion`,
+      [0, 1],
+      [start.x, start.y, start.z, start.w, end.x, end.y, end.z, end.w]
+    ),
   ]);
 }
 
@@ -155,16 +241,19 @@ describe('BakedAnimationController playback state normalization', () => {
     expect(controller.getAnimationClips()[0]?.supportsAdditive).toBe(true);
   });
 
-  it('allows additive baked playback for resolved facial/head transform tracks', () => {
+  it('converts resolved head bone rotation tracks to additive deltas', () => {
     const { controller, head } = makeHost({ includeHeadBone: true });
     expect(head).toBeTruthy();
-    controller.loadAnimationClips([makeSafeBoneClip(head!, 'HeadNod')]);
+    head!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeQuaternionPoseClip(head!, 'HeadNod', 10, 20)]);
 
     const handle = controller.playAnimation('HeadNod', {
       blendMode: 'additive',
     });
 
     expect(handle).toBeTruthy();
+    controller.seekAnimation('HeadNod', 1);
+    expect((head!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
     expect(controller.getAnimationState('HeadNod')).toMatchObject({
       name: 'HeadNod',
       requestedBlendMode: 'additive',
@@ -177,9 +266,10 @@ describe('BakedAnimationController playback state normalization', () => {
     });
   });
 
-  it('falls back to replace for resolved bone position tracks even when the bone is whitelisted', () => {
+  it('converts resolved bone position tracks to additive deltas', () => {
     const { controller, head } = makeHost({ includeHeadBone: true });
     expect(head).toBeTruthy();
+    head!.position.x = 3;
     controller.loadAnimationClips([makeBonePositionClip(head!, 'HeadShift')]);
 
     const handle = controller.playAnimation('HeadShift', {
@@ -187,32 +277,186 @@ describe('BakedAnimationController playback state normalization', () => {
     });
 
     expect(handle).toBeTruthy();
+    controller.seekAnimation('HeadShift', 1);
+    expect(head!.position.x).toBeCloseTo(4, 3);
     expect(controller.getAnimationState('HeadShift')).toMatchObject({
       name: 'HeadShift',
       requestedBlendMode: 'additive',
-      blendMode: 'replace',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      blendMode: 'additive',
+      supportsAdditive: true,
     });
   });
 
-  it('falls back to replace for root-like bone rotation tracks even when they resolve as bones', () => {
+  it('converts hip bone rotation tracks to additive deltas', () => {
     const { controller, hip } = makeHost({ includeHipBone: true });
     expect(hip).toBeTruthy();
-    controller.loadAnimationClips([makeBoneQuaternionClip(hip!, 'HipTurn')]);
+    hip!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeQuaternionPoseClip(hip!, 'HipTurn', 10, 20)]);
 
     const handle = controller.playAnimation('HipTurn', {
       blendMode: 'additive',
     });
 
     expect(handle).toBeTruthy();
+    controller.seekAnimation('HipTurn', 1);
+    expect((hip!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
     expect(controller.getAnimationState('HipTurn')).toMatchObject({
       name: 'HipTurn',
       requestedBlendMode: 'additive',
-      blendMode: 'replace',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      blendMode: 'additive',
+      supportsAdditive: true,
     });
+  });
+
+  it('converts foot bone rotation tracks to additive deltas', () => {
+    const { controller, foot } = makeHost({ includeFootBone: true });
+    expect(foot).toBeTruthy();
+    foot!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeQuaternionPoseClip(foot!, 'FootLift', 10, 20)]);
+
+    const handle = controller.playAnimation('FootLift', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    controller.seekAnimation('FootLift', 1);
+    expect((foot!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
+    expect(controller.getAnimationState('FootLift')).toMatchObject({
+      name: 'FootLift',
+      requestedBlendMode: 'additive',
+      blendMode: 'additive',
+      supportsAdditive: true,
+    });
+  });
+
+  it('converts unmapped Three bone tracks instead of dropping the whole baked clip', () => {
+    const { controller, model } = makeHost();
+    const leg = new Bone();
+    leg.name = 'UnmappedLeg';
+    model.add(leg);
+    leg.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeQuaternionPoseClip(leg, 'LegLift', 10, 20)]);
+
+    const handle = controller.playAnimation('LegLift', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    controller.seekAnimation('LegLift', 1);
+    expect((leg.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
+    expect(controller.getAnimationState('LegLift')).toMatchObject({
+      name: 'LegLift',
+      requestedBlendMode: 'additive',
+      blendMode: 'additive',
+      supportsAdditive: true,
+    });
+  });
+
+  it('keeps morph tracks additive while converting jaw rotation tracks to additive deltas', () => {
+    const { controller, mesh, jaw } = makeHost({ includeJawBone: true });
+    expect(jaw).toBeTruthy();
+    jaw!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeMixedMorphJawClip(jaw!, 'SmileWithJaw', 10, 20)]);
+
+    const handle = controller.playAnimation('SmileWithJaw', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    controller.seekAnimation('SmileWithJaw', 1);
+    expect((jaw!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
+    expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(1, 3);
+    expect(controller.getAnimationState('SmileWithJaw')).toMatchObject({
+      name: 'SmileWithJaw',
+      requestedBlendMode: 'additive',
+      blendMode: 'additive',
+      supportsAdditive: true,
+    });
+  });
+
+  it('applies additive morph tracks relative to the neutral mesh state instead of the clip start pose', () => {
+    const { controller, mesh } = makeHost();
+    controller.loadAnimationClips([makeMorphPoseClip('SmilePose', 0.4, 1)]);
+
+    const handle = controller.playAnimation('SmilePose', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    controller.seekAnimation('SmilePose', 0);
+    expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(0.4, 3);
+    controller.seekAnimation('SmilePose', 1);
+    expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(1, 3);
+    expect(controller.getAnimationState('SmilePose')).toMatchObject({
+      name: 'SmilePose',
+      requestedBlendMode: 'additive',
+      blendMode: 'additive',
+      supportsAdditive: true,
+    });
+  });
+
+  it('keeps morph tracks additive while converting head bone rotation tracks to additive deltas', () => {
+    const { controller, mesh, head } = makeHost({ includeHeadBone: true });
+    expect(head).toBeTruthy();
+    head!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeMixedMorphQuaternionClip(head!, 'SmileWithHeadTurn', 10, 20)]);
+
+    const handle = controller.playAnimation('SmileWithHeadTurn', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    controller.seekAnimation('SmileWithHeadTurn', 1);
+    expect((head!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
+    expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(1, 3);
+    expect(controller.getAnimationState('SmileWithHeadTurn')).toMatchObject({
+      name: 'SmileWithHeadTurn',
+      requestedBlendMode: 'additive',
+      blendMode: 'additive',
+      supportsAdditive: true,
+    });
+  });
+
+  it('keeps morph tracks additive while converting foot bone rotation tracks to additive deltas', () => {
+    const { controller, mesh, foot } = makeHost({ includeFootBone: true });
+    expect(foot).toBeTruthy();
+    foot!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeMixedMorphQuaternionClip(foot!, 'SmileWithFootLift', 10, 20)]);
+
+    const handle = controller.playAnimation('SmileWithFootLift', {
+      blendMode: 'additive',
+    });
+
+    expect(handle).toBeTruthy();
+    controller.seekAnimation('SmileWithFootLift', 0);
+    expect((foot!.rotation.z * 180) / Math.PI).toBeCloseTo(5, 3);
+    controller.seekAnimation('SmileWithFootLift', 1);
+    expect((foot!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
+    expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(1, 3);
+    expect(controller.getAnimationState('SmileWithFootLift')).toMatchObject({
+      name: 'SmileWithFootLift',
+      requestedBlendMode: 'additive',
+      blendMode: 'additive',
+      supportsAdditive: true,
+    });
+  });
+
+  it('reapplies procedural state after additive baked mixer updates', () => {
+    const reapplyProceduralState = vi.fn();
+    const { controller } = makeHost({ reapplyProceduralState });
+    controller.loadAnimationClips([makeMorphClip('Smile')]);
+
+    controller.playAnimation('Smile', { blendMode: 'additive' });
+    controller.update(1 / 60);
+
+    expect(reapplyProceduralState).toHaveBeenCalledTimes(1);
+
+    reapplyProceduralState.mockClear();
+    controller.stopAnimation('Smile');
+    controller.playAnimation('Smile', { blendMode: 'replace' });
+    controller.update(1 / 60);
+
+    expect(reapplyProceduralState).not.toHaveBeenCalled();
   });
 
   it('applies the same normalized aliases to clip-backed playback', () => {
@@ -310,8 +554,9 @@ describe('BakedAnimationController playback state normalization', () => {
     expect(controller.getAnimationState('Wave')?.time).toBeCloseTo(1, 5);
   });
 
-  it('falls back to replace when additive is requested for baked transform clips', () => {
+  it('allows additive no-op playback when every baked track is filtered', () => {
     const { controller, model } = makeHost();
+    model.position.x = 3;
     controller.loadAnimationClips([makeTransformClip(model, 'Idle')]);
 
     const handle = controller.playAnimation('Idle', {
@@ -319,33 +564,69 @@ describe('BakedAnimationController playback state normalization', () => {
     });
 
     expect(handle).toBeTruthy();
+    controller.seekAnimation('Idle', 1);
+    expect(model.position.x).toBeCloseTo(3, 3);
     expect(controller.getAnimationState('Idle')).toMatchObject({
       name: 'Idle',
       requestedBlendMode: 'additive',
-      blendMode: 'replace',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      blendMode: 'additive',
+      supportsAdditive: true,
     });
     expect(controller.getAnimationClips()[0]).toMatchObject({
       name: 'Idle',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      supportsAdditive: true,
     });
   });
 
-  it('keeps unsafe baked clips on replace when additive is toggled after playback starts', () => {
-    const { controller, model } = makeHost();
-    controller.loadAnimationClips([makeTransformClip(model, 'Idle')]);
+  it('switches mixed baked clips to filtered additive playback when toggled after playback starts', () => {
+    const { controller, mesh, jaw } = makeHost({ includeJawBone: true });
+    expect(jaw).toBeTruthy();
+    jaw!.rotation.z = (5 * Math.PI) / 180;
+    controller.loadAnimationClips([makeMixedMorphJawClip(jaw!, 'SmileWithJaw', 10, 20)]);
 
-    controller.playAnimation('Idle');
-    controller.setAnimationBlendMode('Idle', 'additive');
+    controller.playAnimation('SmileWithJaw');
+    const replaceActionId = controller.getAnimationState('SmileWithJaw')?.actionId;
 
-    expect(controller.getAnimationState('Idle')).toMatchObject({
-      name: 'Idle',
+    controller.setAnimationBlendMode('SmileWithJaw', 'additive');
+    jaw!.rotation.z = (5 * Math.PI) / 180;
+    controller.seekAnimation('SmileWithJaw', 1);
+
+    expect(controller.getAnimationState('SmileWithJaw')).toMatchObject({
+      name: 'SmileWithJaw',
       requestedBlendMode: 'additive',
-      blendMode: 'replace',
-      supportsAdditive: false,
-      additiveModeReason: 'unsafe_baked_additive_tracks',
+      blendMode: 'additive',
+      supportsAdditive: true,
+    });
+    expect(controller.getAnimationState('SmileWithJaw')?.actionId).not.toBe(replaceActionId);
+    expect((jaw!.rotation.z * 180) / Math.PI).toBeCloseTo(15, 3);
+    expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(1, 3);
+  });
+
+  it('clears filtered additive caches when a baked clip is removed and reloaded', () => {
+    const { controller, model, jaw } = makeHost({ includeJawBone: true });
+    expect(jaw).toBeTruthy();
+    controller.loadAnimationClips([makeMixedMorphJawClip(jaw!, 'SmileWithJaw', 10, 20)]);
+
+    controller.playAnimation('SmileWithJaw', {
+      blendMode: 'additive',
+    });
+    expect(controller.getAnimationState('SmileWithJaw')).toMatchObject({
+      blendMode: 'additive',
+      supportsAdditive: true,
+    });
+
+    expect(controller.removeAnimationClip('SmileWithJaw')).toBe(true);
+    controller.loadAnimationClips([makeTransformClip(model, 'SmileWithJaw')]);
+
+    const handle = controller.playAnimation('SmileWithJaw', {
+      blendMode: 'additive',
+    });
+    expect(handle).toBeTruthy();
+    expect(controller.getAnimationState('SmileWithJaw')).toMatchObject({
+      name: 'SmileWithJaw',
+      requestedBlendMode: 'additive',
+      blendMode: 'additive',
+      supportsAdditive: true,
     });
   });
 });

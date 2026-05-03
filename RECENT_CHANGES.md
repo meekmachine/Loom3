@@ -9,6 +9,7 @@
 
 ### Playback and mixer updates
 - Clip stop now resolves cleanly, so stopping playback does not throw a rejected promise.
+- Clip handles now expose `subscribe()` for keyframe, loop, seek, and completion events from the runtime update loop.
 - Eye and head tracking clips stay cached on stop to avoid pose resets during continuous tracking.
 - Snippet-to-clip conversion supports UUID-based tracks for bones, which avoids dot-name binding issues.
 - Curves can be played through the mixer via `snippetToClip()` + `playClip()`, including composite bone rotations.

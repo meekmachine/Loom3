@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Profile } from './types';
+import { CC4_PRESET } from '../presets/cc4';
 import {
   buildMappingEditorModel,
   compileVisemeKeys,
@@ -100,6 +101,15 @@ describe('viseme system helpers', () => {
 
     expect(model.sections.map((section) => section.id)).toEqual(['Visemes', 'Brows', 'Unmapped']);
     expect(model.sections[0]).toMatchObject({ label: 'Speech', meshCategory: 'viseme' });
+  });
+
+  it('does not classify CC4 left/right AU suffixes as L/R viseme candidates', () => {
+    const model = buildMappingEditorModel(CC4_PRESET, ['Brow_Raise_Inner_R', 'Eye_Blink_L']);
+
+    expect(model.candidates).toEqual([
+      { morph: 'Brow_Raise_Inner_R', sectionId: 'Unmapped', kind: 'unmapped', matches: [] },
+      { morph: 'Eye_Blink_L', sectionId: 'Unmapped', kind: 'unmapped', matches: [] },
+    ]);
   });
 
   it('maps provider viseme ids and phonemes to active profile slots', () => {

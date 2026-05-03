@@ -96,6 +96,8 @@ export type {
   CurvePoint,
   CurvesMap,
   ClipOptions,
+  ClipEvent,
+  ClipEventListener,
   ClipHandle,
   Snippet,
 } from './core/types';
@@ -191,7 +193,12 @@ export {
 export { BETTA_FISH_PRESET, AU_MAPPING_CONFIG, FISH_AU_MAPPING_CONFIG } from './presets/bettaFish';
 
 // Preset resolution by type name
-export { getPreset, getPresetWithProfile } from './presets';
+export {
+  getPreset,
+  getPresetWithProfile,
+  resolvePreset,
+  resolvePresetWithOverrides,
+} from './presets';
 export type { PresetType } from './presets';
 
 // ============================================================================

@@ -246,6 +246,40 @@ export interface AnimationActionHandle {
 // SNIPPET-TO-CLIP TYPES (Dynamic clip construction from AU curves)
 // ============================================================================
 
+export type ClipEvent =
+  | {
+      type: 'keyframe';
+      clipName: string;
+      keyframeIndex: number;
+      totalKeyframes: number;
+      currentTime: number;
+      duration: number;
+      iteration: number;
+    }
+  | {
+      type: 'loop';
+      clipName: string;
+      iteration: number;
+      currentTime: number;
+      duration: number;
+    }
+  | {
+      type: 'seek';
+      clipName: string;
+      currentTime: number;
+      duration: number;
+      iteration: number;
+    }
+  | {
+      type: 'completed';
+      clipName: string;
+      currentTime: number;
+      duration: number;
+      iteration: number;
+    };
+
+export type ClipEventListener = (event: ClipEvent) => void;
+
 /**
  * A single keyframe point in an animation curve.
  */
@@ -348,6 +382,8 @@ export interface ClipHandle {
   getTime: () => number;
   /** Get total clip duration in seconds */
   getDuration: () => number;
+  /** Subscribe to clip lifecycle events emitted by the runtime update loop */
+  subscribe?: (listener: ClipEventListener) => () => void;
   /** Promise that resolves when clip finishes (non-looping only) */
   finished: Promise<void>;
 }

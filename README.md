@@ -1846,6 +1846,7 @@ Loom3 can convert AU/morph curves into AnimationMixer clips for smooth, mixer-on
 Key APIs:
 - `snippetToClip(name, curves, options)` builds an AnimationClip from curves.
 - `playClip(clip, options)` returns a ClipHandle you can pause/resume/stop.
+- `clipHandle.subscribe(listener)` streams lifecycle events from the runtime update loop.
 - `clipHandle.stop()` now resolves cleanly (no rejected promise).
 
 ```typescript
@@ -1856,9 +1857,23 @@ const clip = loom.snippetToClip('gaze', {
 
 if (clip) {
   const handle = loom.playClip(clip, { loop: false, speed: 1 });
+  const unsubscribe = handle?.subscribe?.((event) => {
+    if (event.type === 'keyframe') {
+      console.log(event.currentTime, event.keyframeIndex);
+    }
+  });
+
   await handle.finished;
+  unsubscribe?.();
 }
 ```
+
+Clip stream events are discrete runtime events, not a polling surface:
+
+- `keyframe` fires when playback crosses an authored keyframe.
+- `loop` fires when looping playback starts another iteration.
+- `seek` fires when `setTime()` scrubs the clip.
+- `completed` fires when non-looping playback reaches its terminal state.
 
 ### Playing a snippet directly
 
@@ -2138,7 +2153,7 @@ This is a compact reference for the public surface exported by `@lovelace_lol/lo
 
 ### Types and lower-level exports
 
-- Configuration/types: `Profile`, `MeshInfo`, `BlendingMode`, `TransitionHandle`, `ClipHandle`, `Snippet`, `AnimationState`, `AnimationClipInfo`.
+- Configuration/types: `Profile`, `MeshInfo`, `BlendingMode`, `TransitionHandle`, `ClipEvent`, `ClipEventListener`, `ClipHandle`, `Snippet`, `AnimationState`, `AnimationClipInfo`.
 - Standalone implementations: `AnimationThree`, `HairPhysics`, `BLENDING_MODES`.
 - Region and geometry helpers: `resolveBoneName()`, `resolveBoneNames()`, `resolveFaceCenter()`, `findFaceCenter()`, `getModelForwardDirection()`, `detectFacingDirection()`.
 

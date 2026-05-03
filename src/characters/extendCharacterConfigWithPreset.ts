@@ -152,32 +152,38 @@ export function mergeRegionsByName(base?: Region[], override?: Region[]): Region
   return Array.from(merged.values());
 }
 
+function getAnnotationRegions(value: unknown): Region[] | undefined {
+  return Array.isArray(value) ? value as Region[] : undefined;
+}
+
+function getLegacyNestedOverrides(config: CharacterConfig): Record<string, unknown> {
+  return isPlainObject(config.profile) ? config.profile as Record<string, unknown> : {};
+}
+
+function getLegacyRuntimeRegions(config: CharacterConfig): Region[] | undefined {
+  return Array.isArray(config.regions) && config.regions.length > 0 ? config.regions : undefined;
+}
+
+function getCanonicalAnnotationOverrides(config: CharacterConfig): Region[] | undefined {
+  return mergeRegionsByName(
+    getAnnotationRegions(getLegacyNestedOverrides(config).annotationRegions),
+    getAnnotationRegions((config as unknown as Record<string, unknown>).annotationRegions),
+  );
+}
+
 export function extractProfileOverrides(config: CharacterConfig): Partial<Profile> {
   const topLevelConfig = config as unknown as Record<string, unknown>;
-  const legacyNestedOverrides = isPlainObject(config.profile)
-    ? config.profile as Record<string, unknown>
-    : {};
+  const legacyNestedOverrides = getLegacyNestedOverrides(config);
+  const canonicalAnnotationOverrides = getCanonicalAnnotationOverrides(config);
+  const legacyRuntimeRegions = getLegacyRuntimeRegions(config);
+  const annotationOverrides = canonicalAnnotationOverrides
+    ?? (legacyRuntimeRegions ? legacyRuntimeRegions.map((region) => cloneRegion(region)) : undefined);
   const overrides: Partial<Profile> = {};
 
   for (const key of PROFILE_OVERRIDE_KEYS) {
     if (key === 'annotationRegions') {
-      const topLevelAnnotationRegions = Array.isArray(topLevelConfig.annotationRegions)
-        ? topLevelConfig.annotationRegions as Region[]
-        : undefined;
-      const legacyAnnotationRegions = Array.isArray(legacyNestedOverrides.annotationRegions)
-        ? legacyNestedOverrides.annotationRegions as Region[]
-        : undefined;
-      const legacyRegionFallback = Array.isArray(config.regions) && config.regions.length > 0
-        ? config.regions
-        : undefined;
-      const legacyProfileRegions = mergeRegionsByName(legacyRegionFallback, legacyAnnotationRegions);
-      const regions = mergeRegionsByName(
-        legacyProfileRegions,
-        topLevelAnnotationRegions
-      );
-
-      if (regions) {
-        overrides.annotationRegions = regions.map((region) => cloneRegion(region));
+      if (annotationOverrides) {
+        overrides.annotationRegions = annotationOverrides.map((region) => cloneRegion(region));
       }
       continue;
     }
@@ -191,18 +197,6 @@ export function extractProfileOverrides(config: CharacterConfig): Partial<Profil
   }
 
   return overrides;
-}
-
-function hasCanonicalAnnotationRegionOverrides(config: CharacterConfig): boolean {
-  const topLevelConfig = config as unknown as Record<string, unknown>;
-  if (Array.isArray(topLevelConfig.annotationRegions)) {
-    return true;
-  }
-
-  return (
-    isPlainObject(config.profile) &&
-    Array.isArray((config.profile as Record<string, unknown>).annotationRegions)
-  );
 }
 
 export function applyCharacterProfileToPreset(config: CharacterConfig): Profile | null {
@@ -249,10 +243,9 @@ function orderExtendedRegions(
  *
  * Precedence:
  * 1. preset defaults
- * 2. saved `config.regions` overrides, or fallbacks when `annotationRegions`
- *    is present
+ * 2. canonical flattened `annotationRegions` / top-level profile overrides
  * 3. legacy nested `config.profile` overrides (compatibility only)
- * 4. flattened top-level profile overrides
+ * 4. legacy `config.regions` fallback only when canonical annotation overrides are absent
  */
 export function extendCharacterConfigWithPreset(config: CharacterConfig): CharacterConfig {
   const presetType = config.auPresetType;
@@ -260,27 +253,41 @@ export function extendCharacterConfigWithPreset(config: CharacterConfig): Charac
     return config;
   }
 
+  const canonicalAnnotationOverrides = getCanonicalAnnotationOverrides(config);
+  const legacyRuntimeRegions = getLegacyRuntimeRegions(config);
   const profileOverrides = extractProfileOverrides(config);
   const extendedPresetProfile = applyCharacterProfileToPreset(config);
   if (!extendedPresetProfile) {
     return config;
   }
-  const presetRegions = extendedPresetProfile.annotationRegions as Region[] | undefined;
-  const mergedRegions = hasCanonicalAnnotationRegionOverrides(config)
-    ? mergeRegionsByName(config.regions, presetRegions)
-    : mergeRegionsByName(presetRegions, config.regions);
-  const normalizedRegions = normalizeRegionTree(
-    mergedRegions,
+  const presetRegionNames = new Set(
+    ((getPreset(presetType).annotationRegions as Region[] | undefined) ?? []).map((region) => region.name)
+  );
+  const extendedAnnotationRegions = normalizeRegionTree(
+    extendedPresetProfile.annotationRegions as Region[] | undefined,
+    profileOverrides.disabledRegions,
+  );
+  const extendedRegionNames = new Set((extendedAnnotationRegions ?? []).map((region) => region.name));
+  const legacyExtraRegions = canonicalAnnotationOverrides && legacyRuntimeRegions
+    ? legacyRuntimeRegions
+        .filter((region) => !presetRegionNames.has(region.name) && !extendedRegionNames.has(region.name))
+        .map((region) => cloneRegion(region))
+    : undefined;
+  const mergedRegions = normalizeRegionTree(
+    mergeRegionsByName(extendedAnnotationRegions, legacyExtraRegions),
     profileOverrides.disabledRegions,
   );
   const extendedRegions = orderExtendedRegions(
-    normalizedRegions,
-    [config.regions, profileOverrides.annotationRegions as Region[] | undefined, presetRegions]
+    mergedRegions,
+    canonicalAnnotationOverrides
+      ? [extendedAnnotationRegions, legacyExtraRegions]
+      : [legacyRuntimeRegions, extendedAnnotationRegions]
   );
 
   return {
     ...config,
     ...extendedPresetProfile,
+    annotationRegions: extendedRegions ?? extendedAnnotationRegions,
     regions: extendedRegions ?? config.regions,
   };
 }

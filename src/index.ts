@@ -202,7 +202,7 @@ export {
 // Fish/skeletal preset
 export { BETTA_FISH_PRESET, AU_MAPPING_CONFIG, FISH_AU_MAPPING_CONFIG } from './presets/bettaFish';
 
-// Preset resolution by type name
+// Preset lookup and profile extension by type name
 export {
   getPreset,
   getPresetWithProfile,

@@ -15,7 +15,7 @@ Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https:
 
 Loom3 is broader than a face-controller wrapper. The library spans four practical areas:
 - Runtime control: Action Units, visemes, direct morphs, continuum pairs, composite rotations, transitions, and mixer playback.
-- Rig configuration: built-in presets, profile overrides, preset resolution, name resolution, viseme routing, mix weights, and skeletal-only preset support.
+- Rig configuration: built-in presets, profile overrides, preset lookup and extension, name resolution, viseme routing, mix weights, and skeletal-only preset support.
 - Inspection and validation: mesh, morph, and bone discovery; preset-fit checks; correction suggestions; and full model analysis.
 - Runtime tooling: mesh/material debugging, baked animation clip helpers, hair physics, and region/geometry helpers for annotation or camera tooling.
 
@@ -366,7 +366,7 @@ For the current runtime-oriented documentation, including:
 - `cameraOffset`
 - `style.lineDirection`
 - the difference between `cameraAngle: 0` and omitting `cameraAngle`
-- the current LoomLarge runtime note that annotations have not been moved from the demo project into Loom3 yet
+- runtime compatibility and legacy `config.regions` fallback behavior
 
 see [ANNOTATION_CONFIGURATION.md](./ANNOTATION_CONFIGURATION.md).
 
@@ -380,7 +380,7 @@ Open in LoomLarge: [Properties tab](https://www.characterloom.com/?drawer=open&t
 
 Before you tune AUs or hand-edit a profile, confirm that you picked the right preset and that the model actually matches it. Loom3 exposes a full preset-selection and validation workflow, not just low-level control APIs.
 
-### Resolving presets by type
+### Looking Up and Extending Presets by Type
 
 Use preset helpers when you want a stable entry point by model class instead of importing a preset constant directly:
 

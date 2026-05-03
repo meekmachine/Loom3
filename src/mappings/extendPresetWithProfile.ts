@@ -52,7 +52,7 @@ const mergeAnnotationRegion = (
   merged.objects = override.objects ? [...override.objects] : base.objects ? [...base.objects] : undefined;
   merged.children = override.children ? [...override.children] : base.children ? [...base.children] : undefined;
   merged.cameraOffset = override.cameraOffset
-    ? { ...override.cameraOffset }
+    ? { ...base.cameraOffset, ...override.cameraOffset }
     : base.cameraOffset
       ? { ...base.cameraOffset }
       : undefined;
@@ -139,7 +139,7 @@ const mergeHairPhysicsConfig = (
  * - Scalars: extension wins when provided.
  * - Maps: shallow-merged by key, values cloned.
  * - Arrays: replaced when the extension provides them (except annotationRegions).
- * - annotationRegions: merged by region name, shallow field merge (extension wins).
+ * - annotationRegions: merged by region name, with nested camera/style fields preserved.
  */
 export function extendPresetWithProfile(base: Profile, extension?: Partial<Profile>): Profile {
   if (!extension) {

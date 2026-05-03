@@ -10,6 +10,11 @@ function makeGeometry(): BufferGeometry {
     1, 0, 0,
     0, 1, 0,
   ]), 3));
+  geometry.setAttribute('normal', new BufferAttribute(new Float32Array([
+    0, 0, 1,
+    0, 0, 1,
+    0, 0, 1,
+  ]), 3));
   return geometry;
 }
 
@@ -97,6 +102,35 @@ describe('Loom3 runtime morph target authoring', () => {
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(face.morphTargetDictionary?.AfterRenderMorph).toBe(1);
     expect(face.morphTargetInfluences).toEqual([0, 0]);
+  });
+
+  it('keeps existing morph attribute streams aligned for position-only targets', () => {
+    const face = makeMesh('FaceMesh', { ExistingSmile: smileDelta });
+    face.geometry.morphAttributes.normal = [
+      new BufferAttribute(new Float32Array([
+        0, 0, 0.1,
+        0, 0, 0.1,
+        0, 0, 0.1,
+      ]), 3),
+    ];
+    const model = new Object3D();
+    model.add(face);
+
+    const engine = new Loom3({
+      presetType: 'cc4',
+      profile: { morphToMesh: { face: ['FaceMesh'] } },
+    });
+    engine.onReady({ model, meshes: [face] });
+
+    engine.addMorphTarget({
+      meshName: 'FaceMesh',
+      name: 'BodyWidth',
+      position: bodyDelta,
+    });
+
+    const normalMorphs = face.geometry.morphAttributes.normal;
+    expect(normalMorphs).toHaveLength(2);
+    expect(normalMorphs?.[1]?.array).toEqual(new Float32Array(9));
   });
 
   it('creates the first morph influence slot on a static mesh', async () => {

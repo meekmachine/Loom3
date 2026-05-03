@@ -1594,22 +1594,39 @@ export class Loom3 implements LoomLarge {
     const geometry = forceGeometryReplacement ? sourceGeometry.clone() : sourceGeometry;
     const dictionary = { ...previousDictionary };
     const usedIndices = Object.values(dictionary).filter(Number.isInteger);
-    const existingPositionTargetCount = geometry.morphAttributes.position?.length ?? 0;
-    const nextIndex = Math.max(existingPositionTargetCount, usedIndices.length ? Math.max(...usedIndices) + 1 : 0);
+    const existingAttributeTargetCount = Math.max(
+      0,
+      ...Object.values(geometry.morphAttributes).map((attributes) => attributes?.length ?? 0)
+    );
+    const nextIndex = Math.max(existingAttributeTargetCount, usedIndices.length ? Math.max(...usedIndices) + 1 : 0);
     const index = existingIndex ?? nextIndex;
     dictionary[target.name] = index;
 
     this.setMorphAttributeAtIndex(geometry, 'position', target.position, position.itemSize, position.count, index, target.name);
 
+    const normal = geometry.getAttribute('normal');
     if (target.normal) {
-      const normal = geometry.getAttribute('normal');
       this.setMorphAttributeAtIndex(geometry, 'normal', target.normal, normal?.itemSize ?? 3, position.count, index, target.name);
+    } else {
+      this.setZeroMorphAttributeAtIndex(geometry, 'normal', normal?.itemSize ?? 3, position.count, index, target.name);
     }
 
+    const tangent = geometry.getAttribute('tangent');
     if (target.tangent) {
-      const tangent = geometry.getAttribute('tangent');
       this.setMorphAttributeAtIndex(geometry, 'tangent', target.tangent, tangent?.itemSize ?? 4, position.count, index, target.name);
+    } else {
+      this.setZeroMorphAttributeAtIndex(geometry, 'tangent', tangent?.itemSize ?? 4, position.count, index, target.name);
     }
+    const color = geometry.getAttribute('color');
+    const existingColorMorph = geometry.morphAttributes.color?.find(Boolean);
+    this.setZeroMorphAttributeAtIndex(
+      geometry,
+      'color',
+      color?.itemSize ?? existingColorMorph?.itemSize ?? 3,
+      position.count,
+      index,
+      target.name
+    );
 
     geometry.morphTargetsRelative = target.relative !== false;
     (geometry as any).morphTargetDictionary = dictionary;
@@ -1673,7 +1690,7 @@ export class Loom3 implements LoomLarge {
 
   private setMorphAttributeAtIndex(
     geometry: Mesh['geometry'],
-    semantic: 'position' | 'normal' | 'tangent',
+    semantic: string,
     data: Float32Array | number[],
     itemSize: number,
     vertexCount: number,
@@ -1699,6 +1716,30 @@ export class Loom3 implements LoomLarge {
     const attribute = new BufferAttribute(values, itemSize);
     (attribute as any).name = name;
     attributes[index] = attribute;
+    geometry.morphAttributes[semantic] = attributes;
+  }
+
+  private setZeroMorphAttributeAtIndex(
+    geometry: Mesh['geometry'],
+    semantic: string,
+    itemSize: number,
+    vertexCount: number,
+    index: number,
+    name: string
+  ): void {
+    if (!geometry.morphAttributes[semantic]?.length) return;
+
+    const expectedLength = vertexCount * itemSize;
+    const attributes = [...geometry.morphAttributes[semantic]];
+    while (attributes.length < index) {
+      const empty = new BufferAttribute(new Float32Array(expectedLength), itemSize);
+      (empty as any).name = `morph_${attributes.length}`;
+      attributes.push(empty);
+    }
+
+    const empty = new BufferAttribute(new Float32Array(expectedLength), itemSize);
+    (empty as any).name = name;
+    attributes[index] = empty;
     geometry.morphAttributes[semantic] = attributes;
   }
 

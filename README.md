@@ -1,8 +1,8 @@
 # Loom3
 
-The missing character controller for Three.js! Loom3 allows you to bring humanoid and animal characters to life. Loom3 is based on the Facial Action Coding System (FACS) as the basis of its mappings, providing a morph and bone mapping library for controlling high-definition 3D characters in Three.js.
+Loom3 is an expressive animation engine for Three.js characters. It creates performant, mixable animation built on `AnimationMixer`, but lets you control that animation through a higher-level semantic layer: [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units, speech animation, morph targets, bone rotations, presets, and profile mappings instead of one-off rig plumbing.
 
-Loom3 provides mappings that connect [Facial Action Coding System (FACS)](https://en.wikipedia.org/wiki/Facial_Action_Coding_System) Action Units to the morph targets and bone transforms found in Character Creator 4 (CC4) characters. Instead of manually figuring out which blend shapes correspond to which facial movements, you can simply say `setAU(12, 0.8)` and the library handles the rest.
+At runtime, Loom3 can mix baked clips with procedurally generated animation, coordinate morph target influence with bone motion, and map rig-specific names into a stable control surface. That is what makes it useful for real-time, socially expressive characters rather than just isolated face poses or one-off rig mappings.
 
 > **Note:** If you previously used the `loomlarge` npm package, it has been renamed to `@lovelace_lol/loom3`.
 

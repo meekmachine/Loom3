@@ -33,14 +33,14 @@ These demo site links open the LoomLarge drawer on the matching tab. The demo si
 
 | Goal | Open in LoomLarge |
 |------|-------------------|
-| Start with the main runtime surface | [Animation tab](https://loomlarge.web.app/?drawer=open&tab=animation) |
-| Inspect preset and profile settings | [Properties tab](https://loomlarge.web.app/?drawer=open&tab=properties) |
-| Inspect AU, morph, and bone routing | [Mappings tab](https://loomlarge.web.app/?drawer=open&tab=mappings) |
-| Inspect meshes and material state | [Meshes tab](https://loomlarge.web.app/?drawer=open&tab=meshes) |
-| Inspect resolved bones | [Bones tab](https://loomlarge.web.app/?drawer=open&tab=bones) |
-| Tune expressions and continuum pairs | [Action Units tab](https://loomlarge.web.app/?drawer=open&tab=action-units) |
-| Inspect lip-sync views | [Visemes tab](https://loomlarge.web.app/?drawer=open&tab=visemes) and [Speech tab](https://loomlarge.web.app/?drawer=open&tab=speech) |
-| Tune hair behavior | [Hair tab](https://loomlarge.web.app/?drawer=open&tab=hair) |
+| Start with the main runtime surface | [Animation tab](https://www.characterloom.com/?drawer=open&tab=animation) |
+| Inspect preset and profile settings | [Properties tab](https://www.characterloom.com/?drawer=open&tab=properties) |
+| Inspect AU, morph, and bone routing | [Mappings tab](https://www.characterloom.com/?drawer=open&tab=mappings) |
+| Inspect meshes and material state | [Meshes tab](https://www.characterloom.com/?drawer=open&tab=meshes) |
+| Inspect resolved bones | [Bones tab](https://www.characterloom.com/?drawer=open&tab=bones) |
+| Tune expressions and continuum pairs | [Action Units tab](https://www.characterloom.com/?drawer=open&tab=action-units) |
+| Inspect lip-sync views | [Visemes tab](https://www.characterloom.com/?drawer=open&tab=visemes) and [Speech tab](https://www.characterloom.com/?drawer=open&tab=speech) |
+| Tune hair behavior | [Hair tab](https://www.characterloom.com/?drawer=open&tab=hair) |
 
 Most screenshots below were captured from LoomLarge with the matching tab open so the docs and the live product are easy to compare. The viseme grid image is the main exception: it still shows older labels from the captured UI, so the viseme table later in the README should be treated as the source of truth.
 
@@ -84,7 +84,7 @@ Additional:
 
 ## 1. Installation & Setup
 
-Open in LoomLarge: [Animation tab](https://loomlarge.web.app/?drawer=open&tab=animation)
+Open in LoomLarge: [Animation tab](https://www.characterloom.com/?drawer=open&tab=animation)
 
 ![Project structure with Loom3 installed](./assets/readme/project-structure.svg)
 
@@ -201,7 +201,7 @@ const meshes = collectMorphMeshes(gltf.scene);
 
 ## 2. Using Presets
 
-Open in LoomLarge: [Properties tab](https://loomlarge.web.app/?drawer=open&tab=properties) | [Mappings tab](https://loomlarge.web.app/?drawer=open&tab=mappings)
+Open in LoomLarge: [Properties tab](https://www.characterloom.com/?drawer=open&tab=properties) | [Mappings tab](https://www.characterloom.com/?drawer=open&tab=mappings)
 
 ![Diagram showing how Loom3 presets connect AUs to morphs and bones](./assets/readme/preset-au-flow.svg)
 
@@ -376,7 +376,7 @@ see [ANNOTATION_CONFIGURATION.md](./ANNOTATION_CONFIGURATION.md).
 
 ## 3. Preset Selection & Validation
 
-Open in LoomLarge: [Properties tab](https://loomlarge.web.app/?drawer=open&tab=properties) | [Mappings tab](https://loomlarge.web.app/?drawer=open&tab=mappings) | [Bones tab](https://loomlarge.web.app/?drawer=open&tab=bones)
+Open in LoomLarge: [Properties tab](https://www.characterloom.com/?drawer=open&tab=properties) | [Mappings tab](https://www.characterloom.com/?drawer=open&tab=mappings) | [Bones tab](https://www.characterloom.com/?drawer=open&tab=bones)
 
 Before you tune AUs or hand-edit a profile, confirm that you picked the right preset and that the model actually matches it. Loom3 exposes a full preset-selection and validation workflow, not just low-level control APIs.
 
@@ -477,7 +477,7 @@ Use this section when you need to:
 
 ## 4. Getting to Know Your Character
 
-Open in LoomLarge: [Meshes tab](https://loomlarge.web.app/?drawer=open&tab=meshes) | [Bones tab](https://loomlarge.web.app/?drawer=open&tab=bones) | [Mappings tab](https://loomlarge.web.app/?drawer=open&tab=mappings)
+Open in LoomLarge: [Meshes tab](https://www.characterloom.com/?drawer=open&tab=meshes) | [Bones tab](https://www.characterloom.com/?drawer=open&tab=bones) | [Mappings tab](https://www.characterloom.com/?drawer=open&tab=mappings)
 
 ![Console-style diagram showing Loom3 mesh and morph target inspection output](./assets/readme/console-mesh-output.svg)
 
@@ -667,7 +667,7 @@ This is especially useful for:
 
 ## 5. Extending & Custom Presets
 
-Open in LoomLarge: [Properties tab](https://loomlarge.web.app/?drawer=open&tab=properties) | [Mappings tab](https://loomlarge.web.app/?drawer=open&tab=mappings)
+Open in LoomLarge: [Properties tab](https://www.characterloom.com/?drawer=open&tab=properties) | [Mappings tab](https://www.characterloom.com/?drawer=open&tab=mappings)
 
 ![Diagram showing preset inheritance and profile override merging](./assets/readme/preset-inheritance.svg)
 
@@ -746,7 +746,7 @@ const current = loom.getProfile();
 
 ## 6. Creating Skeletal Animation Presets
 
-Open in LoomLarge: [Bones tab](https://loomlarge.web.app/?drawer=open&tab=bones) | [Action Units tab](https://loomlarge.web.app/?drawer=open&tab=action-units) | [Animation tab](https://loomlarge.web.app/?drawer=open&tab=animation)
+Open in LoomLarge: [Bones tab](https://www.characterloom.com/?drawer=open&tab=bones) | [Action Units tab](https://www.characterloom.com/?drawer=open&tab=action-units) | [Animation tab](https://www.characterloom.com/?drawer=open&tab=animation)
 
 ![Betta fish model with bones panel visible](./assets/readme/fish-bones-ui.webp)
 
@@ -1029,7 +1029,7 @@ async function swimCycle() {
 
 ## 7. Action Unit Control
 
-Open in LoomLarge: [Action Units tab](https://loomlarge.web.app/?drawer=open&tab=action-units)
+Open in LoomLarge: [Action Units tab](https://www.characterloom.com/?drawer=open&tab=action-units)
 
 ![Grid of Loom3 Action Unit examples on a character](./assets/readme/au-values-grid.webp)
 
@@ -1107,7 +1107,7 @@ loom.setAU(12, 0.8, 1);    // Right side only
 
 ## 8. Mix Weight System
 
-Open in LoomLarge: [Action Units tab](https://loomlarge.web.app/?drawer=open&tab=action-units)
+Open in LoomLarge: [Action Units tab](https://www.characterloom.com/?drawer=open&tab=action-units)
 
 ![Comparison of morph-only, mixed, and bone-only AU results](./assets/readme/mix-weight-comparison.webp)
 
@@ -1156,7 +1156,7 @@ if (isMixedAU(26)) {
 
 ## 9. Composite Rotation System
 
-Open in LoomLarge: [Action Units tab](https://loomlarge.web.app/?drawer=open&tab=action-units) | [Bones tab](https://loomlarge.web.app/?drawer=open&tab=bones)
+Open in LoomLarge: [Action Units tab](https://www.characterloom.com/?drawer=open&tab=action-units) | [Bones tab](https://www.characterloom.com/?drawer=open&tab=bones)
 
 ![Diagram showing pitch, yaw, and roll axes on the head](./assets/readme/head-axes-diagram.svg)
 
@@ -1218,7 +1218,7 @@ loom.setAU(64, 0.4);
 
 ## 10. Continuum Pairs
 
-Open in LoomLarge: [Action Units tab](https://loomlarge.web.app/?drawer=open&tab=action-units)
+Open in LoomLarge: [Action Units tab](https://www.characterloom.com/?drawer=open&tab=action-units)
 
 ![Continuum slider UI for paired Loom3 AUs](./assets/readme/continuum-slider-ui.webp)
 
@@ -1320,7 +1320,7 @@ const pair = CONTINUUM_PAIRS_MAP[51];
 
 ## 11. Direct Morph Control
 
-Open in LoomLarge: [Meshes tab](https://loomlarge.web.app/?drawer=open&tab=meshes) | [Mappings tab](https://loomlarge.web.app/?drawer=open&tab=mappings)
+Open in LoomLarge: [Meshes tab](https://www.characterloom.com/?drawer=open&tab=meshes) | [Mappings tab](https://www.characterloom.com/?drawer=open&tab=mappings)
 
 ![Direct morph control screenshot with a live morph preview](./assets/readme/direct-morph-control.webp)
 
@@ -1364,7 +1364,7 @@ Loom3 caches morph target lookups for performance. The first time you access a m
 
 ## 12. Viseme System
 
-Open in LoomLarge: [Visemes tab](https://loomlarge.web.app/?drawer=open&tab=visemes) | [Speech tab](https://loomlarge.web.app/?drawer=open&tab=speech)
+Open in LoomLarge: [Visemes tab](https://www.characterloom.com/?drawer=open&tab=visemes) | [Speech tab](https://www.characterloom.com/?drawer=open&tab=speech)
 
 ![Grid of all 15 Loom3 viseme mouth shapes](./assets/readme/viseme-grid.webp)
 
@@ -1450,7 +1450,7 @@ speak([5, 0, 10, 4]);
 
 ## 13. Transition System
 
-Open in LoomLarge: [Animation tab](https://loomlarge.web.app/?drawer=open&tab=animation)
+Open in LoomLarge: [Animation tab](https://www.characterloom.com/?drawer=open&tab=animation)
 
 ![Diagram showing a Loom3 transition timeline with easing and handle methods](./assets/readme/transition-timeline-easing.svg)
 
@@ -1534,7 +1534,7 @@ loom.clearTransitions();
 
 ## 14. Playback & State Control
 
-Open in LoomLarge: [Animation tab](https://loomlarge.web.app/?drawer=open&tab=animation)
+Open in LoomLarge: [Animation tab](https://www.characterloom.com/?drawer=open&tab=animation)
 
 ![Playback controls UI showing Loom3 pause and resume controls](./assets/readme/pause-resume-controls.webp)
 
@@ -1593,7 +1593,7 @@ loom.dispose();
 
 ## 15. Hair Physics
 
-Open in LoomLarge: [Hair tab](https://loomlarge.web.app/?drawer=open&tab=hair)
+Open in LoomLarge: [Hair tab](https://www.characterloom.com/?drawer=open&tab=hair)
 
 ![Animated GIF showing Loom3 hair physics reacting to head motion](./assets/readme/hair-physics.gif)
 
@@ -1783,7 +1783,7 @@ loom.setMorphOnMeshes(
 
 ## 16. Baked Animations
 
-Open in LoomLarge: [Animation tab](https://loomlarge.web.app/?drawer=open&tab=animation)
+Open in LoomLarge: [Animation tab](https://www.characterloom.com/?drawer=open&tab=animation)
 
 Loom3 can play baked skeletal animations from your GLB/GLTF files using Three.js AnimationMixer. This allows you to combine pre-made animations (idle, walk, gestures) with real-time facial control.
 
@@ -2052,7 +2052,7 @@ loom.transitionAU(45, 1.0, 100);  // Blink
 
 ## 17. Regions & Geometry Helpers
 
-Open in LoomLarge: [Bones tab](https://loomlarge.web.app/?drawer=open&tab=bones) | [Mappings tab](https://loomlarge.web.app/?drawer=open&tab=mappings)
+Open in LoomLarge: [Bones tab](https://www.characterloom.com/?drawer=open&tab=bones) | [Mappings tab](https://www.characterloom.com/?drawer=open&tab=mappings)
 
 These helpers are for applications that need semantic face regions, marker anchors, or camera targets in addition to direct animation control.
 
@@ -2117,7 +2117,7 @@ Use these helpers when you need to:
 
 ## 18. API Reference
 
-Open in LoomLarge: [Animation tab](https://loomlarge.web.app/?drawer=open&tab=animation)
+Open in LoomLarge: [Animation tab](https://www.characterloom.com/?drawer=open&tab=animation)
 
 This is a compact reference for the public surface exported by `@lovelace_lol/loom3`.
 

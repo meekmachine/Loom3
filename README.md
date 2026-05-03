@@ -20,6 +20,7 @@ In practical terms, Loom3 gives you:
 - expressive face and speech control through AUs, visemes, continuum pairs, and direct morph access
 - coordinated head, eye, jaw, and tongue motion through composite rotations and paired controls
 - reusable character mappings through presets, profile overrides, name resolution, and skeletal-only support
+- runtime-safe profile edits for bone authoring flows, including re-resolving newly introduced semantic bones on a loaded model
 - runtime playback tools through transitions, snippets, generated clips, baked clips, crossfades, weights, and `AnimationMixer`
 - inspection and validation tools for meshes, morphs, bones, preset fit, correction suggestions, and model analysis
 - supporting character tools such as region helpers, geometry helpers, mesh debugging, and hair physics
@@ -772,6 +773,12 @@ loom.setProfile(ANOTHER_PRESET);
 const current = loom.getProfile();
 ```
 
+`setProfile()` is safe to use in authoring workflows after a model has already loaded. When the profile changes, Loom3 refreshes the runtime composite-rotation map, re-resolves bones against the current model, preserves original base transforms for already-resolved bones, and reapplies active AU values against the updated mapping.
+
+That matters when a mapping UI adds or edits bone-driven controls. For example, if a user maps an AU to a new semantic bone node or changes which axis a head/eye control should use, the character can exercise that mapping immediately without forcing a reload.
+
+The profile is still the source of truth. Downstream authoring tools should update `boneNodes`, `auToBones`, `compositeRotations`, `continuumPairs`, and related metadata coherently before calling `setProfile()`.
+
 ![Comparison showing a custom Loom3 preset override in action](./assets/readme/custom-preset-in-action.webp)
 
 ---
@@ -1198,12 +1205,51 @@ loom.setAU(53, 0.3);
 // Both motions combine on the same head bone
 ```
 
+The semantic axis does not always equal the raw transform channel. CC4 eye yaw, for example, is represented semantically as left/right eye motion but maps to the raw `rz` channel in the shipped preset. Keep that distinction in mind when building authoring tools: the UI should usually speak in semantic axes, while the profile stores the rig-specific channel that actually moves the bone.
+
 ### Eye direction
 
 ```typescript
 loom.setAU(61, 0.6); // eyes left
 loom.setAU(64, 0.4); // eyes down
 ```
+
+The CC4 preset supports both shared and independent eye bone control:
+- `61` / `62` move both eyes horizontally
+- `63` / `64` move both eyes vertically
+- `65` / `66` move the left eye horizontally
+- `67` / `68` move the left eye vertically
+- `69` / `70` move the right eye horizontally
+- `71` / `72` move the right eye vertically
+
+Those controls are not isolated morph tweaks. The composite eye rotations combine shared eye AUs with the per-eye AUs for both direct runtime playback and generated mixer clips.
+
+### Runtime profile edits
+
+Bone mappings can be edited while the character is already live:
+
+```typescript
+import { resolveProfile } from '@lovelace_lol/loom3';
+
+const nextProfile = resolveProfile(loom.getProfile(), {
+  boneNodes: {
+    HEAD: 'Head',
+    EYE_L: 'LeftEye',
+    EYE_R: 'RightEye',
+  },
+  auToBones: {
+    61: [
+      { node: 'EYE_L', channel: 'rz', scale: 1, maxDegrees: 25, side: 'left' },
+      { node: 'EYE_R', channel: 'rz', scale: 1, maxDegrees: 25, side: 'right' },
+    ],
+  },
+});
+
+loom.setProfile(nextProfile);
+loom.setAU(61, 0.6); // exercises the refreshed eye mapping immediately
+```
+
+When `setProfile()` runs, Loom3 rebuilds the composite rotation lookup and bone runtime state from the new profile. Existing active AU values are replayed against the updated mapping so an authoring UI can test edits without reloading the GLB.
 
 ### Why quaternions show up here
 
@@ -1797,6 +1843,7 @@ This is a compact reference for the public surface exported by `@lovelace_lol/lo
 - Lifecycle: `onReady()`, `update()`, `start()`, `stop()`, `dispose()`.
 - Preset state: `setProfile()`, `getProfile()`.
 - Control APIs: `setAU()`, `transitionAU()`, `setContinuum()`, `transitionContinuum()`, `setMorph()`, `transitionMorph()`, `setViseme()`, `transitionViseme()`.
+- Bone/profile helpers: `getCompositeRotations()`, `hasLeftRightBones()`.
 - Transition state: `pause()`, `resume()`, `getPaused()`, `clearTransitions()`, `getActiveTransitionCount()`, `resetToNeutral()`.
 
 ### Presets and profiles
@@ -1818,7 +1865,7 @@ This is a compact reference for the public surface exported by `@lovelace_lol/lo
 - Mesh inspection: `getMeshList()`, `getMorphTargets()`, `getMorphTargetIndices()`, `getBones()`.
 - Mesh debugging: `setMeshVisible()`, `highlightMesh()`, `getMeshMaterialConfig()`, `setMeshMaterialConfig()`.
 - Hair runtime: `registerHairObjects()`, `getRegisteredHairObjects()`, `setHairPhysicsEnabled()`, `setHairPhysicsConfig()`, `validateHairMorphTargets()`, `applyHairStateToObject()`.
-- Mixer helpers: `loadAnimationClips()`, `getAnimationClips()`, `playAnimation()`, `pauseAnimation()`, `resumeAnimation()`, `stopAnimation()`, `stopAllAnimations()`, `pauseAllAnimations()`, `resumeAllAnimations()`, `setAnimationSpeed()`, `setAnimationIntensity()`, `setAnimationTimeScale()`, `getAnimationState()`, `getPlayingAnimations()`, `crossfadeTo()`, `snippetToClip()`, `playClip()`, `playSnippet()`, `buildClip()`, `updateClipParams()`, `supportsClipCurves()`.
+- Mixer helpers: `loadAnimationClips()`, `getAnimationClips()`, `removeAnimationClip()`, `playAnimation()`, `pauseAnimation()`, `resumeAnimation()`, `stopAnimation()`, `stopAllAnimations()`, `pauseAllAnimations()`, `resumeAllAnimations()`, `setAnimationSpeed()`, `setAnimationIntensity()`, `setAnimationLoopMode()`, `setAnimationRepeatCount()`, `setAnimationReverse()`, `setAnimationBlendMode()`, `seekAnimation()`, `setAnimationTimeScale()`, `getAnimationState()`, `getPlayingAnimations()`, `crossfadeTo()`, `snippetToClip()`, `playClip()`, `playSnippet()`, `buildClip()`, `updateClipParams()`, `cleanupSnippet()`, `supportsClipCurves()`.
 
 ### Types and lower-level exports
 

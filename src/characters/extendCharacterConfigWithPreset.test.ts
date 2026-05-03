@@ -164,7 +164,7 @@ describe('extendCharacterConfigWithPreset', () => {
     ]);
   });
 
-  it('still honors legacy nested profile annotation overrides during migration', () => {
+  it('prefers canonical annotation regions over legacy region fallbacks during migration', () => {
     const extended = extendCharacterConfigWithPreset(
       createConfig({
         profile: {
@@ -175,22 +175,29 @@ describe('extendCharacterConfigWithPreset', () => {
         },
         regions: [
           { name: 'left_eye', cameraAngle: 45, paddingFactor: 0.5 },
+          { name: 'hat', objects: ['HatMesh'], paddingFactor: 1.4 },
         ],
       })
     );
 
     const leftEye = extended.regions.find((region) => region.name === 'left_eye');
     const mouth = extended.regions.find((region) => region.name === 'mouth');
+    const hat = extended.regions.find((region) => region.name === 'hat');
 
     expect(leftEye).toMatchObject({
       name: 'left_eye',
       bones: ['EYE_L'],
-      paddingFactor: 0.5,
-      cameraAngle: 45,
+      paddingFactor: 1.1,
+      cameraAngle: 30,
       parent: 'head',
     });
     expect(mouth?.style).toMatchObject({
       lineDirection: 'camera',
+    });
+    expect(hat).toMatchObject({
+      name: 'hat',
+      objects: ['HatMesh'],
+      paddingFactor: 1.4,
     });
   });
 

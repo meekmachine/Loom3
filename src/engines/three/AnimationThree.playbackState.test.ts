@@ -6,7 +6,9 @@ import {
   MeshBasicMaterial,
   NumberKeyframeTrack,
   Object3D,
+  Quaternion,
   QuaternionKeyframeTrack,
+  Vector3,
 } from 'three';
 import type { Profile } from '../../mappings/types';
 import { BakedAnimationController, type BakedAnimationHost } from './AnimationThree';
@@ -91,6 +93,17 @@ function makeMixedClip(model: Object3D, head: Object3D, name: string): Animation
   ]);
 }
 
+function makeOffsetHeadClip(head: Object3D, name: string): AnimationClip {
+  const start = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.6);
+  const end = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.9);
+  return new AnimationClip(name, 1, [
+    new QuaternionKeyframeTrack(`${head.uuid}.quaternion`, [0, 1], [
+      ...start.toArray(),
+      ...end.toArray(),
+    ]),
+  ]);
+}
+
 function makeSceneClip(camera: Object3D, name: string): AnimationClip {
   return new AnimationClip(name, 1, [
     new NumberKeyframeTrack(`${camera.uuid}.position[x]`, [0, 1], [0, 1]),
@@ -171,6 +184,42 @@ describe('BakedAnimationController playback state normalization', () => {
         { channel: 'body', trackCount: 1, playable: true, blendMode: 'replace' },
       ],
     });
+  });
+
+  it('converts additive baked face bone tracks to deltas before playback', () => {
+    const { controller, head } = makeHost({ includeHeadBone: true });
+    expect(head).toBeTruthy();
+    controller.loadAnimationClips([makeOffsetHeadClip(head!, 'HeadPose')]);
+
+    const handle = controller.playAnimation('HeadPose', { blendMode: 'additive' });
+
+    expect(handle).toBeTruthy();
+    controller.seekAnimation('HeadPose', 0);
+    expect(head!.quaternion.angleTo(new Quaternion())).toBeLessThan(1e-5);
+
+    controller.seekAnimation('HeadPose', 1);
+    const expectedDelta = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.3);
+    expect(head!.quaternion.angleTo(expectedDelta)).toBeLessThan(1e-5);
+  });
+
+  it('switches baked face channels to delta clips when additive is toggled after playback starts', () => {
+    const { controller, head } = makeHost({ includeHeadBone: true });
+    expect(head).toBeTruthy();
+    controller.loadAnimationClips([makeOffsetHeadClip(head!, 'HeadPose')]);
+
+    controller.playAnimation('HeadPose', { blendMode: 'replace' });
+    controller.seekAnimation('HeadPose', 0.5);
+    controller.setAnimationBlendMode('HeadPose', 'additive');
+    controller.seekAnimation('HeadPose', 0);
+
+    expect(controller.getAnimationState('HeadPose')).toMatchObject({
+      requestedBlendMode: 'additive',
+      blendMode: 'additive',
+      channels: [
+        { channel: 'face', trackCount: 1, playable: true, blendMode: 'additive' },
+      ],
+    });
+    expect(head!.quaternion.angleTo(new Quaternion())).toBeLessThan(1e-5);
   });
 
   it('surfaces scene-only partitions without creating a Loom3-playable action', () => {

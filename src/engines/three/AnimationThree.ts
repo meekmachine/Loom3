@@ -8,7 +8,9 @@ import {
   AnimationMixer,
   AnimationAction,
   AnimationClip,
+  AnimationUtils,
   NumberKeyframeTrack,
+  PropertyBinding,
   QuaternionKeyframeTrack,
   AdditiveAnimationBlendMode,
   LoopRepeat,
@@ -17,8 +19,9 @@ import {
   NormalAnimationBlendMode,
   Quaternion,
   Vector3,
+  VectorKeyframeTrack,
 } from 'three';
-import type { Mesh, Object3D } from 'three';
+import type { KeyframeTrack, Mesh, Object3D } from 'three';
 import type {
   TransitionHandle,
   AnimationPlayOptions,
@@ -199,6 +202,7 @@ export interface BakedAnimationHost {
   computeSideValues: (base: number, balance?: number) => { left: number; right: number };
   getAUMixWeight: (auId: number) => number;
   isMixedAU: (auId: number) => boolean;
+  reapplyProceduralState?: () => void;
 }
 
 // Lightweight unique id for mixer actions/handles
@@ -254,6 +258,8 @@ type BakedActionGroup = {
   resolveFinished: () => void;
 };
 
+const ADDITIVE_BAKED_RUNTIME_CLIP_SUFFIX = '__loom3_additive_delta';
+
 export class BakedAnimationController {
   private host: BakedAnimationHost;
   private animationMixer: AnimationMixer | null = null;
@@ -261,6 +267,7 @@ export class BakedAnimationController {
   private animationClips: AnimationClip[] = [];
   private bakedSourceClips = new Map<string, PartitionedBakedClip>();
   private bakedRuntimeActions = new Map<string, AnimationAction>();
+  private bakedAdditiveRuntimeClips = new Map<string, AnimationClip>();
   private bakedActionGroups = new Map<string, BakedActionGroup>();
   private bakedRuntimeClipToSource = new Map<string, { sourceClipName: string; channel: BakedClipChannel }>();
   private animationActions = new Map<string, AnimationAction>();
@@ -288,6 +295,213 @@ export class BakedAnimationController {
     this.actionIdToClip.set(actionId, clipName);
     action.__actionId = actionId;
     return actionId;
+  }
+
+  private clearActionId(action?: AnimationAction | null): void {
+    if (!action) return;
+    const actionId = this.getActionId(action);
+    if (actionId) {
+      this.actionIdToClip.delete(actionId);
+    }
+    this.actionIds.delete(action);
+    delete action.__actionId;
+  }
+
+  private uncacheClip(clip?: AnimationClip | null): void {
+    if (!clip || !this.animationMixer) return;
+    try {
+      this.animationMixer.uncacheClip(clip);
+    } catch {}
+  }
+
+  private uncacheAction(action?: AnimationAction | null): void {
+    if (!action || !this.animationMixer) return;
+    try {
+      const clip = action.getClip();
+      if (clip) {
+        this.animationMixer.uncacheAction(clip);
+        this.animationMixer.uncacheClip(clip);
+      }
+    } catch {}
+  }
+
+  private releaseBakedRuntimeAction(runtimeClipName: string): void {
+    const action = this.bakedRuntimeActions.get(runtimeClipName);
+    if (!action) return;
+    try {
+      action.stop();
+    } catch {}
+    this.uncacheAction(action);
+    this.clearActionId(action);
+    this.bakedRuntimeActions.delete(runtimeClipName);
+  }
+
+  private clearBakedAdditiveRuntimeClip(runtimeClipName: string): void {
+    const clip = this.bakedAdditiveRuntimeClips.get(runtimeClipName);
+    if (!clip) return;
+    this.uncacheClip(clip);
+    this.bakedAdditiveRuntimeClips.delete(runtimeClipName);
+  }
+
+  private clearAllBakedAdditiveRuntimeClips(): void {
+    for (const runtimeClipName of Array.from(this.bakedAdditiveRuntimeClips.keys())) {
+      this.clearBakedAdditiveRuntimeClip(runtimeClipName);
+    }
+  }
+
+  private resolveTrackTarget(
+    model: Object3D,
+    parsed: ReturnType<typeof PropertyBinding.parseTrackName>
+  ): Object3D | null {
+    const targetKey = parsed.objectName === 'bones' && parsed.objectIndex
+      ? parsed.objectIndex
+      : parsed.nodeName;
+    if (!targetKey) {
+      return null;
+    }
+    return model.getObjectByProperty('uuid', targetKey)
+      ?? PropertyBinding.findNode(model, targetKey)
+      ?? null;
+  }
+
+  private getMorphTrackBaseValue(
+    target: Object3D | null,
+    propertyIndex: string | number | undefined
+  ): number {
+    if (!target) {
+      return 0;
+    }
+
+    const meshTarget = target as Mesh & {
+      morphTargetInfluences?: number[];
+      morphTargetDictionary?: Record<string, number>;
+    };
+    const influences = meshTarget.morphTargetInfluences;
+    if (!influences) {
+      return 0;
+    }
+
+    let morphIndex: number | undefined;
+    if (typeof propertyIndex === 'number' && Number.isInteger(propertyIndex)) {
+      morphIndex = propertyIndex;
+    } else if (typeof propertyIndex === 'string') {
+      if (/^\d+$/.test(propertyIndex)) {
+        morphIndex = Number(propertyIndex);
+      } else {
+        morphIndex = meshTarget.morphTargetDictionary?.[propertyIndex];
+      }
+    }
+
+    if (morphIndex === undefined) {
+      return 0;
+    }
+
+    return influences[morphIndex] ?? 0;
+  }
+
+  private canCreateFirstFrameReferenceTrack(track: KeyframeTrack): boolean {
+    const valueSize = track.getValueSize();
+    if (!Number.isFinite(valueSize) || valueSize <= 0 || track.values.length < valueSize) {
+      return false;
+    }
+
+    return track.ValueTypeName === 'number'
+      || track.ValueTypeName === 'quaternion'
+      || track.ValueTypeName === 'vector';
+  }
+
+  private createFirstFrameReferenceTrack(track: KeyframeTrack): KeyframeTrack | null {
+    const valueSize = track.getValueSize();
+    if (!this.canCreateFirstFrameReferenceTrack(track)) {
+      return null;
+    }
+
+    const values = Array.from(track.values.slice(0, valueSize));
+    if (track.ValueTypeName === 'number') {
+      return new NumberKeyframeTrack(track.name, [0], values);
+    }
+    if (track.ValueTypeName === 'quaternion') {
+      return new QuaternionKeyframeTrack(track.name, [0], values);
+    }
+    if (track.ValueTypeName === 'vector') {
+      return new VectorKeyframeTrack(track.name, [0], values);
+    }
+    return null;
+  }
+
+  private createAdditiveReferenceTrack(
+    track: KeyframeTrack,
+    model: Object3D
+  ): KeyframeTrack | null {
+    const trackName = typeof track?.name === 'string' ? track.name : '';
+    if (!trackName) {
+      return null;
+    }
+
+    let parsed: ReturnType<typeof PropertyBinding.parseTrackName>;
+    try {
+      parsed = PropertyBinding.parseTrackName(trackName);
+    } catch {
+      return null;
+    }
+
+    const target = this.resolveTrackTarget(model, parsed);
+    if (parsed.propertyName === 'morphTargetInfluences') {
+      return new NumberKeyframeTrack(
+        track.name,
+        [0],
+        [this.getMorphTrackBaseValue(target, parsed.propertyIndex)]
+      );
+    }
+
+    return this.createFirstFrameReferenceTrack(track);
+  }
+
+  private createAdditiveRuntimeClip(runtimeClip: AnimationClip): AnimationClip | null {
+    const model = this.host.getModel();
+    if (!model) {
+      return null;
+    }
+
+    const additiveTracks: KeyframeTrack[] = [];
+    const referenceTracks: KeyframeTrack[] = [];
+    for (const track of runtimeClip.tracks) {
+      const referenceTrack = this.createAdditiveReferenceTrack(track, model);
+      if (!referenceTrack) {
+        continue;
+      }
+      additiveTracks.push(track.clone());
+      referenceTracks.push(referenceTrack);
+    }
+
+    const additiveClip = new AnimationClip(
+      `${runtimeClip.name}${ADDITIVE_BAKED_RUNTIME_CLIP_SUFFIX}`,
+      runtimeClip.duration,
+      additiveTracks
+    );
+    if (additiveTracks.length > 0) {
+      const referenceClip = new AnimationClip(
+        `${runtimeClip.name}${ADDITIVE_BAKED_RUNTIME_CLIP_SUFFIX}_reference`,
+        0,
+        referenceTracks
+      );
+      AnimationUtils.makeClipAdditive(additiveClip, 0, referenceClip);
+    }
+    return additiveClip;
+  }
+
+  private getOrCreateBakedAdditiveRuntimeClip(runtimeClip: AnimationClip): AnimationClip | null {
+    const cached = this.bakedAdditiveRuntimeClips.get(runtimeClip.name);
+    if (cached) {
+      return cached;
+    }
+
+    const additiveClip = this.createAdditiveRuntimeClip(runtimeClip);
+    if (!additiveClip) {
+      return null;
+    }
+    this.bakedAdditiveRuntimeClips.set(runtimeClip.name, additiveClip);
+    return additiveClip;
   }
 
   private setClipEventMetadata(clip: AnimationClip, metadata: ClipEventMetadata) {
@@ -652,7 +866,8 @@ export class BakedAnimationController {
 
   private getOrCreateBakedRuntimeAction(
     sourceClipName: string,
-    channel: BakedClipChannel
+    channel: BakedClipChannel,
+    blendMode: AnimationBlendMode = 'replace'
   ): AnimationAction | null {
     const bakedClip = this.getBakedSourceClip(sourceClipName);
     const runtimeClip = bakedClip?.runtimeClips.find((entry) => entry.channel === channel)?.clip;
@@ -660,8 +875,15 @@ export class BakedAnimationController {
       return null;
     }
 
+    const desiredClip = blendMode === 'additive'
+      ? this.getOrCreateBakedAdditiveRuntimeClip(runtimeClip)
+      : runtimeClip;
+    if (!desiredClip) {
+      return null;
+    }
+
     const existing = this.bakedRuntimeActions.get(runtimeClip.name);
-    if (existing) {
+    if (existing?.getClip() === desiredClip) {
       return existing;
     }
 
@@ -670,7 +892,11 @@ export class BakedAnimationController {
       return null;
     }
 
-    const action = this.animationMixer.clipAction(runtimeClip);
+    if (existing) {
+      this.releaseBakedRuntimeAction(runtimeClip.name);
+    }
+
+    const action = this.animationMixer.clipAction(desiredClip);
     this.bakedRuntimeActions.set(runtimeClip.name, action);
     return action;
   }
@@ -694,7 +920,15 @@ export class BakedAnimationController {
 
     const channelActions = new Map<BakedClipChannel, AnimationAction>();
     for (const runtimeClip of bakedClip.runtimeClips) {
-      const action = this.getOrCreateBakedRuntimeAction(clipName, runtimeClip.channel);
+      const channelBlendMode = resolveBakedChannelBlendMode(
+        runtimeClip.channel,
+        playbackState.requestedBlendMode
+      ) ?? 'replace';
+      const action = this.getOrCreateBakedRuntimeAction(
+        clipName,
+        runtimeClip.channel,
+        channelBlendMode
+      );
       if (action) {
         channelActions.set(runtimeClip.channel, action);
       }
@@ -744,6 +978,32 @@ export class BakedAnimationController {
     return getMeshNamesForVisemeProfile(config);
   }
 
+  private hasActiveAdditivePlayback(): boolean {
+    for (const [clipName, group] of this.bakedActionGroups) {
+      const state = this.playbackState.get(clipName);
+      if (state?.blendMode !== 'additive') {
+        continue;
+      }
+      for (const action of group.channelActions.values()) {
+        if (action.isRunning() && !action.paused) {
+          return true;
+        }
+      }
+    }
+
+    for (const [clipName, action] of this.animationActions) {
+      const state = this.playbackState.get(clipName);
+      if (state?.blendMode !== 'additive') {
+        continue;
+      }
+      if (action.isRunning() && !action.paused) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   update(dtSeconds: number): void {
     if (this.animationMixer) {
       const snapshots = Array.from(this.clipMonitors.values()).map((monitor) => ({
@@ -751,6 +1011,9 @@ export class BakedAnimationController {
         previousTime: monitor.action.time,
       }));
       this.animationMixer.update(dtSeconds);
+      if (this.hasActiveAdditivePlayback()) {
+        this.host.reapplyProceduralState?.();
+      }
       for (const { actionId, previousTime } of snapshots) {
         const monitor = this.clipMonitors.get(actionId);
         if (!monitor) continue;
@@ -773,6 +1036,7 @@ export class BakedAnimationController {
 
   dispose(): void {
     this.stopAllAnimations();
+    this.clearAllBakedAdditiveRuntimeClips();
     if (this.animationMixer) {
       this.animationMixer.stopAllAction();
       this.animationMixer = null;
@@ -780,6 +1044,7 @@ export class BakedAnimationController {
     this.animationClips = [];
     this.bakedSourceClips.clear();
     this.bakedRuntimeActions.clear();
+    this.bakedAdditiveRuntimeClips.clear();
     this.bakedActionGroups.clear();
     this.bakedRuntimeClipToSource.clear();
     this.animationActions.clear();
@@ -804,6 +1069,8 @@ export class BakedAnimationController {
     if (this.animationMixer) {
       for (const bakedClip of this.bakedSourceClips.values()) {
         for (const runtimeClip of bakedClip.runtimeClips) {
+          this.releaseBakedRuntimeAction(runtimeClip.clip.name);
+          this.clearBakedAdditiveRuntimeClip(runtimeClip.clip.name);
           try {
             this.animationMixer.uncacheAction(runtimeClip.clip);
           } catch {}
@@ -813,6 +1080,7 @@ export class BakedAnimationController {
         }
       }
     }
+    this.clearAllBakedAdditiveRuntimeClips();
 
     for (const clipName of this.bakedSourceClips.keys()) {
       this.playbackState.delete(clipName);
@@ -863,13 +1131,14 @@ export class BakedAnimationController {
     if (this.animationMixer) {
       for (const runtimeClip of bakedClip.runtimeClips) {
         const action = this.bakedRuntimeActions.get(runtimeClip.clip.name);
+        this.releaseBakedRuntimeAction(runtimeClip.clip.name);
+        this.clearBakedAdditiveRuntimeClip(runtimeClip.clip.name);
         try {
           this.animationMixer.uncacheAction(runtimeClip.clip);
         } catch {}
         try {
           this.animationMixer.uncacheClip(runtimeClip.clip);
         } catch {}
-        this.bakedRuntimeActions.delete(runtimeClip.clip.name);
         this.bakedRuntimeClipToSource.delete(runtimeClip.clip.name);
         const actionId = this.getActionId(action);
         if (actionId && action) {
@@ -877,6 +1146,10 @@ export class BakedAnimationController {
           this.actionIds.delete(action);
         }
       }
+    }
+    for (const runtimeClip of bakedClip.runtimeClips) {
+      this.clearBakedAdditiveRuntimeClip(runtimeClip.clip.name);
+      this.bakedRuntimeActions.delete(runtimeClip.clip.name);
     }
 
     this.animationClips = this.animationClips.filter((entry) => entry.name !== clipName);
@@ -1199,8 +1472,24 @@ export class BakedAnimationController {
       next.blendMode = this.getBakedAggregateBlendMode(clipName, next);
       const bakedGroup = this.bakedActionGroups.get(clipName);
       if (bakedGroup) {
-        for (const [channel, action] of bakedGroup.channelActions) {
+        for (const [channel, currentAction] of Array.from(bakedGroup.channelActions)) {
+          const channelBlendMode = resolveBakedChannelBlendMode(channel, next.requestedBlendMode) ?? 'replace';
+          const previousTime = currentAction.time;
+          const wasActive = currentAction.isRunning() || currentAction.paused;
+          const wasPaused = currentAction.paused;
+          const action = this.getOrCreateBakedRuntimeAction(clipName, channel, channelBlendMode);
+          if (!action) {
+            bakedGroup.channelActions.delete(channel);
+            continue;
+          }
+
           this.applyPlaybackStateToBakedAction(action, next, channel);
+          action.time = Math.max(0, Math.min(action.getClip().duration, previousTime));
+          if (action !== currentAction && wasActive) {
+            action.play();
+          }
+          action.paused = wasPaused;
+          bakedGroup.channelActions.set(channel, action);
         }
       }
       this.setPlaybackState(clipName, next);
@@ -1217,6 +1506,10 @@ export class BakedAnimationController {
   seekAnimation(clipName: string, time: number): void {
     const bakedGroup = this.bakedActionGroups.get(clipName);
     if (bakedGroup) {
+      const state = this.getPlaybackStateSnapshot(clipName, {
+        loop: true,
+        source: this.clipSources.get(clipName) ?? 'baked',
+      });
       const duration = this.getBakedSourceClip(clipName)?.sourceClip.duration ?? 0;
       const clamped = Math.max(0, Math.min(duration, Number.isFinite(time) ? time : 0));
       for (const action of bakedGroup.channelActions.values()) {
@@ -1224,6 +1517,9 @@ export class BakedAnimationController {
       }
       try {
         this.animationMixer?.update(0);
+        if (state.blendMode === 'additive') {
+          this.host.reapplyProceduralState?.();
+        }
       } catch {}
       return;
     }
@@ -1234,6 +1530,10 @@ export class BakedAnimationController {
     action.time = Math.max(0, Math.min(duration, Number.isFinite(time) ? time : 0));
     try {
       this.animationMixer?.update(0);
+      const state = this.playbackState.get(clipName);
+      if (state?.blendMode === 'additive') {
+        this.host.reapplyProceduralState?.();
+      }
     } catch {}
   }
 

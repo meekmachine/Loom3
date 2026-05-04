@@ -16,6 +16,7 @@ import { BakedAnimationController, type BakedAnimationHost } from './AnimationTh
 function makeHost(options: { includeHeadBone?: boolean; includeCamera?: boolean } = {}): {
   controller: BakedAnimationController;
   model: Object3D;
+  mesh: Mesh;
   head: Object3D | null;
   camera: Object3D | null;
 } {
@@ -70,7 +71,7 @@ function makeHost(options: { includeHeadBone?: boolean; includeCamera?: boolean 
     isMixedAU: () => false,
   };
 
-  return { controller: new BakedAnimationController(host), model, head, camera };
+  return { controller: new BakedAnimationController(host), model, mesh, head, camera };
 }
 
 function makeTransformClip(model: Object3D, name: string): AnimationClip {
@@ -82,6 +83,12 @@ function makeTransformClip(model: Object3D, name: string): AnimationClip {
 function makeMorphClip(name: string): AnimationClip {
   return new AnimationClip(name, 1, [
     new NumberKeyframeTrack('FaceMesh.morphTargetInfluences[0]', [0, 1], [0, 1]),
+  ]);
+}
+
+function makeMorphPoseClip(name: string, start: number, end: number): AnimationClip {
+  return new AnimationClip(name, 1, [
+    new NumberKeyframeTrack('FaceMesh.morphTargetInfluences[0]', [0, 1], [start, end]),
   ]);
 }
 
@@ -200,6 +207,28 @@ describe('BakedAnimationController playback state normalization', () => {
     controller.seekAnimation('HeadPose', 1);
     const expectedDelta = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.3);
     expect(head!.quaternion.angleTo(expectedDelta)).toBeLessThan(1e-5);
+  });
+
+  it('lets regular clip-backed snippets play over active baked additive face tracks', () => {
+    const { controller, mesh } = makeHost();
+    controller.loadAnimationClips([makeMorphPoseClip('IdleSmile', 0, 0.4)]);
+
+    const bakedHandle = controller.playAnimation('IdleSmile', { blendMode: 'additive', loopMode: 'once' });
+    expect(bakedHandle).toBeTruthy();
+    controller.seekAnimation('IdleSmile', 1);
+    expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(0.4, 5);
+    controller.seekAnimation('IdleSmile', 0);
+
+    const clipHandle = controller.playClip(makeMorphPoseClip('ExpressionOverride', 0, 0.9), {
+      source: 'snippet',
+      loopMode: 'once',
+    });
+    expect(clipHandle).toBeTruthy();
+    controller.update(0.5);
+    expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(0.45, 5);
+
+    controller.update(0.5);
+    expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(0.9, 5);
   });
 
   it('switches baked face channels to delta clips when additive is toggled after playback starts', () => {

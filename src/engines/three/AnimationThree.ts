@@ -262,8 +262,11 @@ const ADDITIVE_BAKED_RUNTIME_CLIP_SUFFIX = '__loom3_additive_delta';
 
 export class BakedAnimationController {
   private host: BakedAnimationHost;
+  // Clip-backed snippets need a later mixer pass so they can override baked additive tracks.
   private animationMixer: AnimationMixer | null = null;
+  private clipAnimationMixer: AnimationMixer | null = null;
   private mixerFinishedListenerAttached = false;
+  private clipMixerFinishedListenerAttached = false;
   private animationClips: AnimationClip[] = [];
   private bakedSourceClips = new Map<string, PartitionedBakedClip>();
   private bakedRuntimeActions = new Map<string, AnimationAction>();
@@ -307,20 +310,26 @@ export class BakedAnimationController {
     delete action.__actionId;
   }
 
-  private uncacheClip(clip?: AnimationClip | null): void {
-    if (!clip || !this.animationMixer) return;
+  private uncacheClip(
+    clip?: AnimationClip | null,
+    mixer: AnimationMixer | null = this.animationMixer
+  ): void {
+    if (!clip || !mixer) return;
     try {
-      this.animationMixer.uncacheClip(clip);
+      mixer.uncacheClip(clip);
     } catch {}
   }
 
-  private uncacheAction(action?: AnimationAction | null): void {
-    if (!action || !this.animationMixer) return;
+  private uncacheAction(
+    action?: AnimationAction | null,
+    mixer: AnimationMixer | null = this.animationMixer
+  ): void {
+    if (!action || !mixer) return;
     try {
       const clip = action.getClip();
       if (clip) {
-        this.animationMixer.uncacheAction(clip);
-        this.animationMixer.uncacheClip(clip);
+        mixer.uncacheAction(clip);
+        mixer.uncacheClip(clip);
       }
     } catch {}
   }
@@ -1006,14 +1015,15 @@ export class BakedAnimationController {
 
   update(dtSeconds: number): void {
     if (this.animationMixer) {
+      this.animationMixer.update(dtSeconds);
+    }
+
+    if (this.clipAnimationMixer) {
       const snapshots = Array.from(this.clipMonitors.values()).map((monitor) => ({
         actionId: monitor.actionId,
         previousTime: monitor.action.time,
       }));
-      this.animationMixer.update(dtSeconds);
-      if (this.hasActiveAdditivePlayback()) {
-        this.host.reapplyProceduralState?.();
-      }
+      this.clipAnimationMixer.update(dtSeconds);
       for (const { actionId, previousTime } of snapshots) {
         const monitor = this.clipMonitors.get(actionId);
         if (!monitor) continue;
@@ -1032,6 +1042,10 @@ export class BakedAnimationController {
         }
       }
     }
+
+    if (this.hasActiveAdditivePlayback()) {
+      this.host.reapplyProceduralState?.();
+    }
   }
 
   dispose(): void {
@@ -1041,6 +1055,12 @@ export class BakedAnimationController {
       this.animationMixer.stopAllAction();
       this.animationMixer = null;
     }
+    if (this.clipAnimationMixer) {
+      this.clipAnimationMixer.stopAllAction();
+      this.clipAnimationMixer = null;
+    }
+    this.mixerFinishedListenerAttached = false;
+    this.clipMixerFinishedListenerAttached = false;
     this.animationClips = [];
     this.bakedSourceClips.clear();
     this.bakedRuntimeActions.clear();
@@ -1218,12 +1238,12 @@ export class BakedAnimationController {
       const actionId = this.getActionId(action);
       const isBaked = (this.clipSources.get(clipName) ?? 'baked') === 'baked';
       action.stop();
-      if (!isBaked && this.animationMixer) {
+      if (!isBaked && this.clipAnimationMixer) {
         try {
           const clip = action.getClip();
           if (clip) {
-            this.animationMixer.uncacheAction(clip);
-            this.animationMixer.uncacheClip(clip);
+            this.clipAnimationMixer.uncacheAction(clip);
+            this.clipAnimationMixer.uncacheClip(clip);
           }
         } catch {}
       }
@@ -1241,11 +1261,11 @@ export class BakedAnimationController {
       const actionId = this.getActionId(clipAction);
       try {
         clipAction.stop();
-        if (this.animationMixer) {
+        if (this.clipAnimationMixer) {
           const clip = clipAction.getClip();
           if (clip) {
-            this.animationMixer.uncacheAction(clip);
-            this.animationMixer.uncacheClip(clip);
+            this.clipAnimationMixer.uncacheAction(clip);
+            this.clipAnimationMixer.uncacheClip(clip);
           }
         }
       } catch {}
@@ -1517,6 +1537,7 @@ export class BakedAnimationController {
       }
       try {
         this.animationMixer?.update(0);
+        this.clipAnimationMixer?.update(0);
         if (state.blendMode === 'additive') {
           this.host.reapplyProceduralState?.();
         }
@@ -1529,7 +1550,7 @@ export class BakedAnimationController {
     const duration = action.getClip().duration;
     action.time = Math.max(0, Math.min(duration, Number.isFinite(time) ? time : 0));
     try {
-      this.animationMixer?.update(0);
+      this.clipAnimationMixer?.update(0);
       const state = this.playbackState.get(clipName);
       if (state?.blendMode === 'additive') {
         this.host.reapplyProceduralState?.();
@@ -1540,6 +1561,9 @@ export class BakedAnimationController {
   setAnimationTimeScale(timeScale: number): void {
     if (this.animationMixer) {
       this.animationMixer.timeScale = timeScale;
+    }
+    if (this.clipAnimationMixer) {
+      this.clipAnimationMixer.timeScale = timeScale;
     }
   }
 
@@ -1977,9 +2001,9 @@ export class BakedAnimationController {
   }
 
   playClip(clip: AnimationClip, options?: ClipOptions): ClipHandle | null {
-    this.ensureMixer();
+    const mixer = this.ensureClipMixer();
 
-    if (!this.animationMixer) {
+    if (!mixer) {
       console.warn('[Loom3] playClip: No model loaded, cannot create mixer');
       return null;
     }
@@ -1999,7 +2023,7 @@ export class BakedAnimationController {
       actionId = this.setActionId(action, clip.name);
     }
     if (!action) {
-      action = this.animationMixer.clipAction(clip);
+      action = mixer.clipAction(clip);
       actionId = this.setActionId(action, clip.name);
     }
 
@@ -2069,10 +2093,8 @@ export class BakedAnimationController {
       stop: () => {
         action.stop();
         // Fully remove action from mixer to prevent accumulation and weight blending issues
-        if (this.animationMixer) {
-          try { this.animationMixer.uncacheAction(clip); } catch {}
-          try { this.animationMixer.uncacheClip(clip); } catch {}
-        }
+        try { mixer.uncacheAction(clip); } catch {}
+        try { mixer.uncacheClip(clip); } catch {}
         this.clipActions.delete(clip.name);
         this.animationActions.delete(clip.name);
         this.animationFinishedCallbacks.delete(clip.name);
@@ -2117,7 +2139,7 @@ export class BakedAnimationController {
       setTime: (t: number) => {
         const clamped = Math.max(0, Math.min(clip.duration, t));
         action.time = clamped;
-        try { this.animationMixer?.update(0); } catch {}
+        try { mixer.update(0); } catch {}
         this.syncClipMonitorTime(monitor, clamped, true);
       },
 
@@ -2163,7 +2185,7 @@ export class BakedAnimationController {
   }
 
   cleanupSnippet(name: string) {
-    if (!this.animationMixer || !this.host.getModel()) return;
+    if (!this.host.getModel()) return;
     for (const [clipName, action] of Array.from(this.clipActions.entries())) {
       if (clipName === name || clipName.startsWith(`${name}_`)) {
         const actionId = this.getActionId(action);
@@ -2171,9 +2193,9 @@ export class BakedAnimationController {
           action.stop();
           // Fully remove action from mixer to prevent accumulation
           const clip = action.getClip();
-          if (clip) {
-            this.animationMixer.uncacheAction(clip);
-            this.animationMixer.uncacheClip(clip);
+          if (clip && this.clipAnimationMixer) {
+            this.clipAnimationMixer.uncacheAction(clip);
+            this.clipAnimationMixer.uncacheClip(clip);
           }
         } catch {}
         this.clipActions.delete(clipName);
@@ -2202,7 +2224,10 @@ export class BakedAnimationController {
       clipActions: Array.from(this.clipActions.entries()).map(([k, a]) => ({ name: k, actionId: this.getActionId(a) })),
       animationActions: Array.from(this.animationActions.entries()).map(([k, a]) => ({ name: k, actionId: this.getActionId(a) })),
       clipHandles: Array.from(this.clipHandles.entries()).map(([k, h]) => ({ name: k, actionId: h.actionId })),
-      mixerActions: (this.animationMixer?._actions || []).map((a: AnimationAction) => ({ name: a?.getClip?.()?.name || '', actionId: this.getActionId(a) })),
+      mixerActions: [
+        ...(this.animationMixer?._actions || []),
+        ...(this.clipAnimationMixer?._actions || []),
+      ].map((a: AnimationAction) => ({ name: a?.getClip?.()?.name || '', actionId: this.getActionId(a) })),
     });
 
     console.log('[Loom3] updateClipParams start', debugSnapshot());
@@ -2353,35 +2378,53 @@ export class BakedAnimationController {
     }
 
     if (this.animationMixer && !this.mixerFinishedListenerAttached) {
-      this.animationMixer.addEventListener('finished', (event: any) => {
-        const action = event.action as AnimationAction;
-        const actionId = this.getActionId(action);
-        if (actionId) {
-          const monitor = this.clipMonitors.get(actionId);
-          if (monitor) {
-            monitor.finishedPending = true;
-            return;
-          }
-        }
-        const clip = action.getClip();
-        const bakedRuntime = this.bakedRuntimeClipToSource.get(clip.name);
-        if (bakedRuntime) {
-          const group = this.bakedActionGroups.get(bakedRuntime.sourceClipName);
-          if (group && group.pendingFinishedChannels.delete(bakedRuntime.channel) && group.pendingFinishedChannels.size === 0) {
-            group.resolveFinished();
-          }
-          return;
-        }
-        const callback = this.animationFinishedCallbacks.get(clip.name);
-        if (callback) {
-          callback();
-          this.animationFinishedCallbacks.delete(clip.name);
-        }
-      });
+      this.animationMixer.addEventListener('finished', (event: any) => this.handleMixerFinished(event));
       this.mixerFinishedListenerAttached = true;
     }
 
     return this.animationMixer;
+  }
+
+  private ensureClipMixer(): AnimationMixer | null {
+    const model = this.host.getModel();
+    if (!model) return null;
+
+    if (!this.clipAnimationMixer) {
+      this.clipAnimationMixer = new AnimationMixer(model);
+    }
+
+    if (this.clipAnimationMixer && !this.clipMixerFinishedListenerAttached) {
+      this.clipAnimationMixer.addEventListener('finished', (event: any) => this.handleMixerFinished(event));
+      this.clipMixerFinishedListenerAttached = true;
+    }
+
+    return this.clipAnimationMixer;
+  }
+
+  private handleMixerFinished(event: any): void {
+    const action = event.action as AnimationAction;
+    const actionId = this.getActionId(action);
+    if (actionId) {
+      const monitor = this.clipMonitors.get(actionId);
+      if (monitor) {
+        monitor.finishedPending = true;
+        return;
+      }
+    }
+    const clip = action.getClip();
+    const bakedRuntime = this.bakedRuntimeClipToSource.get(clip.name);
+    if (bakedRuntime) {
+      const group = this.bakedActionGroups.get(bakedRuntime.sourceClipName);
+      if (group && group.pendingFinishedChannels.delete(bakedRuntime.channel) && group.pendingFinishedChannels.size === 0) {
+        group.resolveFinished();
+      }
+      return;
+    }
+    const callback = this.animationFinishedCallbacks.get(clip.name);
+    if (callback) {
+      callback();
+      this.animationFinishedCallbacks.delete(clip.name);
+    }
   }
 
   private createAnimationHandle(

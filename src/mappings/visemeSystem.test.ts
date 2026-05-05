@@ -5,6 +5,7 @@ import {
   compileVisemeKeys,
   getMeshNamesForVisemeProfile,
   getProfileVisemeSlots,
+  getVisemeBindingTargets,
   getVisemeSlotIndex,
   mapProviderVisemeToSlot,
   resolveVisemeMeshCategory,
@@ -59,6 +60,25 @@ describe('viseme system helpers', () => {
     });
 
     expect(compileVisemeKeys(profile)).toEqual(['Mouth_Aah', 'Mouth_Closed']);
+  });
+
+  it('resolves all weighted targets for runtime playback', () => {
+    const profile = makeProfile({
+      visemeBindings: {
+        aa: {
+          targets: [
+            { morph: 'Mouth_Aah' },
+            { morph: 'Mouth_Wide', weight: 0.5 },
+          ],
+        },
+      },
+    });
+
+    expect(getVisemeBindingTargets(profile, 0)).toEqual([
+      { morph: 'Mouth_Aah', weight: 1 },
+      { morph: 'Mouth_Wide', weight: 0.5 },
+    ]);
+    expect(getVisemeBindingTargets(profile, 1)).toEqual([{ morph: 'BMP', weight: 1 }]);
   });
 
   it('keeps explicit empty viseme mesh routes authoritative', () => {

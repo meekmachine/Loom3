@@ -6,7 +6,14 @@
  */
 
 import type { Mesh, Object3D } from 'three';
-import type { Profile, MeshInfo } from '../mappings/types';
+import type {
+  Profile,
+  MeshInfo,
+  PoseApplyOptions,
+  PoseApplyResult,
+  PoseCaptureOptions,
+  PoseSnapshot,
+} from '../mappings/types';
 import type { PresetType } from '../presets';
 import type { Animation } from './Animation';
 import type { Hair } from './Hair';
@@ -107,6 +114,52 @@ export interface LoomLarge extends Animation, Hair {
    * Get current AU mappings configuration
    */
   getProfile(): Profile;
+
+  // ============================================================================
+  // POSE CONTROL
+  // ============================================================================
+
+  /**
+   * Capture the current evaluated skeleton/expression state as a pose snapshot.
+   * Captured FACS AU values are accompanied by the resolved bone/morph state.
+   */
+  capturePose(options?: PoseCaptureOptions): PoseSnapshot;
+
+  /**
+   * Apply a saved pose snapshot to the current model.
+   */
+  applyPose(pose: PoseSnapshot, options?: PoseApplyOptions): PoseApplyResult;
+
+  /**
+   * Get the GLB/rest pose captured when the model became ready.
+   */
+  getImportedRestPose(): PoseSnapshot | null;
+
+  /**
+   * Reset the current character to the GLB/rest pose.
+   */
+  resetToImportedRestPose(options?: PoseApplyOptions): PoseApplyResult;
+
+  /**
+   * Set the user-authored base pose used by resetToBasePose().
+   */
+  setBasePose(pose: PoseSnapshot | null): PoseSnapshot | null;
+
+  /**
+   * Set a base expression from FACS AU values and capture the resolved parts
+   * into the base pose.
+   */
+  setBaseExpression(aus: Record<string | number, number>, options?: PoseCaptureOptions): PoseSnapshot | null;
+
+  /**
+   * Get the user-authored base pose, falling back to null when none is set.
+   */
+  getBasePose(): PoseSnapshot | null;
+
+  /**
+   * Reset to the user-authored base pose, or the imported rest pose if unset.
+   */
+  resetToBasePose(options?: PoseApplyOptions): PoseApplyResult;
 
 }
 

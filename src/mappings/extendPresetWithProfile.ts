@@ -195,5 +195,10 @@ export function extendPresetWithProfile(base: Profile, extension?: Partial<Profi
     annotationRegions: mergeAnnotationRegions(base.annotationRegions, extension.annotationRegions),
     disabledRegions,
     hairPhysics: mergeHairPhysicsConfig(base.hairPhysics, extension.hairPhysics),
+    characterPoses: base.characterPoses || extension.characterPoses
+      ? mergeRecord(base.characterPoses || {}, extension.characterPoses || {})
+      : undefined,
+    basePoseId: extension.basePoseId ?? base.basePoseId,
+    basePose: extension.basePose ?? base.basePose,
   };
 }

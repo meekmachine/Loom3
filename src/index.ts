@@ -111,6 +111,13 @@ export type {
 
 export type {
   Profile,
+  PoseApplyOptions,
+  PoseApplyResult,
+  PoseCaptureOptions,
+  PoseCaptureSource,
+  PoseSnapshot,
+  PoseTransform,
+  PoseTransformSource,
   MorphTargetsBySide,
   MorphTargetRef,
   HairPhysicsProfileConfig,

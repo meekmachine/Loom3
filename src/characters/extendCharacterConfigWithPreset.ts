@@ -37,6 +37,9 @@ const PROFILE_OVERRIDE_KEYS = [
   'annotationRegions',
   'disabledRegions',
   'hairPhysics',
+  'characterPoses',
+  'basePoseId',
+  'basePose',
 ] as const satisfies readonly (keyof Profile)[];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

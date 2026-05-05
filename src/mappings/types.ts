@@ -7,6 +7,64 @@
 
 import type { BoneBinding, AUInfo, CompositeRotation } from '../core/types';
 
+export type PoseTransformSource = 'mapped-au' | 'semantic-bone' | 'raw-skeleton';
+export type PoseCaptureSource = 'gltf-rest' | 'manual' | 'runtime-capture' | 'animation-frame' | 'animation-stack' | 'base-expression';
+
+export interface PoseTransform {
+  /** Local-space quaternion [x, y, z, w]. */
+  rotation?: [number, number, number, number];
+  /** Local-space position [x, y, z]. */
+  position?: [number, number, number];
+  /** Local-space scale [x, y, z]. */
+  scale?: [number, number, number];
+  /** Where this transform came from in the authoring/runtime layer. */
+  source?: PoseTransformSource;
+}
+
+export interface PoseSnapshot {
+  version?: 1;
+  id?: string;
+  name?: string;
+  kind?: 'base' | 'pose' | 'imported-rest';
+  createdAt?: number;
+  updatedAt?: number;
+  source?: PoseCaptureSource;
+  includeExpression?: boolean;
+  bones?: Record<string, PoseTransform>;
+  /** FACS Action Unit values. These are also resolved into constituent bones/morphs when captured. */
+  aus?: Record<string, number>;
+  /** Morph influences grouped by mesh name, then morph target name. */
+  morphs?: Record<string, Record<string, number>>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PoseCaptureOptions {
+  id?: string;
+  name?: string;
+  kind?: PoseSnapshot['kind'];
+  source?: PoseCaptureSource;
+  includeBones?: boolean;
+  includeExpression?: boolean;
+  includeZeroValues?: boolean;
+}
+
+export interface PoseApplyOptions {
+  includeBones?: boolean;
+  includeExpression?: boolean;
+  clearTransitions?: boolean;
+  stopAnimations?: boolean;
+  resetBeforeApply?: boolean;
+}
+
+export interface PoseApplyResult {
+  appliedBones: string[];
+  missingBones: string[];
+  appliedMorphs: string[];
+  missingMorphs: string[];
+  appliedAUs: string[];
+  warnings: string[];
+}
+
 /**
  * Profile - Complete configuration for AU-to-morph/bone mappings
  *
@@ -163,6 +221,15 @@ export interface Profile {
    * Optional: Hair physics defaults for this preset/profile.
    */
   hairPhysics?: HairPhysicsProfileConfig;
+
+  /** Saved reusable pose snapshots for this character/profile. */
+  characterPoses?: Record<string, PoseSnapshot>;
+
+  /** Saved pose id that should be treated as the user-authored base pose. */
+  basePoseId?: string;
+
+  /** Embedded base pose snapshot used when a saved pose id is unavailable or stale. */
+  basePose?: PoseSnapshot;
 }
 
 /**

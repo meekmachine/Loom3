@@ -19,7 +19,17 @@ import type {
   ReadyPayload,
   LoomLargeConfig,
 } from '../../interfaces/LoomLarge';
-import type { MeshInfo, MorphTargetRef, Profile, HairPhysicsProfileConfig } from '../../mappings/types';
+import type {
+  MeshInfo,
+  MorphTargetRef,
+  Profile,
+  HairPhysicsProfileConfig,
+  PoseApplyOptions,
+  PoseApplyResult,
+  PoseCaptureOptions,
+  PoseSnapshot,
+  PoseTransform,
+} from '../../mappings/types';
 import type {
   TransitionHandle,
   BoneKey,
@@ -150,6 +160,8 @@ export class Loom3 implements LoomLarge {
   // Bones
   private bones: ResolvedBones = {};
   private mixWeights: Record<number, number> = {};
+  private importedRestPose: PoseSnapshot | null = null;
+  private basePose: PoseSnapshot | null = null;
 
   // Viseme state
   private visemeValues: number[] = [];
@@ -188,6 +200,7 @@ export class Loom3 implements LoomLarge {
   ) {
     const basePreset = config.presetType ? getPreset(config.presetType) : CC4_PRESET;
     this.config = extendPresetWithProfile(basePreset, config.profile);
+    this.basePose = this.config.basePose ? this.clonePoseSnapshot(this.config.basePose) : null;
     this.mixWeights = { ...this.config.auMixDefaults };
     this.syncVisemeRuntimeState();
     this.animation = animation || new AnimationThree();
@@ -286,6 +299,17 @@ export class Loom3 implements LoomLarge {
     }
 
     this.rebuildMorphTargetsCache();
+    this.importedRestPose = this.capturePose({
+      id: 'imported-rest',
+      name: 'Imported rest pose',
+      kind: 'imported-rest',
+      source: 'gltf-rest',
+      includeBones: true,
+      includeExpression: true,
+      includeZeroValues: true,
+    });
+    const configuredBasePose = this.resolveConfiguredBasePose();
+    this.basePose = configuredBasePose ? this.clonePoseSnapshot(configuredBasePose) : this.basePose;
 
     if (this.resolvedFaceMeshes.length > 0) {
       for (const faceName of this.resolvedFaceMeshes) {
@@ -467,6 +491,172 @@ export class Loom3 implements LoomLarge {
     this.meshes = [];
     this.model = null;
     this.bones = {};
+    this.importedRestPose = null;
+    this.basePose = null;
+  }
+
+  capturePose(options: PoseCaptureOptions = {}): PoseSnapshot {
+    const includeBones = options.includeBones !== false;
+    const includeExpression = options.includeExpression !== false;
+    const includeZeroValues = options.includeZeroValues === true;
+    const now = Date.now();
+    const pose: PoseSnapshot = {
+      version: 1,
+      id: options.id,
+      name: options.name,
+      kind: options.kind ?? 'pose',
+      source: options.source ?? 'runtime-capture',
+      createdAt: now,
+      updatedAt: now,
+      includeExpression,
+    };
+
+    if (includeBones) {
+      pose.bones = this.captureBoneTransforms();
+    }
+
+    if (includeExpression) {
+      const aus = this.captureAUValues(includeZeroValues);
+      const morphs = this.captureMorphInfluences(includeZeroValues);
+      if (Object.keys(aus).length > 0) pose.aus = aus;
+      if (Object.keys(morphs).length > 0) pose.morphs = morphs;
+    }
+
+    return pose;
+  }
+
+  applyPose(pose: PoseSnapshot, options: PoseApplyOptions = {}): PoseApplyResult {
+    const result = this.createPoseApplyResult();
+    const includeBones = options.includeBones !== false;
+    const includeExpression = options.includeExpression !== false;
+
+    if (options.clearTransitions !== false) {
+      this.clearTransitions();
+    }
+    if (options.stopAnimations) {
+      this.stopAllAnimations();
+    }
+    if (options.resetBeforeApply && this.importedRestPose && pose !== this.importedRestPose) {
+      this.applyPose(this.importedRestPose, {
+        includeBones: true,
+        includeExpression: true,
+        clearTransitions: false,
+        stopAnimations: false,
+        resetBeforeApply: false,
+      });
+    }
+
+    if (includeExpression) {
+      this.auValues = {};
+      this.auBalances = {};
+      const visemeCount = getProfileVisemeSlots(this.config).length;
+      this.visemeValues = new Array(visemeCount).fill(0);
+      this.visemeJawScales = new Array(visemeCount).fill(1);
+
+      if (pose.aus) {
+        for (const [auId, value] of Object.entries(pose.aus)) {
+          const numericAuId = Number(auId);
+          if (!Number.isFinite(numericAuId)) {
+            result.warnings.push(`Skipped invalid AU "${auId}".`);
+            continue;
+          }
+          this.setAU(numericAuId, value);
+          result.appliedAUs.push(String(auId));
+        }
+      }
+      this.flushPendingComposites();
+    }
+
+    if (includeBones && pose.bones) {
+      this.applyPoseBones(pose.bones, result);
+    }
+
+    if (includeExpression && pose.morphs) {
+      this.applyPoseMorphs(pose.morphs, result);
+    }
+
+    this.flushPendingComposites();
+    if (this.model) {
+      this.model.updateMatrixWorld(true);
+    }
+    return result;
+  }
+
+  getImportedRestPose(): PoseSnapshot | null {
+    return this.importedRestPose ? this.clonePoseSnapshot(this.importedRestPose) : null;
+  }
+
+  resetToImportedRestPose(options: PoseApplyOptions = {}): PoseApplyResult {
+    if (this.importedRestPose) {
+      return this.applyPose(this.importedRestPose, {
+        includeBones: true,
+        includeExpression: true,
+        ...options,
+        resetBeforeApply: false,
+      });
+    }
+
+    this.resetToNeutral();
+    return this.createPoseApplyResult();
+  }
+
+  setBasePose(pose: PoseSnapshot | null): PoseSnapshot | null {
+    this.basePose = pose ? this.clonePoseSnapshot({ ...pose, kind: 'base' }) : null;
+    return this.getBasePose();
+  }
+
+  setBaseExpression(aus: Record<string | number, number>, options: PoseCaptureOptions = {}): PoseSnapshot | null {
+    if (!this.model) return null;
+    this.clearTransitions();
+
+    for (const [auId, value] of Object.entries(aus)) {
+      const numericAuId = Number(auId);
+      if (Number.isFinite(numericAuId)) {
+        this.setAU(numericAuId, value);
+      }
+    }
+    this.flushPendingComposites();
+    if (this.model) {
+      this.model.updateMatrixWorld(true);
+    }
+
+    const pose = this.capturePose({
+      id: options.id,
+      name: options.name ?? 'Base expression',
+      kind: 'base',
+      source: 'base-expression',
+      includeBones: true,
+      includeExpression: true,
+      includeZeroValues: options.includeZeroValues,
+    });
+    pose.aus = Object.fromEntries(
+      Object.entries(aus)
+        .filter(([auId, value]) => Number.isFinite(Number(auId)) && Number.isFinite(value))
+        .map(([auId, value]) => [String(auId), value])
+    );
+    pose.metadata = {
+      ...pose.metadata,
+      baseExpressionAUs: { ...pose.aus },
+    };
+    this.setBasePose(pose);
+    return this.getBasePose();
+  }
+
+  getBasePose(): PoseSnapshot | null {
+    return this.basePose ? this.clonePoseSnapshot(this.basePose) : null;
+  }
+
+  resetToBasePose(options: PoseApplyOptions = {}): PoseApplyResult {
+    const pose = this.basePose ?? this.resolveConfiguredBasePose();
+    if (pose) {
+      return this.applyPose(pose, {
+        includeBones: true,
+        includeExpression: true,
+        ...options,
+        resetBeforeApply: options.resetBeforeApply ?? true,
+      });
+    }
+    return this.resetToImportedRestPose(options);
   }
 
   // ============================================================================
@@ -1431,6 +1621,8 @@ export class Loom3 implements LoomLarge {
 
   setProfile(profile: Profile): void {
     this.config = profile;
+    const configuredBasePose = this.resolveConfiguredBasePose();
+    this.basePose = configuredBasePose ? this.clonePoseSnapshot(configuredBasePose) : null;
     this.compositeRotations = this.config.compositeRotations || CC4_COMPOSITE_ROTATIONS;
     this.auToCompositeMap = buildAUToCompositeMap(this.compositeRotations);
     this.mixWeights = { ...profile.auMixDefaults };
@@ -1532,6 +1724,191 @@ export class Loom3 implements LoomLarge {
   // ============================================================================
   // PRIVATE METHODS
   // ============================================================================
+
+  private createPoseApplyResult(): PoseApplyResult {
+    return {
+      appliedBones: [],
+      missingBones: [],
+      appliedMorphs: [],
+      missingMorphs: [],
+      appliedAUs: [],
+      warnings: [],
+    };
+  }
+
+  private clonePoseSnapshot(pose: PoseSnapshot): PoseSnapshot {
+    return JSON.parse(JSON.stringify(pose)) as PoseSnapshot;
+  }
+
+  private resolveConfiguredBasePose(): PoseSnapshot | null {
+    if (this.config.basePose) {
+      return this.config.basePose;
+    }
+    const basePoseId = this.config.basePoseId;
+    if (basePoseId && this.config.characterPoses?.[basePoseId]) {
+      return this.config.characterPoses[basePoseId];
+    }
+    return null;
+  }
+
+  private getPoseBoneKey(object: Object3D): string {
+    return object.name || (object as any).uuid;
+  }
+
+  private collectPoseBoneObjects(): Object3D[] {
+    const objects: Object3D[] = [];
+    const seen = new Set<string>();
+    const semanticObjects = new Set(
+      Object.values(this.bones)
+        .map((entry) => entry?.obj)
+        .filter((entry): entry is Object3D => Boolean(entry))
+    );
+
+    const addObject = (object: Object3D) => {
+      const key = this.getPoseBoneKey(object);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      objects.push(object);
+    };
+
+    if (this.model) {
+      this.model.traverse((object: any) => {
+        if (object?.isBone || object?.type === 'Bone' || semanticObjects.has(object)) {
+          addObject(object);
+        }
+      });
+    }
+
+    for (const object of semanticObjects) {
+      addObject(object);
+    }
+
+    return objects;
+  }
+
+  private getPoseBoneObjectMap(): Map<string, Object3D> {
+    const byName = new Map<string, Object3D>();
+    for (const object of this.collectPoseBoneObjects()) {
+      byName.set(this.getPoseBoneKey(object), object);
+    }
+    return byName;
+  }
+
+  private captureBoneTransforms(): Record<string, PoseTransform> {
+    const bones: Record<string, PoseTransform> = {};
+    const semanticEntries = new Map<Object3D, string>();
+    for (const [semanticKey, entry] of Object.entries(this.bones)) {
+      if (entry?.obj) semanticEntries.set(entry.obj, semanticKey);
+    }
+
+    for (const object of this.collectPoseBoneObjects()) {
+      const semanticKey = semanticEntries.get(object);
+      const key = this.getPoseBoneKey(object);
+      bones[key] = {
+        rotation: [object.quaternion.x, object.quaternion.y, object.quaternion.z, object.quaternion.w],
+        position: [object.position.x, object.position.y, object.position.z],
+        scale: [object.scale.x, object.scale.y, object.scale.z],
+        source: semanticKey ? 'semantic-bone' : 'raw-skeleton',
+      };
+    }
+
+    return bones;
+  }
+
+  private captureAUValues(includeZeroValues: boolean): Record<string, number> {
+    const aus: Record<string, number> = {};
+    const knownAuIds = new Set<number>();
+
+    for (const key of Object.keys(this.config.auInfo || {})) {
+      const auId = Number(key);
+      if (Number.isFinite(auId)) knownAuIds.add(auId);
+    }
+    for (const key of Object.keys(this.auValues)) {
+      const auId = Number(key);
+      if (Number.isFinite(auId)) knownAuIds.add(auId);
+    }
+
+    for (const auId of knownAuIds) {
+      const value = this.auValues[auId] ?? 0;
+      if (!includeZeroValues && Math.abs(value) <= 0.0001) continue;
+      aus[String(auId)] = value;
+    }
+
+    return aus;
+  }
+
+  private captureMorphInfluences(includeZeroValues: boolean): Record<string, Record<string, number>> {
+    const morphs: Record<string, Record<string, number>> = {};
+    for (const mesh of this.meshes) {
+      const dict = mesh.morphTargetDictionary;
+      const infl = mesh.morphTargetInfluences;
+      if (!dict || !infl) continue;
+      const meshName = mesh.name || (mesh as any).uuid;
+      const meshMorphs: Record<string, number> = {};
+      for (const [morphName, index] of Object.entries(dict)) {
+        const value = infl[index] ?? 0;
+        if (!includeZeroValues && Math.abs(value) <= 0.0001) continue;
+        meshMorphs[morphName] = value;
+      }
+      if (Object.keys(meshMorphs).length > 0) {
+        morphs[meshName] = meshMorphs;
+      }
+    }
+    return morphs;
+  }
+
+  private applyPoseBones(bones: Record<string, PoseTransform>, result: PoseApplyResult): void {
+    const bonesByName = this.getPoseBoneObjectMap();
+    for (const [boneName, transform] of Object.entries(bones)) {
+      const object = bonesByName.get(boneName);
+      if (!object) {
+        result.missingBones.push(boneName);
+        continue;
+      }
+      if (transform.position) {
+        object.position.fromArray(transform.position);
+      }
+      if (transform.rotation) {
+        object.quaternion.fromArray(transform.rotation);
+      }
+      if (transform.scale) {
+        object.scale.fromArray(transform.scale);
+      }
+      object.updateMatrixWorld(false);
+      result.appliedBones.push(boneName);
+    }
+  }
+
+  private applyPoseMorphs(morphs: Record<string, Record<string, number>>, result: PoseApplyResult): void {
+    for (const [meshName, meshMorphs] of Object.entries(morphs)) {
+      const mesh = this.meshByName.get(meshName) ?? this.meshes.find((candidate) => (candidate.name || (candidate as any).uuid) === meshName);
+      if (!mesh) {
+        for (const morphName of Object.keys(meshMorphs)) {
+          result.missingMorphs.push(`${meshName}.${morphName}`);
+        }
+        continue;
+      }
+
+      const dict = mesh.morphTargetDictionary as Record<string, number> | undefined;
+      const infl = mesh.morphTargetInfluences;
+      if (!dict || !infl) {
+        for (const morphName of Object.keys(meshMorphs)) {
+          result.missingMorphs.push(`${meshName}.${morphName}`);
+        }
+        continue;
+      }
+
+      for (const [morphName, value] of Object.entries(meshMorphs)) {
+        const index = dict[morphName];
+        if (index === undefined || index >= infl.length) {
+          result.missingMorphs.push(`${meshName}.${morphName}`);
+          continue;
+        }
+        infl[index] = clamp01(value);
+        result.appliedMorphs.push(`${meshName}.${morphName}`);
+      }
+    }
+  }
 
   private computeSideValues(base: number, balance?: number): { left: number; right: number } {
     const b = Math.max(-1, Math.min(1, balance ?? 0));

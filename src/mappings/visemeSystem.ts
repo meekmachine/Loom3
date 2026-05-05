@@ -29,6 +29,15 @@ function bindingTargets(binding: VisemeBinding | undefined): MorphTargetRef[] {
   return binding.morph !== undefined && binding.morph !== '' ? [binding.morph] : [];
 }
 
+export interface ResolvedVisemeBindingTarget {
+  morph: MorphTargetRef;
+  weight: number;
+}
+
+function normalizeBindingWeight(weight: number | undefined): number {
+  return Number.isFinite(weight) ? Math.max(0, weight ?? 1) : 1;
+}
+
 export function getProfileVisemeSlots(profile: Profile): VisemeSlot[] {
   if (profile.visemeSlots && profile.visemeSlots.length > 0) {
     return [...profile.visemeSlots].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -57,6 +66,32 @@ export function compileVisemeKeys(profile: Profile): MorphTargetRef[] {
     const target = bindingTargets(profile.visemeBindings?.[slot.id])[0];
     return target ?? profile.visemeKeys?.[index] ?? '';
   });
+}
+
+export function getVisemeBindingTargets(profile: Profile, visemeIndex: number): ResolvedVisemeBindingTarget[] {
+  const slots = getProfileVisemeSlots(profile);
+  const slot = slots[visemeIndex];
+  const binding = slot ? profile.visemeBindings?.[slot.id] : undefined;
+
+  const boundTargets = binding?.targets
+    ?.filter((target) => target.morph !== undefined && target.morph !== '')
+    .map((target) => ({
+      morph: target.morph,
+      weight: normalizeBindingWeight(target.weight),
+    }));
+
+  if (boundTargets && boundTargets.length > 0) {
+    return boundTargets;
+  }
+
+  if (binding?.morph !== undefined && binding.morph !== '') {
+    return [{ morph: binding.morph, weight: 1 }];
+  }
+
+  const legacyTarget = profile.visemeKeys?.[visemeIndex];
+  return legacyTarget !== undefined && legacyTarget !== ''
+    ? [{ morph: legacyTarget, weight: 1 }]
+    : [];
 }
 
 export function getVisemeJawAmounts(profile: Profile): number[] | undefined {

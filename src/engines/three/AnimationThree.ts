@@ -44,7 +44,13 @@ import type {
 } from '../../core/types';
 import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import type { Profile } from '../../mappings/types';
-import { getMeshNamesForAUProfile, getMeshNamesForVisemeProfile } from '../../mappings/visemeSystem';
+import {
+  getMeshNamesForAUProfile,
+  getMeshNamesForVisemeProfile,
+  getProfileVisemeSlots,
+  getVisemeBindingTargets,
+  getVisemeJawAmounts,
+} from '../../mappings/visemeSystem';
 import type { ResolvedBones } from './types';
 import { getSideScale, resolveCurveBalance } from './balanceUtils';
 import {
@@ -1699,13 +1705,14 @@ export class BakedAnimationController {
     const globalBalance = options?.balance ?? 0;
     const balanceMap = options?.balanceMap;
     const meshNames = options?.meshNames;
+    const visemeSlotCount = getProfileVisemeSlots(config).length;
     let maxTime = 0;
 
     const isNumericAU = (id: string) => /^\d+$/.test(id);
     const isVisemeIndex = (id: string) => {
       if (options?.snippetCategory !== 'visemeSnippet') return false;
       const num = Number(id);
-      return !Number.isNaN(num) && num >= 0 && num < config.visemeKeys.length;
+      return !Number.isNaN(num) && num >= 0 && num < visemeSlotCount;
     };
 
     const sampleAt = (arr: Array<{ time: number; intensity: number }>, t: number) => {
@@ -1750,11 +1757,13 @@ export class BakedAnimationController {
 
         if (isVisemeIndex(curveId)) {
           const visemeMeshNames = this.getMeshNamesForViseme(config, meshNames);
-          const visemeKey = config.visemeKeys[auId];
-          if (typeof visemeKey === 'number') {
-            this.addMorphIndexTracks(tracks, visemeKey, keyframes, intensityScale, visemeMeshNames);
-          } else if (visemeKey) {
-            this.addMorphTracks(tracks, visemeKey, keyframes, intensityScale, visemeMeshNames);
+          for (const target of getVisemeBindingTargets(config, auId)) {
+            const effectiveScale = intensityScale * target.weight;
+            if (typeof target.morph === 'number') {
+              this.addMorphIndexTracks(tracks, target.morph, keyframes, effectiveScale, visemeMeshNames);
+            } else if (target.morph) {
+              this.addMorphTracks(tracks, target.morph, keyframes, effectiveScale, visemeMeshNames);
+            }
           }
         } else {
           const auMeshNames = this.getMeshNamesForAU(auId, config, meshNames);
@@ -1803,7 +1812,7 @@ export class BakedAnimationController {
     // This replicates transitionViseme behavior for clip-based playback
     const autoVisemeJaw = options?.autoVisemeJaw !== false; // Default true
     const jawScale = options?.jawScale ?? 1.0;
-    const visemeJawAmounts = config.visemeJawAmounts;
+    const visemeJawAmounts = getVisemeJawAmounts(config);
 
     if (
       autoVisemeJaw &&
@@ -1823,7 +1832,7 @@ export class BakedAnimationController {
           let jawAmount = 0;
 
           // Sum contributions from all active visemes at time t
-          for (let visemeIdx = 0; visemeIdx < config.visemeKeys.length; visemeIdx++) {
+          for (let visemeIdx = 0; visemeIdx < visemeSlotCount; visemeIdx++) {
             const visemeCurve = curves[String(visemeIdx)];
             if (!visemeCurve) continue;
 

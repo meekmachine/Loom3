@@ -46,8 +46,10 @@ import { CC4_PRESET, CC4_MESHES, COMPOSITE_ROTATIONS as CC4_COMPOSITE_ROTATIONS 
 import { getPreset } from '../../presets';
 import { extendPresetWithProfile } from '../../mappings/extendPresetWithProfile';
 import {
+  getProfileVisemeSlots,
   getMeshNamesForAUProfile,
   getMeshNamesForVisemeProfile,
+  getVisemeBindingTargets,
   getVisemeJawAmounts,
   getVisemeSlotIndex,
 } from '../../mappings/visemeSystem';
@@ -89,6 +91,7 @@ function clamp01(x: number) {
 }
 
 type MorphTargetHandle = { infl: number[]; idx: number };
+type WeightedMorphTargetHandle = MorphTargetHandle & { weight: number };
 type ResolvedMorphTargetsBySide = {
   left: MorphTargetHandle[];
   right: MorphTargetHandle[];
@@ -142,7 +145,7 @@ export class Loom3 implements LoomLarge {
   private morphKeyCache = new Map<string, MorphTargetHandle[]>();
   private morphIndexCache = new Map<string, MorphTargetHandle[]>();
   private resolvedAUMorphTargets = new Map<number, ResolvedMorphTargetsBySide>();
-  private resolvedVisemeTargets: MorphTargetHandle[][] = [];
+  private resolvedVisemeTargets: WeightedMorphTargetHandle[][] = [];
 
   // Bones
   private bones: ResolvedBones = {};
@@ -335,12 +338,17 @@ export class Loom3 implements LoomLarge {
       this.resolvedAUMorphTargets.set(auId, resolved);
     }
 
-    for (let i = 0; i < (this.config.visemeKeys || []).length; i += 1) {
-      const key = this.config.visemeKeys[i];
+    for (let i = 0; i < getProfileVisemeSlots(this.config).length; i += 1) {
       const visemeMeshNames = this.getMeshNamesForViseme();
-      const targets = typeof key === 'number'
-        ? this.resolveMorphTargetsByIndex(key, visemeMeshNames)
-        : this.resolveMorphTargets(key, visemeMeshNames);
+      const targets: WeightedMorphTargetHandle[] = [];
+      for (const bindingTarget of getVisemeBindingTargets(this.config, i)) {
+        const resolved = typeof bindingTarget.morph === 'number'
+          ? this.resolveMorphTargetsByIndex(bindingTarget.morph, visemeMeshNames)
+          : this.resolveMorphTargets(bindingTarget.morph, visemeMeshNames);
+        for (const target of resolved) {
+          targets.push({ ...target, weight: bindingTarget.weight });
+        }
+      }
       this.resolvedVisemeTargets[i] = targets;
     }
   }
@@ -962,53 +970,34 @@ export class Loom3 implements LoomLarge {
   // ============================================================================
 
   setViseme(visemeIndex: number, value: number, jawScale = 1.0): void {
-    if (visemeIndex < 0 || visemeIndex >= this.config.visemeKeys.length) return;
+    if (visemeIndex < 0 || visemeIndex >= this.visemeValues.length) return;
 
     const val = clamp01(value);
     this.visemeValues[visemeIndex] = val;
     this.visemeJawScales[visemeIndex] = jawScale;
-
-    const targets = this.resolvedVisemeTargets[visemeIndex];
-    if (targets && targets.length > 0) {
-      this.applyMorphTargets(targets, val);
-    } else {
-      const morphKey = this.config.visemeKeys[visemeIndex];
-      const visemeMeshNames = this.getMeshNamesForViseme();
-      if (typeof morphKey === 'number') {
-        this.setMorphInfluence(morphKey, val, visemeMeshNames);
-      } else if (typeof morphKey === 'string') {
-        this.setMorph(morphKey, val, visemeMeshNames);
-      }
-    }
-
-    const jawAmount = this.getVisemeJawAmount(visemeIndex) * val * jawScale;
-    if (Math.abs(jawScale) > 1e-6 && Math.abs(jawAmount) > 1e-6) {
-      this.updateBoneRotation('JAW', 'pitch', jawAmount);
-    }
+    this.applyVisemeRuntimeState();
   }
 
   transitionViseme(visemeIndex: number, to: number, durationMs = 80, jawScale = 1.0): TransitionHandle {
-    if (visemeIndex < 0 || visemeIndex >= this.config.visemeKeys.length) {
+    if (visemeIndex < 0 || visemeIndex >= this.visemeValues.length) {
       return { promise: Promise.resolve(), pause: () => {}, resume: () => {}, cancel: () => {} };
     }
 
-    const morphKey = this.config.visemeKeys[visemeIndex];
     const target = clamp01(to);
-    this.visemeValues[visemeIndex] = target;
+    const from = this.visemeValues[visemeIndex] ?? 0;
     this.visemeJawScales[visemeIndex] = jawScale;
-    const visemeMeshNames = this.getMeshNamesForViseme();
 
-    const morphHandle = typeof morphKey === 'number'
-      ? this.transitionMorphInfluence(morphKey, target, durationMs, visemeMeshNames)
-      : this.transitionMorph(morphKey, target, durationMs, visemeMeshNames);
-
-    const jawAmount = this.getVisemeJawAmount(visemeIndex) * target * jawScale;
-    if (Math.abs(jawScale) <= 1e-6 || Math.abs(jawAmount) <= 1e-6) {
-      return morphHandle;
-    }
-
-    const jawHandle = this.transitionBoneRotation('JAW', 'pitch', jawAmount, durationMs);
-    return this.combineHandles([morphHandle, jawHandle]);
+    return this.animation.addTransition(
+      `viseme_value_${visemeIndex}`,
+      from,
+      target,
+      durationMs,
+      (value) => {
+        this.visemeValues[visemeIndex] = clamp01(value);
+        this.visemeJawScales[visemeIndex] = jawScale;
+        this.applyVisemeRuntimeState();
+      }
+    );
   }
 
   setVisemeById(slotId: string, value: number, jawScale = 1.0): void {
@@ -1069,8 +1058,9 @@ export class Loom3 implements LoomLarge {
 
   resetToNeutral(): void {
     this.auValues = {};
-    this.visemeValues = new Array(this.config.visemeKeys.length).fill(0);
-    this.visemeJawScales = new Array(this.config.visemeKeys.length).fill(1);
+    const visemeCount = getProfileVisemeSlots(this.config).length;
+    this.visemeValues = new Array(visemeCount).fill(0);
+    this.visemeJawScales = new Array(visemeCount).fill(1);
     this.translations = {};
     this.initBoneRotations();
     this.clearTransitions();
@@ -1110,11 +1100,7 @@ export class Loom3 implements LoomLarge {
       this.setAU(auId, value, this.auBalances[auId]);
     }
 
-    for (let visemeIndex = 0; visemeIndex < this.visemeValues.length; visemeIndex += 1) {
-      const value = this.visemeValues[visemeIndex] ?? 0;
-      if (value <= 0) continue;
-      this.setViseme(visemeIndex, value, this.visemeJawScales[visemeIndex] ?? 1);
-    }
+    this.applyVisemeRuntimeState();
 
     if (this.model) {
       this.flushPendingComposites();
@@ -1571,6 +1557,41 @@ export class Loom3 implements LoomLarge {
     }
   }
 
+  private applyVisemeRuntimeState(): void {
+    for (const targets of this.resolvedVisemeTargets) {
+      for (const target of targets || []) {
+        if (target.idx < target.infl.length) {
+          target.infl[target.idx] = 0;
+        }
+      }
+    }
+
+    for (let index = 0; index < this.visemeValues.length; index += 1) {
+      const value = clamp01(this.visemeValues[index] ?? 0);
+      if (value <= 1e-6) continue;
+      const targets = this.resolvedVisemeTargets[index] || [];
+      for (const target of targets) {
+        if (target.idx >= target.infl.length) continue;
+        const weighted = clamp01(value * target.weight);
+        target.infl[target.idx] = Math.max(target.infl[target.idx] ?? 0, weighted);
+      }
+    }
+
+    this.updateBoneRotation('JAW', 'pitch', this.getActiveVisemeJawAmount());
+  }
+
+  private getActiveVisemeJawAmount(): number {
+    let jawAmount = 0;
+    for (let index = 0; index < this.visemeValues.length; index += 1) {
+      const value = clamp01(this.visemeValues[index] ?? 0);
+      if (value <= 1e-6) continue;
+      const jawScale = this.visemeJawScales[index] ?? 1;
+      if (Math.abs(jawScale) <= 1e-6) continue;
+      jawAmount = Math.max(jawAmount, this.getVisemeJawAmount(index) * value * jawScale);
+    }
+    return jawAmount;
+  }
+
   private getMorphValue(key: string): number {
     if (this.faceMesh) {
       const dict = this.faceMesh.morphTargetDictionary;
@@ -1800,7 +1821,7 @@ export class Loom3 implements LoomLarge {
   }
 
   private syncVisemeRuntimeState(): void {
-    const visemeCount = this.config.visemeKeys.length;
+    const visemeCount = getProfileVisemeSlots(this.config).length;
     this.visemeValues = Array.from(
       { length: visemeCount },
       (_, index) => this.visemeValues[index] ?? 0

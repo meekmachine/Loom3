@@ -141,6 +141,7 @@ export {
   getMeshNamesForAUProfile,
   getMeshNamesForVisemeProfile,
   getProfileVisemeSlots,
+  getVisemeBindingTargets,
   getVisemeJawAmounts,
   getVisemeSlotIndex,
   mapProviderVisemeToSlot,
@@ -150,6 +151,7 @@ export {
 export type {
   ProviderVisemeEvent,
   ProviderVisemeMatch,
+  ResolvedVisemeBindingTarget,
 } from './mappings/visemeSystem';
 
 // ============================================================================

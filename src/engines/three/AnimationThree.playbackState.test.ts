@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   AnimationClip,
   BufferGeometry,
@@ -116,6 +116,13 @@ function makeSceneClip(camera: Object3D, name: string): AnimationClip {
     new NumberKeyframeTrack(`${camera.uuid}.position[x]`, [0, 1], [0, 1]),
   ]);
 }
+
+const smileCurves = {
+  smile: [
+    { time: 0, intensity: 0 },
+    { time: 1, intensity: 1 },
+  ],
+};
 
 describe('BakedAnimationController playback state normalization', () => {
   it('normalizes baked clip options into the shared animation state surface', () => {
@@ -375,5 +382,83 @@ describe('BakedAnimationController playback state normalization', () => {
 
     handle?.play();
     expect(controller.getAnimationState('Wave')?.time).toBeCloseTo(1, 5);
+  });
+
+  it('updates an active dynamic clip weight by actionId without rebuilding or touching name matches', () => {
+    const { controller } = makeHost();
+    const firstHandle = controller.buildClip('gesture', smileCurves, {
+      loopMode: 'repeat',
+      weight: 1,
+    });
+    const secondHandle = controller.buildClip('gesture_alt', smileCurves, {
+      loopMode: 'repeat',
+      weight: 1,
+    });
+    expect(firstHandle?.actionId).toBeTruthy();
+    expect(secondHandle?.actionId).toBeTruthy();
+
+    controller.seekAnimation('gesture', 0.5);
+    const buildSpy = vi.spyOn(controller, 'buildClip');
+
+    expect(controller.updateClipParams('gesture', {
+      actionId: secondHandle!.actionId,
+      weight: 0.25,
+    })).toBe(true);
+
+    expect(buildSpy).not.toHaveBeenCalled();
+    expect(controller.getAnimationState('gesture')).toMatchObject({
+      actionId: firstHandle!.actionId,
+      weight: 1,
+      time: 0.5,
+    });
+    expect(controller.getAnimationState('gesture_alt')).toMatchObject({
+      actionId: secondHandle!.actionId,
+      weight: 0.25,
+    });
+  });
+
+  it('updates dynamic clip repeat count and reverse playback without resetting loop mode or time', () => {
+    const { controller } = makeHost();
+    const handle = controller.buildClip('loopingGesture', smileCurves, {
+      loopMode: 'repeat',
+      repeatCount: 5,
+      playbackRate: 2,
+      reverse: false,
+      weight: 0.8,
+    });
+    expect(handle?.actionId).toBeTruthy();
+
+    controller.seekAnimation('loopingGesture', 0.4);
+
+    expect(controller.updateClipParams('loopingGesture', { repeatCount: 2 })).toBe(true);
+    expect(controller.getAnimationState('loopingGesture')).toMatchObject({
+      loopMode: 'repeat',
+      repeatCount: 2,
+      playbackRate: 2,
+      reverse: false,
+      weight: 0.8,
+      time: 0.4,
+    });
+
+    expect(controller.updateClipParams('loopingGesture', { reverse: true })).toBe(true);
+    expect(controller.getAnimationState('loopingGesture')).toMatchObject({
+      loopMode: 'repeat',
+      repeatCount: 2,
+      playbackRate: 2,
+      reverse: true,
+      weight: 0.8,
+      time: 0.4,
+    });
+  });
+
+  it('returns false when no active dynamic clip matches the requested actionId', () => {
+    const { controller } = makeHost();
+    controller.buildClip('gesture', smileCurves);
+
+    expect(controller.updateClipParams('gesture', {
+      actionId: 'missing-action',
+      weight: 0.5,
+    })).toBe(false);
+    expect(controller.getAnimationState('gesture')).toMatchObject({ weight: 1 });
   });
 });

@@ -1,49 +1,54 @@
 # Annotation Configuration
 
-Loom3 exposes annotation configuration through `annotationRegions` on `Profile`, and `extendCharacterConfigWithPreset(...)` projects that canonical preset/profile shape into the runtime `config.regions` surface consumed by camera and marker tooling.
+Loom3 exposes annotation configuration through `annotationRegions` on `Profile`. Use `extendProfileConfigWithPreset(...)` when an app has a saved model/profile record and needs one preset-expanded runtime shape for camera and marker tooling.
 
-There are still two related shapes to know about:
+There are three related shapes to know about:
 
 1. The canonical Loom3 preset/profile shape: `annotationRegions`
-2. The runtime/legacy mirror on `CharacterConfig`: `config.regions`
+2. The saved model/profile input shape: `ProfileRuntimeConfig` or `CharacterProfile`, selected with `profilePresetId`
+3. The runtime/legacy mirror for older camera and marker consumers: `config.regions`
 
 ## Runtime Extension
 
-Camera and marker tooling in LoomLarge still consumes top-level region entries like this:
+New stored records should select the base profile with `profilePresetId` and put reusable overrides on `Profile` fields such as `annotationRegions`:
 
 ```ts
-const config = {
+import { extendProfileConfigWithPreset, type CharacterProfile } from '@lovelace_lol/loom3';
+
+const savedProfile: CharacterProfile = {
   characterId: 'jonathan',
   characterName: 'Jonathan',
   modelPath: 'characters/jonathan_new.glb',
-  auPresetType: 'cc4',
-  regions: [
+  profilePresetId: 'cc4',
+  annotationRegions: [
     {
       name: 'left_eye',
-      bones: ['CC_Base_L_Eye'],
-      parent: 'head',
       paddingFactor: 0.5,
       cameraAngle: 45,
     },
     {
       name: 'right_eye',
-      bones: ['CC_Base_R_Eye'],
-      parent: 'head',
       paddingFactor: 0.5,
       cameraAngle: 315,
     },
   ],
 };
+
+const runtimeConfig = extendProfileConfigWithPreset(savedProfile);
 ```
 
-When you call `extendCharacterConfigWithPreset(...)`, Loom3 extends these shapes with this precedence:
+`runtimeConfig.annotationRegions` and `runtimeConfig.regions` contain the preset regions plus saved overrides. The `regions` mirror exists so older camera and marker tooling can keep consuming top-level region entries while new Loom3 data stays profile-first.
+
+When you call `extendProfileConfigWithPreset(...)`, Loom3 extends these shapes with this precedence:
 
 1. preset `annotationRegions`
-2. profile `annotationRegions` overrides by region name
+2. top-level profile fields and `annotationRegions` overrides by region name
 3. legacy nested `config.profile.annotationRegions` for compatibility
 4. top-level `config.regions` only as a fallback when canonical annotation overrides are absent
 
 If canonical annotation overrides exist, legacy `config.regions` entries are only preserved for non-preset extras that do not collide by region name.
+
+`CharacterConfig`, `auPresetType`, and `extendCharacterConfigWithPreset(...)` remain exported as deprecated compatibility names for downstream apps that still persist older LoomLarge-style character records. New code should use `CharacterProfile` or `ProfileRuntimeConfig`, `profilePresetId`, and `extendProfileConfigWithPreset(...)`.
 
 ## Loom3 Profile Shape
 

@@ -155,7 +155,38 @@ export type {
 } from './mappings/visemeSystem';
 
 // ============================================================================
-// CHARACTER CONFIG (Regions, Markers)
+// PROFILES
+// ============================================================================
+
+export type {
+  ProfileOverrides,
+  ProfilePresetId,
+  ProfileRuntimeConfig,
+  ResolvedProfileRuntimeConfig,
+  PresetBackedProfileRuntimeConfig,
+  CustomProfileRuntimeConfig,
+  CharacterProfile,
+  ProfileRegistry,
+  // Deprecated compatibility types
+  CharacterConfig,
+  CharacterRegistry,
+} from './profiles/types';
+
+export {
+  extendProfileConfigWithPreset,
+  extractLegacyCharacterProfileOverrides,
+  getProfilePresetId,
+  mergeProfileRegionsByName,
+  resolveProfileFromPreset,
+  // Deprecated compatibility exports
+  applyCharacterProfileToPreset,
+  extendCharacterConfigWithPreset,
+  extractProfileOverrides,
+  mergeRegionsByName as mergeCharacterRegionsByName,
+} from './profiles/resolveProfileConfig';
+
+// ============================================================================
+// REGIONS AND MARKERS
 // ============================================================================
 
 export type {
@@ -168,25 +199,17 @@ export type {
   ExpandedRegionState,
   FallbackConfig,
   MarkerGroup,
+  AnnotationRegion,
   Region,
   MarkerStyle,
-  CharacterConfig,
-  CharacterRegistry,
-} from './characters/types';
-
-export {
-  applyCharacterProfileToPreset,
-  extendCharacterConfigWithPreset,
-  extractProfileOverrides,
-  mergeRegionsByName as mergeCharacterRegionsByName,
-} from './characters/extendCharacterConfigWithPreset';
+} from './regions/types';
 
 export type {
   CameraRelativeGazeOffset,
   CameraRelativeGazeOptions,
-} from './characters/cameraRelativeGaze';
+} from './camera/cameraRelativeGaze';
 
-export { computeCameraRelativeGazeOffset } from './characters/cameraRelativeGaze';
+export { computeCameraRelativeGazeOffset } from './camera/cameraRelativeGaze';
 
 // ========================================================================
 // REGION MAPPING HELPERS
@@ -197,6 +220,11 @@ export {
   resolveBoneName,
   resolveBoneNames,
   resolveFaceCenter,
+} from './regions/regionMapping';
+
+export type {
+  BoneResolutionProfile,
+  ResolvedFaceCenter,
 } from './regions/regionMapping';
 
 // ============================================================================

@@ -1,7 +1,14 @@
 import * as THREE from 'three';
 
-import type { CharacterConfig, Region } from '../characters/types';
+import type { Region } from './types';
 import { findFaceCenter } from '../validation/geometryHelpers';
+
+export interface BoneResolutionProfile {
+  bonePrefix?: string;
+  boneSuffix?: string;
+  boneNodes?: Record<string, string>;
+  suffixPattern?: string;
+}
 
 export interface ResolvedFaceCenter {
   center: THREE.Vector3;
@@ -13,10 +20,10 @@ function normalizeLooseName(value: string): string {
   return value.replace(/\./g, '');
 }
 
-function resolveBoneNameCandidates(semanticName: string, config?: CharacterConfig): string[] {
-  if (!config) return [semanticName];
+function resolveBoneNameCandidates(semanticName: string, profile?: BoneResolutionProfile): string[] {
+  if (!profile) return [semanticName];
 
-  const { bonePrefix, boneSuffix, boneNodes } = config;
+  const { bonePrefix, boneSuffix, boneNodes } = profile;
   if (!boneNodes || !boneNodes[semanticName]) {
     return [semanticName];
   }
@@ -35,18 +42,18 @@ function resolveBoneNameCandidates(semanticName: string, config?: CharacterConfi
   return Array.from(new Set([fullyAffixed, baseName]));
 }
 
-export function resolveBoneName(semanticName: string, config?: CharacterConfig): string {
-  return resolveBoneNameCandidates(semanticName, config)[0] ?? semanticName;
+export function resolveBoneName(semanticName: string, profile?: BoneResolutionProfile): string {
+  return resolveBoneNameCandidates(semanticName, profile)[0] ?? semanticName;
 }
 
 export function resolveBoneNames(
   names: string[] | undefined,
-  config?: CharacterConfig
+  profile?: BoneResolutionProfile
 ): string[] {
   if (!names || names.length === 0) return [];
   return Array.from(
     new Set(
-      names.flatMap((name) => resolveBoneNameCandidates(name, config))
+      names.flatMap((name) => resolveBoneNameCandidates(name, profile))
     )
   );
 }
@@ -68,9 +75,9 @@ export function fuzzyNameMatch(
 export function resolveFaceCenter(
   model: THREE.Object3D,
   region: Region,
-  config?: CharacterConfig
+  profile?: BoneResolutionProfile
 ): ResolvedFaceCenter {
-  const resolvedBones = resolveBoneNames(region.bones, config);
+  const resolvedBones = resolveBoneNames(region.bones, profile);
   const headBoneNames = resolvedBones.filter((name) => name.toLowerCase().includes('head'));
 
   const result = findFaceCenter(model, {

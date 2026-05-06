@@ -1,28 +1,47 @@
 import { describe, expect, it } from 'vitest';
 import type { CharacterConfig } from './types';
+import type { Profile } from '../mappings/types';
 import { getPresetWithProfile } from '../presets';
 import { resolveBoneNames } from '../regions/regionMapping';
+import type { Region } from '../regions/types';
 import {
-  applyCharacterProfileToPreset,
-  extendCharacterConfigWithPreset,
-  extractProfileOverrides,
-  mergeRegionsByName,
-} from './extendCharacterConfigWithPreset';
+  extendProfileConfigWithPreset,
+  extractLegacyCharacterProfileOverrides,
+  mergeProfileRegionsByName,
+  resolveProfileFromPreset,
+} from './resolveProfileConfig';
 
 function createConfig(overrides: Partial<CharacterConfig> = {}): CharacterConfig {
   return {
     characterId: 'jonathan',
     characterName: 'Jonathan',
     modelPath: '/jonathan.glb',
-    auPresetType: 'cc4',
+    profilePresetId: 'cc4',
     regions: [],
     ...overrides,
   };
 }
 
-describe('mergeRegionsByName', () => {
+type Expect<T extends true> = T;
+
+const inferredRuntimeProfileConfig = extendProfileConfigWithPreset({
+  profilePresetId: 'cc4',
+  regions: [],
+});
+
+type InferredRuntimeProfileHasResolvedSurface = Expect<
+  typeof inferredRuntimeProfileConfig extends {
+    auToMorphs: Profile['auToMorphs'];
+    boneNodes: Profile['boneNodes'];
+    regions?: Region[];
+  }
+    ? true
+    : false
+>;
+
+describe('mergeProfileRegionsByName', () => {
   it('merges nested region fields by name while preserving preset geometry', () => {
-    const merged = mergeRegionsByName(
+    const merged = mergeProfileRegionsByName(
       [
         {
           name: 'left_eye',
@@ -59,7 +78,7 @@ describe('mergeRegionsByName', () => {
   });
 
   it('merges nested camera offsets by axis instead of replacing the whole vector', () => {
-    const merged = mergeRegionsByName(
+    const merged = mergeProfileRegionsByName(
       [
         {
           name: 'head',
@@ -83,10 +102,10 @@ describe('mergeRegionsByName', () => {
   });
 });
 
-describe('extendCharacterConfigWithPreset', () => {
+describe('extendProfileConfigWithPreset', () => {
   it('lets saved annotationRegions override preset defaults by region name', () => {
     const presetRegions = getPresetWithProfile('cc4').annotationRegions ?? [];
-    const extended = extendCharacterConfigWithPreset(
+    const extended = extendProfileConfigWithPreset(
       createConfig({
         annotationRegions: presetRegions.map((region) =>
           region.name === 'left_eye'
@@ -129,7 +148,7 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('keeps preset order when canonical annotationRegions only override a subset', () => {
-    const extended = extendCharacterConfigWithPreset(
+    const extended = extendProfileConfigWithPreset(
       createConfig({
         annotationRegions: [
           { name: 'left_eye', cameraAngle: 45, paddingFactor: 0.5 },
@@ -158,7 +177,7 @@ describe('extendCharacterConfigWithPreset', () => {
     const presetRightEye = getPresetWithProfile('cc4').annotationRegions?.find(
       (region) => region.name === 'right_eye'
     );
-    const extended = extendCharacterConfigWithPreset(
+    const extended = extendProfileConfigWithPreset(
       createConfig({
         regions: [
           { name: 'left_eye', cameraAngle: 45, paddingFactor: 0.5 },
@@ -195,7 +214,7 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('preserves saved region order ahead of preset-only fill-ins', () => {
-    const extended = extendCharacterConfigWithPreset(
+    const extended = extendProfileConfigWithPreset(
       createConfig({
         regions: [
           { name: 'full_body', objects: ['*'], paddingFactor: 2.5 },
@@ -219,7 +238,7 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('prefers canonical annotationRegions over legacy regions while preserving legacy extras', () => {
-    const extended = extendCharacterConfigWithPreset(
+    const extended = extendProfileConfigWithPreset(
       createConfig({
         profile: {
           annotationRegions: [
@@ -256,7 +275,7 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('drops disabled preset regions after extension and cleans parent-child links', () => {
-    const extended = extendCharacterConfigWithPreset(
+    const extended = extendProfileConfigWithPreset(
       createConfig({
         disabledRegions: ['mouth', 'right_eye'],
       })
@@ -272,14 +291,14 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('carries preset bone metadata needed by runtime consumers', () => {
-    const extended = extendCharacterConfigWithPreset(createConfig());
+    const extended = extendProfileConfigWithPreset(createConfig());
 
     expect(extended.suffixPattern).toBeDefined();
     expect(extended.boneNodes).toBeDefined();
   });
 
   it('lets semantic annotation region bones use preset bone nodes plus profile affixes', () => {
-    const extended = extendCharacterConfigWithPreset(
+    const extended = extendProfileConfigWithPreset(
       createConfig({
         characterId: 'trex',
         characterName: 'T-Rex',
@@ -311,7 +330,7 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('returns the full preset-extended profile surface instead of only bone metadata', () => {
-    const extended = extendCharacterConfigWithPreset(
+    const extended = extendProfileConfigWithPreset(
       createConfig({
         morphToMesh: { face: ['CustomFace'] },
         meshes: { CustomFace: { category: 'body', morphCount: 1 } },
@@ -330,9 +349,9 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('merges saved top-level bone node overrides over preset bone mappings by key', () => {
-    const extended = extendCharacterConfigWithPreset(
+    const extended = extendProfileConfigWithPreset(
       createConfig({
-        auPresetType: 'fish',
+        profilePresetId: 'fish',
         boneNodes: {
           HEAD: 'CustomHead',
           CUSTOM_FIN: '777',
@@ -352,9 +371,9 @@ describe('extendCharacterConfigWithPreset', () => {
   });
 
   it('uses fish preset annotation regions when saved top-level regions are absent', () => {
-    const extended = extendCharacterConfigWithPreset(
+    const extended = extendProfileConfigWithPreset(
       createConfig({
-        auPresetType: 'fish',
+        profilePresetId: 'fish',
         regions: [],
       })
     );
@@ -387,21 +406,34 @@ describe('extendCharacterConfigWithPreset', () => {
     });
   });
 
-  it('keeps custom characters on their raw saved region list', () => {
+  it('keeps auPresetType as a deprecated preset id fallback', () => {
+    const extended = extendProfileConfigWithPreset(
+      createConfig({
+        profilePresetId: undefined,
+        auPresetType: 'fish',
+        regions: [],
+      })
+    );
+
+    expect(extended.bonePrefix).toBe('Bone.');
+    expect(extended.regions.map((region) => region.name)).toContain('tail');
+  });
+
+  it('keeps custom profile configs on their raw saved region list', () => {
     const config = createConfig({
-      auPresetType: 'custom',
+      profilePresetId: 'custom',
       regions: [{ name: 'visor', objects: ['VisorMesh'], paddingFactor: 1.4 }],
     });
 
-    const extended = extendCharacterConfigWithPreset(config);
+    const extended = extendProfileConfigWithPreset(config);
 
     expect(extended).toBe(config);
   });
 });
 
-describe('extractProfileOverrides', () => {
+describe('extractLegacyCharacterProfileOverrides', () => {
   it('flattens legacy nested profile overrides onto the top-level character profile shape', () => {
-    const overrides = extractProfileOverrides(
+    const overrides = extractLegacyCharacterProfileOverrides(
       createConfig({
         bonePrefix: 'Top_',
         boneNodes: { HEAD: 'TopHead' },
@@ -428,7 +460,7 @@ describe('extractProfileOverrides', () => {
   });
 
   it('prefers canonical annotationRegions over legacy runtime regions during extraction', () => {
-    const overrides = extractProfileOverrides(
+    const overrides = extractLegacyCharacterProfileOverrides(
       createConfig({
         annotationRegions: [
           { name: 'left_eye', cameraAngle: 30, paddingFactor: 1.1 },
@@ -446,9 +478,9 @@ describe('extractProfileOverrides', () => {
   });
 });
 
-describe('applyCharacterProfileToPreset', () => {
+describe('resolveProfileFromPreset', () => {
   it('applies flattened character profile overrides on top of the selected preset', () => {
-    const extendedPreset = applyCharacterProfileToPreset(
+    const extendedPreset = resolveProfileFromPreset(
       createConfig({
         morphToMesh: { face: ['CustomFace'] },
         meshes: { CustomFace: { category: 'body', morphCount: 1 } },

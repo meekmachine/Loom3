@@ -2,7 +2,16 @@ import type { Profile } from '../mappings/types';
 import { extendPresetWithProfile } from '../mappings/extendPresetWithProfile';
 import { getPreset } from '../presets';
 import { normalizeRegionTree } from '../regions/normalizeRegionTree';
-import type { CharacterConfig, Region } from './types';
+import type { Region } from '../regions/types';
+import type {
+  CharacterConfig,
+  CharacterProfile,
+  CustomProfileRuntimeConfig,
+  PresetBackedProfileRuntimeConfig,
+  ProfilePresetId,
+  ProfileRuntimeConfig,
+  ResolvedProfileRuntimeConfig,
+} from './types';
 
 const PROFILE_OVERRIDE_KEYS = [
   'name',
@@ -139,7 +148,7 @@ function mergeRegion(base: Region, override: Region): Region {
   };
 }
 
-export function mergeRegionsByName(base?: Region[], override?: Region[]): Region[] | undefined {
+export function mergeProfileRegionsByName(base?: Region[], override?: Region[]): Region[] | undefined {
   if (!base && !override) return undefined;
 
   const merged = new Map<string, Region>();
@@ -160,22 +169,31 @@ function getAnnotationRegions(value: unknown): Region[] | undefined {
   return Array.isArray(value) ? value as Region[] : undefined;
 }
 
-function getLegacyNestedOverrides(config: CharacterConfig): Record<string, unknown> {
+/**
+ * @deprecated Use `mergeProfileRegionsByName`.
+ */
+export const mergeRegionsByName = mergeProfileRegionsByName;
+
+export function getProfilePresetId(config: ProfileRuntimeConfig): ProfilePresetId | undefined {
+  return config.profilePresetId ?? config.presetId ?? config.baseProfileId ?? config.auPresetType;
+}
+
+function getLegacyNestedOverrides(config: CharacterProfile): Record<string, unknown> {
   return isPlainObject(config.profile) ? config.profile as Record<string, unknown> : {};
 }
 
-function getLegacyRuntimeRegions(config: CharacterConfig): Region[] | undefined {
+function getLegacyRuntimeRegions(config: CharacterProfile): Region[] | undefined {
   return Array.isArray(config.regions) && config.regions.length > 0 ? config.regions : undefined;
 }
 
-function getCanonicalAnnotationOverrides(config: CharacterConfig): Region[] | undefined {
-  return mergeRegionsByName(
+function getCanonicalAnnotationOverrides(config: CharacterProfile): Region[] | undefined {
+  return mergeProfileRegionsByName(
     getAnnotationRegions(getLegacyNestedOverrides(config).annotationRegions),
     getAnnotationRegions((config as unknown as Record<string, unknown>).annotationRegions),
   );
 }
 
-export function extractProfileOverrides(config: CharacterConfig): Partial<Profile> {
+export function extractLegacyCharacterProfileOverrides(config: CharacterProfile): Partial<Profile> {
   const topLevelConfig = config as unknown as Record<string, unknown>;
   const legacyNestedOverrides = getLegacyNestedOverrides(config);
   const canonicalAnnotationOverrides = getCanonicalAnnotationOverrides(config);
@@ -203,13 +221,27 @@ export function extractProfileOverrides(config: CharacterConfig): Partial<Profil
   return overrides;
 }
 
-export function applyCharacterProfileToPreset(config: CharacterConfig): Profile | null {
-  const presetType = config.auPresetType;
+/**
+ * @deprecated Use `extractLegacyCharacterProfileOverrides`.
+ */
+export function extractProfileOverrides(config: CharacterProfile): Partial<Profile> {
+  return extractLegacyCharacterProfileOverrides(config);
+}
+
+export function resolveProfileFromPreset(config: CharacterProfile): Profile | null {
+  const presetType = getProfilePresetId(config);
   if (!presetType) {
     return null;
   }
 
-  return extendPresetWithProfile(getPreset(presetType), extractProfileOverrides(config));
+  return extendPresetWithProfile(getPreset(presetType), extractLegacyCharacterProfileOverrides(config));
+}
+
+/**
+ * @deprecated Use `resolveProfileFromPreset`.
+ */
+export function applyCharacterProfileToPreset(config: CharacterProfile): Profile | null {
+  return resolveProfileFromPreset(config);
 }
 
 function orderExtendedRegions(
@@ -242,8 +274,8 @@ function orderExtendedRegions(
 }
 
 /**
- * Extend a saved character config with its selected preset so callers get one
- * canonical runtime object.
+ * Extend a profile config with its selected base profile preset so callers get
+ * one canonical runtime object.
  *
  * Precedence:
  * 1. preset defaults
@@ -251,16 +283,25 @@ function orderExtendedRegions(
  * 3. legacy nested `config.profile` overrides (compatibility only)
  * 4. legacy `config.regions` fallback only when canonical annotation overrides are absent
  */
-export function extendCharacterConfigWithPreset(config: CharacterConfig): CharacterConfig {
-  const presetType = config.auPresetType;
+export function extendProfileConfigWithPreset<T extends CustomProfileRuntimeConfig>(config: T): T;
+export function extendProfileConfigWithPreset<T extends PresetBackedProfileRuntimeConfig>(
+  config: T
+): ResolvedProfileRuntimeConfig<T>;
+export function extendProfileConfigWithPreset<T extends CharacterProfile>(
+  config: T
+): T | ResolvedProfileRuntimeConfig<T>;
+export function extendProfileConfigWithPreset<T extends CharacterProfile>(
+  config: T
+): T | ResolvedProfileRuntimeConfig<T> {
+  const presetType = getProfilePresetId(config);
   if (!presetType || presetType === 'custom') {
     return config;
   }
 
   const canonicalAnnotationOverrides = getCanonicalAnnotationOverrides(config);
   const legacyRuntimeRegions = getLegacyRuntimeRegions(config);
-  const profileOverrides = extractProfileOverrides(config);
-  const extendedPresetProfile = applyCharacterProfileToPreset(config);
+  const profileOverrides = extractLegacyCharacterProfileOverrides(config);
+  const extendedPresetProfile = resolveProfileFromPreset(config);
   if (!extendedPresetProfile) {
     return config;
   }
@@ -278,7 +319,7 @@ export function extendCharacterConfigWithPreset(config: CharacterConfig): Charac
         .map((region) => cloneRegion(region))
     : undefined;
   const mergedRegions = normalizeRegionTree(
-    mergeRegionsByName(extendedAnnotationRegions, legacyExtraRegions),
+    mergeProfileRegionsByName(extendedAnnotationRegions, legacyExtraRegions),
     profileOverrides.disabledRegions,
   );
   const extendedRegions = orderExtendedRegions(
@@ -293,5 +334,12 @@ export function extendCharacterConfigWithPreset(config: CharacterConfig): Charac
     ...extendedPresetProfile,
     annotationRegions: extendedRegions ?? extendedAnnotationRegions,
     regions: extendedRegions ?? config.regions,
-  };
+  } as ResolvedProfileRuntimeConfig<T>;
+}
+
+/**
+ * @deprecated Use `extendProfileConfigWithPreset`.
+ */
+export function extendCharacterConfigWithPreset(config: CharacterConfig): CharacterConfig {
+  return extendProfileConfigWithPreset(config) as CharacterConfig;
 }

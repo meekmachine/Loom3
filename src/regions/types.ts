@@ -1,6 +1,3 @@
-import type { Profile } from '../mappings/types';
-import type { PresetType } from '../presets';
-
 // ============ LINE STYLING ============
 
 /** Line stroke style */
@@ -85,9 +82,9 @@ export interface MarkerGroup {
 // ============ REGION DEFINITION ============
 
 /**
- * Single region definition - maps a name to geometry targets
+ * Single annotation region definition - maps a name to geometry targets.
  */
-export interface Region {
+export interface AnnotationRegion {
   /** Display name for the annotation */
   name: string;
   /** Bone names to focus on */
@@ -136,71 +133,11 @@ export interface Region {
   customPosition?: { x: number; y: number; z: number };
 }
 
+export type Region = AnnotationRegion;
+
 /**
  * Marker style for annotation visualization
  * - 'html': Simple HTML overlay markers with numbered dots directly over targets
  * - '3d': 3D markers with lines and labels rendered in scene space
  */
 export type MarkerStyle = 'html' | '3d';
-
-/**
- * Per-character configuration for camera + animation
- */
-export interface CharacterConfig extends Partial<Profile> {
-  /** Unique identifier for the character */
-  characterId: string;
-  /** Display name */
-  characterName: string;
-  /** Path to GLB file (relative to public folder) */
-  modelPath: string;
-  /** Which region to focus on load */
-  defaultRegion?: string;
-  /** List of available regions */
-  regions: Region[];
-  /** Marker visualization style. Default: '3d' */
-  markerStyle?: MarkerStyle;
-  /** Play intro animation on load (orbit around model, then zoom to torso). Default: false */
-  playIntroOnLoad?: boolean;
-  /** Model position offset to apply on load (e.g., to raise fish above ground) */
-  modelOffset?: { x?: number; y?: number; z?: number };
-  /** Model rotation in degrees to apply on load (e.g., to fix models exported with wrong orientation) */
-  modelRotation?: { x?: number; y?: number; z?: number };
-  /** Ensure model's lowest point clears the ground by this amount (world units) */
-  modelGroundClearance?: number;
-  /** Preset type for animation mapping. Default: 'cc4' */
-  auPresetType?: PresetType;
-  /**
-   * Optional legacy nested override blob.
-   * New stored character documents should flatten preset overrides onto the
-   * top-level character profile object instead of nesting them here.
-   */
-  profile?: Partial<Profile>;
-  /** Baked clip names hidden from downstream UIs and filtered out on load */
-  deletedBakedAnimationClips?: string[];
-
-  // === BONE RESOLUTION ===
-  /** Prefix to prepend to bone names (e.g., 'Bone.' for fish) */
-  bonePrefix?: string;
-  /** Suffix to append to bone names (e.g., '_Armature' for fish) */
-  boneSuffix?: string;
-  /** Semantic bone name mapping (e.g., 'HEAD' → '001') */
-  boneNodes?: Record<string, string>;
-  /** Regex pattern for fuzzy bone/mesh name matching (e.g., '_\\d+$|\\.\\d+$') */
-  suffixPattern?: string;
-
-  // === MARKER CUSTOMIZATION ===
-  /** Marker groups for fallback behavior */
-  markerGroups?: MarkerGroup[];
-  /** Global line styling defaults */
-  lineDefaults?: LineConfig;
-  /** Global marker style defaults (overridden by per-region style) */
-  markerDefaults?: Partial<MarkerStyleOverrides>;
-}
-
-/**
- * Registry of all available characters
- */
-export interface CharacterRegistry {
-  characters: CharacterConfig[];
-  defaultCharacter?: string;
-}

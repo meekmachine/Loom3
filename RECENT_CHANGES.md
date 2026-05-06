@@ -6,7 +6,8 @@
 - CC4 now includes independent eye AUs 65-72 for both morph and bone mappings.
 - Composite eye axes now evaluate per-node effective values consistently, so shared-eye balance no longer leaks into independent-eye controls.
 - CC4 head yaw/pitch/roll max degrees were increased for wider head turns.
-- Preset-backed character configs now extend canonical `annotationRegions` into the runtime `regions` mirror, preserving legacy `regions` only as fallback input or non-preset extras.
+- Preset-backed profile configs now extend canonical `annotationRegions` into the runtime `regions` mirror, preserving legacy `regions` only as fallback input or non-preset extras.
+- Profile config, region/marker, and camera gaze helpers now live under profile-, region-, and camera-focused modules internally; the public `CharacterConfig` helpers remain as deprecated compatibility aliases.
 - Annotation region profile overrides now merge by region name and preserve nested camera/style fields such as partial `cameraOffset` updates.
 
 ### Playback and mixer updates

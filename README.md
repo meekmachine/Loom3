@@ -350,14 +350,19 @@ const loom = new Loom3({
 
 `annotationRegions` is the Loom3 field for camera/marker region defaults and profile overrides.
 
-If your app fetches a full saved `CharacterConfig` from Firestore or another backend, use `extendCharacterConfigWithPreset(...)` to build the runtime shape before handing that config to camera/marker tooling:
+If your app fetches a saved model/profile record from Firestore or another backend, use `extendProfileConfigWithPreset(...)` to build the runtime shape before handing that profile config to camera/marker tooling:
 
 ```typescript
-import { extendCharacterConfigWithPreset } from '@lovelace_lol/loom3';
+import { extendProfileConfigWithPreset } from '@lovelace_lol/loom3';
 
-const savedConfig = await fetchCharacterConfig();
-const runtimeConfig = extendCharacterConfigWithPreset(savedConfig);
+const savedConfig = await fetchProfileConfig();
+const runtimeConfig = extendProfileConfigWithPreset({
+  ...savedConfig,
+  profilePresetId: savedConfig.profilePresetId ?? 'cc4',
+});
 ```
+
+`CharacterConfig`, `auPresetType`, and `extendCharacterConfigWithPreset(...)` are still exported as deprecated compatibility aliases for apps migrating from older LoomLarge-style character records. New Loom3 integrations should model presets as base profiles, pass profile overrides through `profile`, `annotationRegions`, or other `Profile` fields, and use `profilePresetId` for preset selection.
 
 For the current runtime-oriented documentation, including:
 
@@ -2091,7 +2096,7 @@ console.log(result.center, result.method, result.debugInfo);
 ### Resolving region-driven centers
 
 ```typescript
-import type { CharacterConfig, Region } from '@lovelace_lol/loom3';
+import type { BoneResolutionProfile, Region } from '@lovelace_lol/loom3';
 import { resolveBoneName, resolveBoneNames, resolveFaceCenter } from '@lovelace_lol/loom3';
 
 const region: Region = {
@@ -2100,18 +2105,14 @@ const region: Region = {
   meshes: ['CC_Base_Body'],
 };
 
-const config = {
-  characterId: 'demo',
-  characterName: 'Demo',
-  modelPath: '/demo.glb',
-  regions: [region],
+const profile: BoneResolutionProfile = {
   bonePrefix: 'CC_Base_',
   boneNodes: { HEAD: 'Head' },
-} satisfies CharacterConfig;
+};
 
-const headBone = resolveBoneName('HEAD', config);
-const resolvedBones = resolveBoneNames(['HEAD'], config);
-const faceCenter = resolveFaceCenter(gltf.scene, region, config);
+const headBone = resolveBoneName('HEAD', profile);
+const resolvedBones = resolveBoneNames(['HEAD'], profile);
+const faceCenter = resolveFaceCenter(gltf.scene, region, profile);
 ```
 
 ### Working with model orientation
@@ -2128,7 +2129,7 @@ const facing = detectFacingDirection(gltf.scene);
 
 Use these helpers when you need to:
 - place annotation markers using semantic regions instead of hard-coded coordinates
-- resolve prefixed/suffixed bone names from a reusable character config
+- resolve prefixed/suffixed bone names from a reusable profile or minimal bone-resolution object
 - derive a face anchor for camera tooling or interaction layers
 - reason about model orientation before building your own camera or annotation system
 

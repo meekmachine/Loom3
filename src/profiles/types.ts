@@ -71,6 +71,25 @@ export interface CharacterProfile extends ProfileRuntimeConfig {
   modelPath?: string;
 }
 
+export type ResolvedProfileRuntimeConfig<T extends CharacterProfile = CharacterProfile> = T & Profile & {
+  annotationRegions?: Region[];
+  regions?: Region[];
+};
+
+export type PresetBackedProfileRuntimeConfig = CharacterProfile & (
+  | { profilePresetId: ProfilePresetId }
+  | { presetId: ProfilePresetId }
+  | { baseProfileId: ProfilePresetId }
+  | { auPresetType: ProfilePresetId }
+);
+
+export type CustomProfileRuntimeConfig = CharacterProfile & (
+  | { profilePresetId: 'custom' }
+  | { presetId: 'custom' }
+  | { baseProfileId: 'custom' }
+  | { auPresetType: 'custom' }
+);
+
 export interface ProfileRegistry {
   profiles: CharacterProfile[];
   defaultProfile?: string;

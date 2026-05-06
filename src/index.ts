@@ -162,6 +162,9 @@ export type {
   ProfileOverrides,
   ProfilePresetId,
   ProfileRuntimeConfig,
+  ResolvedProfileRuntimeConfig,
+  PresetBackedProfileRuntimeConfig,
+  CustomProfileRuntimeConfig,
   CharacterProfile,
   ProfileRegistry,
   // Deprecated compatibility types

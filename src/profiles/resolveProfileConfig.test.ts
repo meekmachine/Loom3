@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { CharacterConfig } from './types';
+import type { Profile } from '../mappings/types';
 import { getPresetWithProfile } from '../presets';
 import { resolveBoneNames } from '../regions/regionMapping';
+import type { Region } from '../regions/types';
 import {
   extendProfileConfigWithPreset,
   extractLegacyCharacterProfileOverrides,
@@ -19,6 +21,23 @@ function createConfig(overrides: Partial<CharacterConfig> = {}): CharacterConfig
     ...overrides,
   };
 }
+
+type Expect<T extends true> = T;
+
+const inferredRuntimeProfileConfig = extendProfileConfigWithPreset({
+  profilePresetId: 'cc4',
+  regions: [],
+});
+
+type InferredRuntimeProfileHasResolvedSurface = Expect<
+  typeof inferredRuntimeProfileConfig extends {
+    auToMorphs: Profile['auToMorphs'];
+    boneNodes: Profile['boneNodes'];
+    regions?: Region[];
+  }
+    ? true
+    : false
+>;
 
 describe('mergeProfileRegionsByName', () => {
   it('merges nested region fields by name while preserving preset geometry', () => {

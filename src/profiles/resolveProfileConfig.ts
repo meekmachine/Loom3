@@ -6,8 +6,11 @@ import type { Region } from '../regions/types';
 import type {
   CharacterConfig,
   CharacterProfile,
+  CustomProfileRuntimeConfig,
+  PresetBackedProfileRuntimeConfig,
   ProfilePresetId,
   ProfileRuntimeConfig,
+  ResolvedProfileRuntimeConfig,
 } from './types';
 
 const PROFILE_OVERRIDE_KEYS = [
@@ -280,7 +283,16 @@ function orderExtendedRegions(
  * 3. legacy nested `config.profile` overrides (compatibility only)
  * 4. legacy `config.regions` fallback only when canonical annotation overrides are absent
  */
-export function extendProfileConfigWithPreset<T extends CharacterProfile>(config: T): T {
+export function extendProfileConfigWithPreset<T extends CustomProfileRuntimeConfig>(config: T): T;
+export function extendProfileConfigWithPreset<T extends PresetBackedProfileRuntimeConfig>(
+  config: T
+): ResolvedProfileRuntimeConfig<T>;
+export function extendProfileConfigWithPreset<T extends CharacterProfile>(
+  config: T
+): T | ResolvedProfileRuntimeConfig<T>;
+export function extendProfileConfigWithPreset<T extends CharacterProfile>(
+  config: T
+): T | ResolvedProfileRuntimeConfig<T> {
   const presetType = getProfilePresetId(config);
   if (!presetType || presetType === 'custom') {
     return config;
@@ -322,12 +334,12 @@ export function extendProfileConfigWithPreset<T extends CharacterProfile>(config
     ...extendedPresetProfile,
     annotationRegions: extendedRegions ?? extendedAnnotationRegions,
     regions: extendedRegions ?? config.regions,
-  } as T;
+  } as ResolvedProfileRuntimeConfig<T>;
 }
 
 /**
  * @deprecated Use `extendProfileConfigWithPreset`.
  */
 export function extendCharacterConfigWithPreset(config: CharacterConfig): CharacterConfig {
-  return extendProfileConfigWithPreset(config);
+  return extendProfileConfigWithPreset(config) as CharacterConfig;
 }

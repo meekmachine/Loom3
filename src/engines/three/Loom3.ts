@@ -202,6 +202,12 @@ export class Loom3 implements LoomLarge {
       getMeshByName: (name) => this.meshByName.get(name),
       getMeshNamesForAU: (auId) => this.getMeshNamesForAU(auId),
       getMeshNamesForViseme: () => this.getMeshNamesForViseme(),
+      getCurrentAUValue: (auId) => this.getAU(auId),
+      getCurrentVisemeValue: (visemeIndex) => this.visemeValues[visemeIndex] ?? 0,
+      getCurrentMorphValue: (morphKey, meshNames) => this.getMorphValueForMeshes(morphKey, meshNames),
+      getCurrentMorphIndexValue: (morphIndex, meshNames) => this.getMorphValueByIndexForMeshes(morphIndex, meshNames),
+      getCurrentBoneQuaternion: (nodeKey) => this.bones[nodeKey]?.obj.quaternion.clone() ?? null,
+      getCurrentBonePositionValue: (nodeKey, axis) => this.bones[nodeKey]?.obj.position[axis] ?? null,
       getBones: () => this.bones,
       getConfig: () => this.config,
       getCompositeRotations: () => this.compositeRotations,
@@ -1612,6 +1618,14 @@ export class Loom3 implements LoomLarge {
     return 0;
   }
 
+  private getMorphValueForMeshes(key: string, meshNames?: string[]): number {
+    const targets = this.resolveMorphTargets(key, meshNames);
+    if (targets.length > 0) {
+      return targets[0].infl[targets[0].idx] ?? 0;
+    }
+    return this.getMorphValue(key);
+  }
+
   private getMorphValueByIndex(index: number): number {
     const idx = Number.isInteger(index) && index >= 0 ? index : null;
     if (idx === null) return 0;
@@ -1628,6 +1642,14 @@ export class Loom3 implements LoomLarge {
       if (idx < infl.length) return infl[idx] ?? 0;
     }
     return 0;
+  }
+
+  private getMorphValueByIndexForMeshes(index: number, meshNames?: string[]): number {
+    const targets = this.resolveMorphTargetsByIndex(index, meshNames);
+    if (targets.length > 0) {
+      return targets[0].infl[targets[0].idx] ?? 0;
+    }
+    return this.getMorphValueByIndex(index);
   }
 
   private applyMorphTargetDelta(target: MorphTargetDelta, options: AddMorphTargetOptions): number {

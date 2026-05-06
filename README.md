@@ -1892,6 +1892,18 @@ if (clip) {
 }
 ```
 
+When the first keyframe has `inherit: true`, Loom3 anchors that first mixer
+track value to the character's current live target value instead of treating the
+placeholder intensity as a real reset. The following keyframes remain authored
+targets:
+
+```typescript
+const handle = loom.buildClip('smile-from-current-pose', {
+  // Starts from the current AU 12/morph/bone state, then moves to 0.7.
+  '12': [{ time: 0, intensity: 0, inherit: true }, { time: 0.25, intensity: 0.7 }],
+}, { loop: false });
+```
+
 Clip stream events are discrete runtime events, not a polling surface:
 
 - `keyframe` fires when playback crosses an authored keyframe.

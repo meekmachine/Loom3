@@ -322,7 +322,11 @@ export interface CurvePoint {
   time: number;
   /** Intensity value (0-1) */
   intensity: number;
-  /** When true, inherit current AU value at playback start */
+  /**
+   * When true on the first keyframe, capture the driven target's current live
+   * value at clip construction/playback start and transition from that anchor
+   * into the following authored keyframes.
+   */
   inherit?: boolean;
 }
 

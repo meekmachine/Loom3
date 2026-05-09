@@ -99,11 +99,22 @@ export type {
   ClipEvent,
   ClipEventListener,
   ClipHandle,
+  LipsyncTimeUnit,
+  LipsyncVisemeKey,
+  MicrosoftVisemeEvent,
+  LipsyncSnippetInput,
+  LipsyncEventListInput,
+  LipsyncSequenceInput,
+  LipsyncSequenceOptions,
+  NormalizedLipsyncEvent,
+  CompiledLipsyncSequence,
   Snippet,
   MorphTargetAttributeData,
   MorphTargetDelta,
   AddMorphTargetOptions,
 } from './core/types';
+
+export { compileLipsyncSequence } from './lipsync';
 
 // ============================================================================
 // MAPPINGS

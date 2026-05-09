@@ -1394,7 +1394,7 @@ Open in LoomLarge: [Visemes tab](https://www.characterloom.com/?drawer=open&tab=
 
 This screenshot was captured before the viseme label refresh, so some cards still show legacy names such as `Er`, `IH`, and `W_OO`. Treat the table below as the source of truth for the current exported `VISEME_KEYS` order.
 
-Visemes are mouth shapes used for lip-sync. Loom3 includes 15 visemes with automatic jaw coupling.
+Visemes are mouth shapes used for lip-sync. Loom3's CC4 preset includes 15 profile slots with automatic jaw coupling. Provider streams such as Microsoft/Azure keep their original source IDs until Loom3 resolves them through `visemeSlots[*].providerIds`, caller-supplied mappings, and the active profile bindings.
 
 ### The 15 visemes
 
@@ -1402,30 +1402,30 @@ The `VISEME_KEYS` export uses unprefixed keys in this order.
 
 | Index | Key | Phoneme Example |
 |-------|-----|-----------------|
-| 0 | EE | "b**ee**" |
+| 0 | AE | "c**a**t" |
 | 1 | Ah | "f**a**ther" |
-| 2 | Oh | "g**o**" |
-| 3 | OO | "t**oo**" |
-| 4 | I | "s**i**t" |
-| 5 | U | "fl**u**te" |
-| 6 | W | "**w**e" |
-| 7 | L | "**l**ip" |
-| 8 | F_V | "**f**un, **v**an" |
-| 9 | Th | "**th**ink" |
-| 10 | S_Z | "**s**un, **z**oo" |
-| 11 | B_M_P | "**b**at, **m**an, **p**op" |
-| 12 | K_G_H_NG | "**k**ite, **g**o, **h**at, si**ng**" |
-| 13 | AE | "c**a**t" |
-| 14 | R | "**r**ed" |
+| 2 | B_M_P | "**b**at, **m**an, **p**op" |
+| 3 | Ch_J | "**ch**in, **j**am" |
+| 4 | EE | "b**ee**" |
+| 5 | Er | "h**er**" |
+| 6 | F_V | "**f**un, **v**an" |
+| 7 | Ih | "s**i**t" |
+| 8 | K_G_H_NG | "**k**ite, **g**o, si**ng**" |
+| 9 | Oh | "g**o**" |
+| 10 | R | "**r**ed" |
+| 11 | S_Z | "**s**un, **z**oo" |
+| 12 | T_L_D_N | "**t**op, **l**ip, **d**og, **n**o" |
+| 13 | Th | "**th**ink" |
+| 14 | W_OO | "**w**e, t**oo**" |
 
 ### Setting a viseme
 
 ```typescript
-// Set viseme 3 (Ah) to full intensity
-loom.setViseme(3, 1.0);
+// Set viseme 1 (Ah) to full intensity
+loom.setViseme(1, 1.0);
 
 // With jaw scale (0-1, default 1)
-loom.setViseme(3, 1.0, 0.5);  // Half jaw opening
+loom.setViseme(1, 1.0, 0.5);  // Half jaw opening
 ```
 
 ### Transitioning visemes
@@ -1434,10 +1434,10 @@ Viseme transitions default to 80ms and use the standard `easeInOutQuad` easing w
 
 ```typescript
 // Animate to a viseme using the default 80ms duration
-const handle = loom.transitionViseme(3, 1.0);
+const handle = loom.transitionViseme(1, 1.0);
 
 // Disable jaw coupling (duration can be omitted to use the 80ms default)
-loom.transitionViseme(3, 1.0, 80, 0);
+loom.transitionViseme(1, 1.0, 80, 0);
 ```
 
 ### Automatic jaw coupling
@@ -1447,7 +1447,41 @@ Each viseme has a predefined jaw opening amount in the preset. When you set a vi
 - `jawScale = 0.5`: Half jaw opening
 - `jawScale = 0`: No jaw movement (viseme only)
 
-### Lip-sync example
+### Provider lip-sync sequence
+
+Use `lipsyncSequence()` when a speech provider already gives timed viseme events. Loom3 parses the provider-faithful source IDs, resolves the active profile's viseme slots and morph bindings, generates jaw rotation from the profile or sequence options, and plays the result as one mixer clip.
+
+```typescript
+loom.lipsyncSequence([
+  { visemeId: 1, audioOffset: 2_000_000 },
+  { visemeId: 21, audioOffset: 4_000_000 },
+], {
+  sourceProvider: 'microsoft',
+  timeUnit: 'ticks',
+  name: 'speech-line-001',
+  // Optional: source id -> profile slot id/index, or reverse slot id -> source ids.
+  sourceVisemeMap: { ah: [1, 2], 'b-m-p': [0, 21] },
+  // Optional direct morph overrides for the active profile.
+  morphTargetToViseme: { Custom_Aah: 'ah' },
+  // Optional per-slot/source jaw amounts for this sequence.
+  jawActivation: { ah: 0.75, 'b-m-p': 0 },
+});
+```
+
+Existing viseme snippet JSON can use the same entry point:
+
+```typescript
+loom.lipsyncSequence({
+  name: 'speech-snippet',
+  snippetCategory: 'visemeSnippet',
+  snippetJawScale: 1,
+  curves: {
+    '1': [{ time: 0, intensity: 0 }, { time: 0.08, intensity: 1 }],
+  },
+});
+```
+
+### Manual lip-sync example
 
 ```typescript
 async function speak(phonemes: number[]) {
@@ -1467,7 +1501,7 @@ async function speak(phonemes: number[]) {
 }
 
 // "Hello" approximation
-speak([5, 0, 10, 4]);
+speak([5, 4, 12, 9]);
 ```
 
 ---
@@ -1870,6 +1904,7 @@ Loom3 can convert AU/morph curves into AnimationMixer clips for smooth, mixer-on
 Key APIs:
 - `snippetToClip(name, curves, options)` builds an AnimationClip from curves.
 - `playClip(clip, options)` returns a ClipHandle you can pause/resume/stop.
+- `lipsyncSequence(input, options)` compiles provider viseme timing or snippet JSON into one managed mixer clip.
 - `clipHandle.subscribe(listener)` streams lifecycle events from the runtime update loop.
 - `clipHandle.stop()` now resolves cleanly (no rejected promise).
 
@@ -2147,7 +2182,7 @@ This is a compact reference for the public surface exported by `@lovelace_lol/lo
 - `collectMorphMeshes()` gathers meshes that already expose morph targets.
 - Lifecycle: `onReady()`, `update()`, `start()`, `stop()`, `dispose()`.
 - Preset state: `setProfile()`, `getProfile()`.
-- Control APIs: `setAU()`, `transitionAU()`, `setContinuum()`, `transitionContinuum()`, `setMorph()`, `transitionMorph()`, `setViseme()`, `transitionViseme()`.
+- Control APIs: `setAU()`, `transitionAU()`, `setContinuum()`, `transitionContinuum()`, `setMorph()`, `transitionMorph()`, `setViseme()`, `transitionViseme()`, `lipsyncSequence()`.
 - Runtime morph authoring: `addMorphTarget()`, `addMorphTargets()`, `ensureMorphInfluence()`, `refreshMorphTargets()`.
 - Transition state: `pause()`, `resume()`, `getPaused()`, `clearTransitions()`, `getActiveTransitionCount()`, `resetToNeutral()`.
 
@@ -2170,11 +2205,11 @@ This is a compact reference for the public surface exported by `@lovelace_lol/lo
 - Mesh inspection: `getMeshList()`, `getMorphTargets()`, `getMorphTargetIndices()`, `getBones()`.
 - Mesh debugging: `setMeshVisible()`, `highlightMesh()`, `getMeshMaterialConfig()`, `setMeshMaterialConfig()`.
 - Hair runtime: `registerHairObjects()`, `getRegisteredHairObjects()`, `setHairPhysicsEnabled()`, `setHairPhysicsConfig()`, `validateHairMorphTargets()`, `applyHairStateToObject()`.
-- Mixer helpers: `loadAnimationClips()`, `getAnimationClips()`, `playAnimation()`, `pauseAnimation()`, `resumeAnimation()`, `stopAnimation()`, `stopAllAnimations()`, `pauseAllAnimations()`, `resumeAllAnimations()`, `setAnimationSpeed()`, `setAnimationIntensity()`, `setAnimationTimeScale()`, `getAnimationState()`, `getPlayingAnimations()`, `crossfadeTo()`, `snippetToClip()`, `playClip()`, `playSnippet()`, `buildClip()`, `updateClipParams()`, `supportsClipCurves()`.
+- Mixer helpers: `loadAnimationClips()`, `getAnimationClips()`, `playAnimation()`, `pauseAnimation()`, `resumeAnimation()`, `stopAnimation()`, `stopAllAnimations()`, `pauseAllAnimations()`, `resumeAllAnimations()`, `setAnimationSpeed()`, `setAnimationIntensity()`, `setAnimationTimeScale()`, `getAnimationState()`, `getPlayingAnimations()`, `crossfadeTo()`, `snippetToClip()`, `playClip()`, `playSnippet()`, `buildClip()`, `lipsyncSequence()`, `updateClipParams()`, `supportsClipCurves()`.
 
 ### Types and lower-level exports
 
-- Configuration/types: `Profile`, `MeshInfo`, `BlendingMode`, `TransitionHandle`, `ClipEvent`, `ClipEventListener`, `ClipHandle`, `Snippet`, `AnimationState`, `AnimationClipInfo`.
+- Configuration/types: `Profile`, `MeshInfo`, `BlendingMode`, `TransitionHandle`, `ClipEvent`, `ClipEventListener`, `ClipHandle`, `Snippet`, `LipsyncSequenceInput`, `LipsyncSequenceOptions`, `MicrosoftVisemeEvent`, `AnimationState`, `AnimationClipInfo`.
 - Standalone implementations: `AnimationThree`, `HairPhysics`, `BLENDING_MODES`.
 - Region and geometry helpers: `resolveBoneName()`, `resolveBoneNames()`, `resolveFaceCenter()`, `findFaceCenter()`, `getModelForwardDirection()`, `detectFacingDirection()`.
 

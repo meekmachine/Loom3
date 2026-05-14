@@ -17,6 +17,8 @@ import type {
   AnimationBlendMode,
   MorphTargetDelta,
   AddMorphTargetOptions,
+  LipsyncSequenceInput,
+  LipsyncSequenceOptions,
 } from '../core/types';
 
 /** Loop mode for mixer clips */
@@ -375,6 +377,16 @@ export interface Animation {
     clipName: string,
     curves: Record<string, Array<CurvePoint>>,
     options?: ClipOptions
+  ): ClipHandle | null;
+
+  /**
+   * Compile provider viseme timing or a viseme snippet into one mixer clip and play it.
+   * This is the preferred entry point for lip-sync systems that already have
+   * Microsoft/Azure viseme timing or profile-faithful viseme curves.
+   */
+  lipsyncSequence?(
+    input: LipsyncSequenceInput,
+    options?: LipsyncSequenceOptions
   ): ClipHandle | null;
 
   /**

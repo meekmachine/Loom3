@@ -1,0 +1,1 @@
+export { compileLipsyncSequence } from './lipsyncSequence';

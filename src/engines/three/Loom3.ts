@@ -37,6 +37,8 @@ import type {
   AnimationBlendMode,
   MorphTargetDelta,
   AddMorphTargetOptions,
+  LipsyncSequenceInput,
+  LipsyncSequenceOptions,
 } from '../../core/types';
 import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import { AnimationThree, BakedAnimationController } from './AnimationThree';
@@ -53,6 +55,7 @@ import {
   getVisemeJawAmounts,
   getVisemeSlotIndex,
 } from '../../mappings/visemeSystem';
+import { compileLipsyncSequence } from '../../lipsync/lipsyncSequence';
 import type { NodeBase, ResolvedBones } from './types';
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
@@ -2325,6 +2328,17 @@ export class Loom3 implements LoomLarge {
     options?: ClipOptions
   ): ClipHandle | null {
     return this.bakedAnimations.buildClip(clipName, curves, options);
+  }
+
+  lipsyncSequence(
+    input: LipsyncSequenceInput,
+    options?: LipsyncSequenceOptions
+  ): ClipHandle | null {
+    const sequence = compileLipsyncSequence(this.config, input, options);
+    if (Object.keys(sequence.curves).length === 0) {
+      return null;
+    }
+    return this.buildClip(sequence.name, sequence.curves, sequence.clipOptions);
   }
 
   cleanupSnippet(name: string) {

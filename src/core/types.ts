@@ -384,8 +384,111 @@ export interface ClipOptions {
    * Default: true (for backwards compatibility with transitionViseme behavior)
    */
   autoVisemeJaw?: boolean;
+  /** Optional per-slot jaw amounts for this clip. Falls back to the active profile. */
+  visemeJawAmounts?: number[];
   /** Optional source override for downstream consumers */
   source?: AnimationSource;
+}
+
+export type LipsyncTimeUnit = 'auto' | 'seconds' | 'milliseconds' | 'ticks';
+export type LipsyncVisemeKey = string | number;
+
+export interface MicrosoftVisemeEvent {
+  visemeId?: LipsyncVisemeKey;
+  viseme_id?: LipsyncVisemeKey;
+  VisemeId?: LipsyncVisemeKey;
+  id?: LipsyncVisemeKey;
+  phoneme?: string;
+  audioOffset?: number;
+  audio_offset?: number;
+  AudioOffset?: number;
+  time?: number;
+  offset?: number;
+  offsetMs?: number;
+  offset_ms?: number;
+  timeMs?: number;
+  startMs?: number;
+  duration?: number;
+  durationMs?: number;
+  duration_ms?: number;
+  animation?: unknown;
+  Animation?: unknown;
+  [key: string]: unknown;
+}
+
+export interface LipsyncSnippetInput {
+  name?: string;
+  curves: CurvesMap;
+  snippetCategory?: string;
+  snippetJawScale?: number;
+  snippetIntensityScale?: number;
+  snippetPlaybackRate?: number;
+  loop?: boolean;
+  mixerLoopMode?: ClipOptions['loopMode'];
+  mixerRepeatCount?: number;
+  mixerReverse?: boolean;
+  autoVisemeJaw?: boolean;
+  [key: string]: unknown;
+}
+
+export interface LipsyncEventListInput {
+  name?: string;
+  provider?: string;
+  sourceProvider?: string;
+  events?: MicrosoftVisemeEvent[];
+  visemes?: MicrosoftVisemeEvent[] | LipsyncVisemeKey[];
+  visemeTiming?: MicrosoftVisemeEvent[] | number[];
+  visemeTimings?: MicrosoftVisemeEvent[] | number[];
+  visemesTiming?: MicrosoftVisemeEvent[] | number[];
+  visemesTimings?: MicrosoftVisemeEvent[] | number[];
+  viseme_timing?: MicrosoftVisemeEvent[] | number[];
+  visemes_timing?: MicrosoftVisemeEvent[] | number[];
+  vsemesTiming?: MicrosoftVisemeEvent[] | number[];
+  vtimes?: number[];
+  vdurations?: number[];
+  duration?: number;
+  durationMs?: number;
+  [key: string]: unknown;
+}
+
+export type LipsyncSequenceInput =
+  | MicrosoftVisemeEvent[]
+  | LipsyncEventListInput
+  | LipsyncSnippetInput;
+
+export interface LipsyncSequenceOptions extends Omit<
+  ClipOptions,
+  'snippetCategory' | 'autoVisemeJaw' | 'jawScale' | 'visemeJawAmounts'
+> {
+  name?: string;
+  sourceProvider?: string;
+  timeUnit?: LipsyncTimeUnit;
+  sourceVisemeMap?: Record<string, LipsyncVisemeKey | LipsyncVisemeKey[]>;
+  morphTargetToViseme?: Record<string, LipsyncVisemeKey>;
+  jawActivation?: Record<string, number>;
+  defaultJawScale?: number;
+  defaultVisemeDurationMs?: number;
+  rampMs?: number;
+  neutralPadMs?: number;
+}
+
+export interface NormalizedLipsyncEvent {
+  sourceId: LipsyncVisemeKey;
+  slotId: string;
+  slotIndex: number;
+  offsetMs: number;
+  durationMs: number;
+  phoneme?: string;
+  animation?: unknown;
+  raw: MicrosoftVisemeEvent;
+}
+
+export interface CompiledLipsyncSequence {
+  name: string;
+  sourceProvider: string;
+  curves: CurvesMap;
+  clipOptions: ClipOptions;
+  events: NormalizedLipsyncEvent[];
 }
 
 /**

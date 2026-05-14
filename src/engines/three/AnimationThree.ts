@@ -1812,7 +1812,7 @@ export class BakedAnimationController {
     // This replicates transitionViseme behavior for clip-based playback
     const autoVisemeJaw = options?.autoVisemeJaw !== false; // Default true
     const jawScale = options?.jawScale ?? 1.0;
-    const visemeJawAmounts = getVisemeJawAmounts(config);
+    const visemeJawAmounts = options?.visemeJawAmounts ?? getVisemeJawAmounts(config);
 
     if (
       autoVisemeJaw &&

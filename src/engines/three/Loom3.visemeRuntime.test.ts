@@ -140,4 +140,33 @@ describe('Loom3 live viseme runtime', () => {
     engine.setVisemeById('bmp', 0);
     expect(mesh.morphTargetInfluences?.[0]).toBeCloseTo(0.3);
   });
+
+  it('plays raw provider viseme timing through a Loom3-owned mixer sequence', () => {
+    const mesh = makeMorphMesh('VisemeMesh', { Viseme_AA: 0, Viseme_BMP: 1 });
+    const engine = makeEngine(makeProfile({
+      visemeSlots: [
+        { id: 'aa', label: 'AA', order: 0, providerIds: { azure: [1] }, defaultJawAmount: 0.8 },
+        { id: 'bmp', label: 'B/M/P', order: 1, providerIds: { azure: [21] }, defaultJawAmount: 0 },
+      ],
+    }), mesh);
+
+    const handle = engine.lipsyncSequence([
+      { visemeId: 1, time: 0, duration: 0.12 },
+      { visemeId: 21, time: 0.12, duration: 0.08 },
+    ], {
+      sourceProvider: 'microsoft',
+      rampMs: 10,
+      neutralPadMs: 0,
+      name: 'raw-provider-visemes',
+    });
+
+    expect(handle).toBeTruthy();
+
+    engine.update(0.02);
+    expect(mesh.morphTargetInfluences?.[0]).toBeGreaterThan(0.5);
+    expect(jawRoll(engine)).toBeGreaterThan(10);
+
+    engine.update(0.12);
+    expect(mesh.morphTargetInfluences?.[1]).toBeGreaterThan(0.5);
+  });
 });

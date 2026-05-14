@@ -41,6 +41,7 @@ import type {
   BakedClipChannel,
   BakedClipChannelInfo,
   AnimationEasing,
+  CurvePoint,
 } from '../../core/types';
 import { getCompositeAxisBinding, getCompositeAxisValue } from '../../core/compositeAxis';
 import type { Profile } from '../../mappings/types';
@@ -202,6 +203,12 @@ export interface BakedAnimationHost {
   getMeshByName: (name: string) => Mesh | undefined;
   getMeshNamesForAU?: (auId: number) => string[];
   getMeshNamesForViseme?: () => string[];
+  getCurrentAUValue?: (auId: number) => number;
+  getCurrentVisemeValue?: (visemeIndex: number) => number;
+  getCurrentMorphValue?: (morphKey: string, meshNames?: string[]) => number;
+  getCurrentMorphIndexValue?: (morphIndex: number, meshNames?: string[]) => number;
+  getCurrentBoneQuaternion?: (nodeKey: string) => Quaternion | null;
+  getCurrentBonePositionValue?: (nodeKey: string, axis: 'x' | 'y' | 'z') => number | null;
   getBones: () => ResolvedBones;
   getConfig: () => Profile;
   getCompositeRotations: () => CompositeRotation[];
@@ -222,6 +229,8 @@ const CLIP_EVENT_EPSILON = 1e-4;
 type ClipEventMetadata = {
   keyframeTimes: number[];
 };
+
+type ScalarKeyframe = Pick<CurvePoint, 'time' | 'intensity' | 'inherit'>;
 
 type ClipMonitor = {
   action: AnimationAction;
@@ -264,6 +273,13 @@ type BakedActionGroup = {
   resolveFinished: () => void;
 };
 
+type DynamicClipSource = {
+  clipName: string;
+  curves: CurvesMap;
+  options?: ClipOptions;
+  hasInheritedStart: boolean;
+};
+
 const ADDITIVE_BAKED_RUNTIME_CLIP_SUFFIX = '__loom3_additive_delta';
 
 export class BakedAnimationController {
@@ -288,6 +304,7 @@ export class BakedAnimationController {
   private actionIds = new WeakMap<AnimationAction, string>();
   private actionIdToClip = new Map<string, string>();
   private clipMonitors = new Map<string, ClipMonitor>();
+  private dynamicClipSources = new WeakMap<AnimationClip, DynamicClipSource>();
 
   constructor(host: BakedAnimationHost) {
     this.host = host;
@@ -530,6 +547,18 @@ export class BakedAnimationController {
       ? userData[CLIP_EVENT_METADATA_KEY].keyframeTimes.filter((time: unknown): time is number => Number.isFinite(time as number))
       : [];
     return { keyframeTimes };
+  }
+
+  private curvesHaveInheritedStart(curves: CurvesMap): boolean {
+    return Object.values(curves).some((curve) => !!curve?.[0]?.inherit);
+  }
+
+  private resolveInheritedClipForPlayback(clip: AnimationClip): AnimationClip {
+    const source = this.dynamicClipSources.get(clip);
+    if (!source?.hasInheritedStart) {
+      return clip;
+    }
+    return this.snippetToClip(source.clipName, source.curves, source.options) ?? clip;
   }
 
   private getKeyframeIndex(times: number[], currentTime: number) {
@@ -1715,27 +1744,27 @@ export class BakedAnimationController {
       return !Number.isNaN(num) && num >= 0 && num < visemeSlotCount;
     };
 
-    const sampleAt = (arr: Array<{ time: number; intensity: number }>, t: number) => {
-      if (!arr.length) return 0;
-      if (t <= arr[0].time) return arr[0].intensity;
-      if (t >= arr[arr.length - 1].time) return arr[arr.length - 1].intensity;
-      for (let i = 0; i < arr.length - 1; i++) {
-        const a = arr[i];
-        const b = arr[i + 1];
-        if (t >= a.time && t <= b.time) {
-          const dt = Math.max(1e-6, b.time - a.time);
-          const p = (t - a.time) / dt;
-          return a.intensity + (b.intensity - a.intensity) * p;
-        }
-      }
-      return 0;
-    };
-
+    const hasInheritedStart = (arr: ScalarKeyframe[] | undefined) => !!arr?.[0]?.inherit;
     const clampIntensity = (v: number) => Math.max(0, Math.min(2, v));
     const sampleCurve = (curveId: string, t: number) => {
       const arr = curves[curveId];
       if (!arr) return 0;
-      return clampIntensity(sampleAt(arr, t) * intensityScale);
+      let inheritedStartValue: number | undefined;
+      if (hasInheritedStart(arr)) {
+        if (isVisemeIndex(curveId)) {
+          inheritedStartValue = this.host.getCurrentVisemeValue?.(Number(curveId));
+        } else if (isNumericAU(curveId)) {
+          inheritedStartValue = this.host.getCurrentAUValue?.(Number(curveId));
+        }
+      }
+      return clampIntensity(
+        this.sampleFinalKeyframeValue(
+          arr,
+          t,
+          (intensity) => intensity * intensityScale,
+          inheritedStartValue === undefined ? undefined : clampIntensity(inheritedStartValue)
+        )
+      );
     };
 
     const keyframeTimes = (() => {
@@ -1827,8 +1856,19 @@ export class BakedAnimationController {
       if (jawEntry) {
         // Sample all viseme curves at each keyframe time and compute weighted jaw amount
         const jawValues: number[] = [];
+        const inheritedJawStart = keyframeTimes.length > 0
+          && Array.from({ length: visemeSlotCount }, (_, index) => curves[String(index)])
+            .some((curve) => hasInheritedStart(curve));
+        const currentJawQ = inheritedJawStart
+          ? this.host.getCurrentBoneQuaternion?.('JAW') ?? null
+          : null;
 
-        for (const t of keyframeTimes) {
+        for (let timeIndex = 0; timeIndex < keyframeTimes.length; timeIndex += 1) {
+          const t = keyframeTimes[timeIndex];
+          if (timeIndex === 0 && currentJawQ) {
+            jawValues.push(currentJawQ.x, currentJawQ.y, currentJawQ.z, currentJawQ.w);
+            continue;
+          }
           let jawAmount = 0;
 
           // Sum contributions from all active visemes at time t
@@ -1836,7 +1876,7 @@ export class BakedAnimationController {
             const visemeCurve = curves[String(visemeIdx)];
             if (!visemeCurve) continue;
 
-            const visemeValue = clampIntensity(sampleAt(visemeCurve, t) * intensityScale);
+            const visemeValue = sampleCurve(String(visemeIdx), t);
             if (visemeValue > 0 && visemeIdx < visemeJawAmounts.length) {
               // Take max jaw amount across all active visemes (like transitionViseme)
               const visemeJaw = visemeJawAmounts[visemeIdx] * visemeValue * jawScale;
@@ -1929,17 +1969,30 @@ export class BakedAnimationController {
           continue;
         }
 
-        const hasRelevantAU = [composite.pitch, composite.yaw, composite.roll]
+        const relevantAUs = new Set<number>();
+        [composite.pitch, composite.yaw, composite.roll]
           .filter(Boolean)
-          .some((axisConfig) => axisConfig!.aus.some((auId) => hasCurveAU.has(auId)));
+          .forEach((axisConfig) => {
+            axisConfig!.aus.forEach((auId) => {
+              if (hasCurveAU.has(auId)) relevantAUs.add(auId);
+            });
+          });
 
-        if (!hasRelevantAU) {
+        if (relevantAUs.size === 0) {
           continue;
         }
 
         const values: number[] = [];
+        const currentBoneQ = Array.from(relevantAUs).some((auId) => hasInheritedStart(curves[String(auId)]))
+          ? this.host.getCurrentBoneQuaternion?.(nodeKey) ?? null
+          : null;
 
-        for (const t of keyframeTimes) {
+        for (let timeIndex = 0; timeIndex < keyframeTimes.length; timeIndex += 1) {
+          const t = keyframeTimes[timeIndex];
+          if (timeIndex === 0 && currentBoneQ) {
+            values.push(currentBoneQ.x, currentBoneQ.y, currentBoneQ.z, currentBoneQ.w);
+            continue;
+          }
           const compositeQ = new Quaternion().copy(entry.baseQuat);
 
           const applyAxis = (
@@ -1983,12 +2036,23 @@ export class BakedAnimationController {
 
           const axisIndex: 'x' | 'y' | 'z' = binding.channel === 'tx' ? 'x' : binding.channel === 'ty' ? 'y' : 'z';
           const basePos = entry.basePos[axisIndex];
+          const inheritedStartValue = curve[0]?.inherit
+            ? this.host.getCurrentBonePositionValue?.(binding.node, axisIndex) ?? entry.obj.position[axisIndex]
+            : undefined;
           const values: number[] = [];
 
           for (const t of keyframeTimes) {
-            const v = sampleCurve(curveId, t);
-            const delta = v * binding.maxUnits * binding.scale;
-            values.push(basePos + delta);
+            values.push(
+              this.sampleFinalKeyframeValue(
+                curve,
+                t,
+                (intensity) => {
+                  const v = clampIntensity(intensity * intensityScale);
+                  return basePos + (v * binding.maxUnits! * binding.scale);
+                },
+                inheritedStartValue
+              )
+            );
           }
 
           const trackName = `${entry.obj.uuid}.position[${axisIndex}]`;
@@ -2004,6 +2068,12 @@ export class BakedAnimationController {
 
     const clip = new AnimationClip(clipName, maxTime, tracks);
     this.setClipEventMetadata(clip, { keyframeTimes });
+    this.dynamicClipSources.set(clip, {
+      clipName,
+      curves,
+      options,
+      hasInheritedStart: this.curvesHaveInheritedStart(curves),
+    });
     console.log(`[Loom3] snippetToClip: Created clip "${clipName}" with ${tracks.length} tracks, duration ${maxTime.toFixed(2)}s`);
 
     return clip;
@@ -2016,6 +2086,8 @@ export class BakedAnimationController {
       console.warn('[Loom3] playClip: No model loaded, cannot create mixer');
       return null;
     }
+    const hasInheritedStart = !!this.dynamicClipSources.get(clip)?.hasInheritedStart;
+    clip = this.resolveInheritedClipForPlayback(clip);
 
     const playbackState = this.mergePlaybackOptions(
       this.getPlaybackStateSnapshot(clip.name, {
@@ -2026,12 +2098,24 @@ export class BakedAnimationController {
     );
     const startTime = this.resolveStartTime(clip.duration, playbackState, options?.startTime);
 
-    let action = this.clipActions.get(clip.name);
-    let actionId = this.getActionId(action);
-    if (action && !actionId) {
-      actionId = this.setActionId(action, clip.name);
+    let action: AnimationAction;
+    let actionId: string;
+    let existingAction = this.clipActions.get(clip.name);
+    if (existingAction && hasInheritedStart && existingAction.getClip() !== clip) {
+      const previousClip = existingAction.getClip();
+      const previousActionId = this.getActionId(existingAction);
+      try { existingAction.stop(); } catch {}
+      try { mixer.uncacheAction(previousClip); } catch {}
+      try { mixer.uncacheClip(previousClip); } catch {}
+      if (previousActionId) this.cleanupClipMonitor(previousActionId);
+      this.clipActions.delete(clip.name);
+      this.animationActions.delete(clip.name);
+      existingAction = undefined;
     }
-    if (!action) {
+    if (existingAction) {
+      action = existingAction;
+      actionId = this.getActionId(action) ?? this.setActionId(action, clip.name);
+    } else {
       action = mixer.clipAction(clip);
       actionId = this.setActionId(action, clip.name);
     }
@@ -2042,35 +2126,39 @@ export class BakedAnimationController {
     }
     this.applyPlaybackState(action, playbackState);
 
-    if (actionId) {
-      this.cleanupClipMonitor(actionId);
-    }
+    this.cleanupClipMonitor(actionId);
 
     let resolveFinished!: () => void;
     const finishedPromise = new Promise<void>((resolve) => {
       resolveFinished = resolve;
     });
-    const keyframeTimes = this.getClipEventMetadata(clip).keyframeTimes;
-    const initialDirection: 1 | -1 = playbackState.reverse ? -1 : 1;
-    const monitor: ClipMonitor = {
-      action,
-      actionId: actionId!,
-      clip,
-      clipName: clip.name,
-      duration: clip.duration,
-      keyframeTimes,
-      listeners: new Set<ClipEventListener>(),
-      initialDirection,
-      direction: initialDirection,
-      iteration: 0,
-      lastTime: Math.max(0, Math.min(clip.duration, action.time)),
-      lastKeyframeIndex: this.getKeyframeIndex(keyframeTimes, action.time),
-      loopMode: playbackState.loopMode,
-      finishedPending: false,
-      cleanedUp: false,
-      resolveFinished,
+    const createMonitor = (
+      listeners = new Set<ClipEventListener>(),
+      state = this.playbackState.get(clip.name) ?? playbackState
+    ): ClipMonitor => {
+      const keyframeTimes = this.getClipEventMetadata(clip).keyframeTimes;
+      const initialDirection: 1 | -1 = state.reverse ? -1 : 1;
+      return {
+        action,
+        actionId,
+        clip,
+        clipName: clip.name,
+        duration: clip.duration,
+        keyframeTimes,
+        listeners,
+        initialDirection,
+        direction: initialDirection,
+        iteration: 0,
+        lastTime: Math.max(0, Math.min(clip.duration, action.time)),
+        lastKeyframeIndex: this.getKeyframeIndex(keyframeTimes, action.time),
+        loopMode: state.loopMode,
+        finishedPending: false,
+        cleanedUp: false,
+        resolveFinished,
+      };
     };
-    this.clipMonitors.set(actionId!, monitor);
+    let monitor = createMonitor();
+    this.clipMonitors.set(actionId, monitor);
 
     action.reset();
     action.time = startTime;
@@ -2087,6 +2175,27 @@ export class BakedAnimationController {
       actionId,
 
       play: () => {
+        const source = this.dynamicClipSources.get(clip);
+        if (source?.hasInheritedStart) {
+          const listeners = new Set(monitor.listeners);
+          const nextClip = this.snippetToClip(source.clipName, source.curves, source.options);
+          if (nextClip) {
+            try { action.stop(); } catch {}
+            try { mixer.uncacheAction(clip); } catch {}
+            try { mixer.uncacheClip(clip); } catch {}
+            this.cleanupClipMonitor(actionId);
+            clip = nextClip;
+            action = mixer.clipAction(clip);
+            actionId = this.setActionId(action, clip.name);
+            handle.actionId = actionId;
+            const nextPlaybackState = this.playbackState.get(clip.name) ?? playbackState;
+            this.applyPlaybackState(action, nextPlaybackState);
+            monitor = createMonitor(listeners, nextPlaybackState);
+            this.clipMonitors.set(actionId, monitor);
+            this.clipActions.set(clip.name, action);
+            this.animationActions.set(clip.name, action);
+          }
+        }
         action.reset();
         action.time = this.resolveStartTime(
           clip.duration,
@@ -2108,7 +2217,7 @@ export class BakedAnimationController {
         this.animationActions.delete(clip.name);
         this.animationFinishedCallbacks.delete(clip.name);
         this.playbackState.delete(clip.name);
-        this.cleanupClipMonitor(actionId!);
+        this.cleanupClipMonitor(actionId);
       },
 
       pause: () => {
@@ -2304,7 +2413,7 @@ export class BakedAnimationController {
   private addMorphTracks(
     tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack>,
     morphKey: string,
-    keyframes: Array<{ time: number; intensity: number }>,
+    keyframes: ScalarKeyframe[],
     intensityScale: number,
     meshNames?: string[]
   ): void {
@@ -2317,16 +2426,33 @@ export class BakedAnimationController {
 
     const addTrackForMesh = (mesh: Mesh) => {
       const dict = mesh.morphTargetDictionary;
-      if (!dict || dict[morphKey] === undefined) return;
+      const infl = mesh.morphTargetInfluences;
+      if (!dict || !infl || dict[morphKey] === undefined) return;
 
       const morphIndex = dict[morphKey];
+      const inheritedStartValue = keyframes[0]?.inherit
+        ? this.host.getCurrentMorphValue?.(morphKey, meshNames) ?? infl[morphIndex] ?? 0
+        : undefined;
 
       const times: number[] = [];
       const values: number[] = [];
 
       for (const kf of keyframes) {
         times.push(kf.time);
-        values.push(Math.max(0, Math.min(2, kf.intensity * intensityScale)));
+        values.push(
+          Math.max(
+            0,
+            Math.min(
+              2,
+              this.sampleFinalKeyframeValue(
+                keyframes,
+                kf.time,
+                (intensity) => intensity * intensityScale,
+                inheritedStartValue
+              )
+            )
+          )
+        );
       }
 
       const trackName = `${mesh.uuid}.morphTargetInfluences[${morphIndex}]`;
@@ -2343,7 +2469,7 @@ export class BakedAnimationController {
   private addMorphIndexTracks(
     tracks: Array<NumberKeyframeTrack | QuaternionKeyframeTrack>,
     morphIndex: number,
-    keyframes: Array<{ time: number; intensity: number }>,
+    keyframes: ScalarKeyframe[],
     intensityScale: number,
     meshNames?: string[]
   ): void {
@@ -2358,13 +2484,29 @@ export class BakedAnimationController {
     const addTrackForMesh = (mesh: Mesh) => {
       const infl = mesh.morphTargetInfluences;
       if (!infl || morphIndex < 0 || morphIndex >= infl.length) return;
+      const inheritedStartValue = keyframes[0]?.inherit
+        ? this.host.getCurrentMorphIndexValue?.(morphIndex, meshNames) ?? infl[morphIndex] ?? 0
+        : undefined;
 
       const times: number[] = [];
       const values: number[] = [];
 
       for (const kf of keyframes) {
         times.push(kf.time);
-        values.push(Math.max(0, Math.min(2, kf.intensity * intensityScale)));
+        values.push(
+          Math.max(
+            0,
+            Math.min(
+              2,
+              this.sampleFinalKeyframeValue(
+                keyframes,
+                kf.time,
+                (intensity) => intensity * intensityScale,
+                inheritedStartValue
+              )
+            )
+          )
+        );
       }
 
       const trackName = `${mesh.uuid}.morphTargetInfluences[${morphIndex}]`;
@@ -2376,6 +2518,34 @@ export class BakedAnimationController {
     for (const mesh of targetMeshes) {
       addTrackForMesh(mesh);
     }
+  }
+
+  private sampleFinalKeyframeValue(
+    keyframes: ScalarKeyframe[],
+    t: number,
+    toFinalValue: (intensity: number) => number,
+    inheritedStartValue?: number
+  ): number {
+    if (!keyframes.length) return 0;
+    const firstValue = inheritedStartValue ?? toFinalValue(keyframes[0].intensity);
+    if (t <= keyframes[0].time) return firstValue;
+    if (t >= keyframes[keyframes.length - 1].time) {
+      return toFinalValue(keyframes[keyframes.length - 1].intensity);
+    }
+
+    for (let i = 0; i < keyframes.length - 1; i += 1) {
+      const a = keyframes[i];
+      const b = keyframes[i + 1];
+      if (t >= a.time && t <= b.time) {
+        const dt = Math.max(1e-6, b.time - a.time);
+        const p = (t - a.time) / dt;
+        const aValue = i === 0 ? firstValue : toFinalValue(a.intensity);
+        const bValue = toFinalValue(b.intensity);
+        return aValue + (bValue - aValue) * p;
+      }
+    }
+
+    return 0;
   }
 
   private ensureMixer(): AnimationMixer | null {

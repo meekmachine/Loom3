@@ -385,6 +385,14 @@ Open in LoomLarge: [Properties tab](https://www.characterloom.com/?drawer=open&t
 
 Before you tune AUs or hand-edit a profile, confirm that you picked the right preset and that the model actually matches it. Loom3 exposes a full preset-selection and validation workflow, not just low-level control APIs.
 
+The preflight loop is:
+
+1. Choose a candidate preset or profile.
+2. Lint the profile itself with `validateMappingConfig()`.
+3. Extract model facts with `extractModelData()` or `extractFromGLTF()`.
+4. Compare the model to the profile with `validateMappings()`, `isPresetCompatible()`, or `suggestBestPreset()`.
+5. Ask for best-effort fixes with `generateMappingCorrections()` or use `analyzeModel()` when you want the full report in one pass.
+
 ### Looking Up and Extending Presets by Type
 
 Use preset helpers when you want a stable entry point by model class instead of importing a preset constant directly:
@@ -413,6 +421,17 @@ const consistency = validateMappingConfig(resolved);
 console.log(consistency.errors, consistency.warnings);
 ```
 
+Use this when you are editing a profile by hand or applying saved profile data from a product UI. It catches structural mistakes such as missing semantic bone nodes, invalid composite rotation references, empty composite AU lists, duplicated AU directions, invalid continuum pairs, and mesh-category references that cannot be resolved from the profile itself.
+
+`validateMappingConfig()` returns a `MappingConsistencyResult`:
+
+| Field | Meaning |
+|-------|---------|
+| `valid` | `true` when there are no blocking internal config errors. |
+| `errors` | Blocking `MappingIssue[]` entries with `code`, `message`, `severity`, and optional `data`. |
+| `warnings` | Non-blocking `MappingIssue[]` entries that should be reviewed. |
+| `issues` | Combined `errors` and `warnings` in one list. |
+
 ### Checking a model against a preset
 
 ```typescript
@@ -436,6 +455,12 @@ const corrections = generateMappingCorrections(meshes, skeleton, resolved, {
 });
 ```
 
+`validateMappings()` compares a profile against the actual model assets. It reports found, missing, and unmapped morphs, bones, and meshes; computes a 0-100 compatibility `score`; and can include correction suggestions when `suggestCorrections` is enabled.
+
+`isPresetCompatible()` is the quick yes/no wrapper around `validateMappings()`. It currently returns `true` when the validation score is at least `50`. Use it for coarse preset filtering, not final authoring decisions.
+
+`generateMappingCorrections()` is a best-effort fuzzy matching helper. It returns a `correctedConfig`, `corrections`, and `unresolved` entries. Each correction records its `type`, `source`, `target`, `confidence`, `reason`, whether it was `applied`, and optional `auId` or `key`. Use `minConfidence` to tune how aggressive suggestions should be, and `useResolvedNames` when the model's actual names should replace prefix/suffix-derived names in the corrected profile.
+
 ### Suggesting the best preset from a candidate set
 
 ```typescript
@@ -450,6 +475,8 @@ const best = suggestBestPreset(meshes, skeleton, [
   BETTA_FISH_PRESET,
 ]);
 ```
+
+`suggestBestPreset()` runs `validateMappings()` for each candidate and returns `{ preset, score }` for the highest-scoring match, or `null` if the candidate list is empty. Treat the returned `score` as a starting point: a best match can still be too incomplete for production if important bones, visemes, or face meshes are missing.
 
 ### Running a full model analysis
 
@@ -471,6 +498,18 @@ const report = await analyzeModel({
 
 console.log(report.summary, report.overallScore);
 ```
+
+`extractModelData()` and `extractFromGLTF()` produce the same `ModelData` shape:
+
+| Field | Meaning |
+|-------|---------|
+| `bones` | Bone hierarchy entries with names, parents, children, world positions, and depth. |
+| `morphs` | Morph targets with name, mesh name, and morph index. |
+| `meshes` | Mesh records with name, `hasMorphTargets`, and `morphCount`. |
+| `animations` | Clip summaries with duration, tracks, animated bones, and animated morphs. |
+| `boneNames`, `morphNames`, `meshNames` | Quick lookup lists for tooling and UI filters. |
+
+`analyzeModel()` wraps extraction, optional preset validation, animation analysis, scoring, and summary generation. Use it for product onboarding, upload checks, and debug reports where a human-readable answer is more useful than separate low-level helper calls.
 
 Use this section when you need to:
 - choose between built-in presets before wiring the character into your app
@@ -569,7 +608,9 @@ import {
   extractFromGLTF,
   extractModelData,
   analyzeModel,
+  validateMappingConfig,
   validateMappings,
+  isPresetCompatible,
   generateMappingCorrections,
   getPreset,
 } from '@lovelace_lol/loom3';
@@ -584,18 +625,28 @@ const analysis = await analyzeModel({
   suggestCorrections: true,
 });
 
+const consistency = validateMappingConfig(preset);
+
 // Validate against lower-level mesh + skeleton inputs when you already have them
 const validation = validateMappings(meshes, skeleton, preset, { suggestCorrections: true });
+const compatible = isPresetCompatible(meshes, skeleton, preset);
 const corrections = generateMappingCorrections(meshes, skeleton, preset, { useResolvedNames: true });
+
+console.log(consistency.valid, compatible, validation.score, corrections.corrections.length);
 ```
 
 If you already have a `ModelData` bundle, `analyzeModel()` is the higher-level path; `validateMappings()` and `generateMappingCorrections()` are intentionally lower-level mesh/skeleton helpers.
 
 Use these helpers to:
 - Extract raw model facts with `extractModelData(model, meshes?, animations?)` or `extractFromGLTF(gltf)`
+- Lint the profile without model data with `validateMappingConfig(profile)`
 - Validate a preset against mesh/skeleton data with `validateMappings(meshes, skeleton, preset, options)`
+- Run a quick 50%-score compatibility check with `isPresetCompatible(meshes, skeleton, preset)`
+- Pick the highest-scoring preset from candidates with `suggestBestPreset(meshes, skeleton, presets)`
 - Generate best-effort fixes with `generateMappingCorrections(meshes, skeleton, preset, options)`
 - Run a single end-to-end pass with `analyzeModel({ source, preset, suggestCorrections })`
+
+`validateMappingConfig()` returns a `MappingConsistencyResult` with `valid`, `errors`, `warnings`, and combined `issues`.
 
 `validateMappings()` returns a `ValidationResult` with:
 - `valid` and `score`
@@ -603,6 +654,10 @@ Use these helpers to:
 - `missingMeshes`, `foundMeshes`, `unmappedMorphs`, `unmappedBones`, `unmappedMeshes`
 - `warnings`
 - optional `suggestedConfig`, `corrections`, and `unresolved` when suggestion mode is enabled
+
+`isPresetCompatible()` returns `true` when the validation score is at least `50`.
+
+`suggestBestPreset()` returns `{ preset, score }` for the highest-scoring candidate, or `null` when no candidates are provided.
 
 `generateMappingCorrections()` returns:
 - `correctedConfig`

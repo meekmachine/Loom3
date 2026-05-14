@@ -211,6 +211,26 @@ export type {
 
 export { computeCameraRelativeGazeOffset } from './camera/cameraRelativeGaze';
 
+export type {
+  AnnotationLaterality,
+} from './camera/annotationCameraAngles';
+
+export {
+  detectAnnotationLaterality,
+  getDefaultAnnotationLaterality,
+  getModelLocalOrbitAngle,
+  getRegionSemanticSide,
+  getSemanticHorizontalSign,
+  getSemanticHorizontalSignForSide,
+  getWorldDirectionForCameraAngle,
+  normalizeCameraAngle,
+  passesMarkerCameraAngleGate,
+  resolveRegionCameraAngle,
+  resolveRegionVisibilityCameraAngle,
+  toModelLocalDirection,
+  toWorldDirection,
+} from './camera/annotationCameraAngles';
+
 // ========================================================================
 // REGION MAPPING HELPERS
 // ========================================================================

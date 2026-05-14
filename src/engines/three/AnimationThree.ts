@@ -2044,6 +2044,7 @@ export class BakedAnimationController {
 
     if (actionId) {
       this.cleanupClipMonitor(actionId);
+      this.actionIdToClip.set(actionId, clip.name);
     }
 
     let resolveFinished!: () => void;
@@ -2218,13 +2219,15 @@ export class BakedAnimationController {
   }
 
   updateClipParams(name: string, params: { weight?: number; rate?: number; loop?: boolean; loopMode?: 'once' | 'repeat' | 'pingpong'; repeatCount?: number; reverse?: boolean; actionId?: string }): boolean {
-    let updated = false;
-    const matches = (clipName: string, action?: AnimationAction | null) => {
-      if (params.actionId) {
-        const aid = action ? this.actionIds.get(action) : this.actionIdToClip.get(params.actionId);
-        if (aid && aid === params.actionId) return true;
-      }
-      return clipName === name || clipName.startsWith(`${name}_`) || clipName.includes(name);
+    const targetActionId = params.actionId;
+    const targets: Array<{ clipName: string; action: AnimationAction }> = [];
+    const seenActions = new Set<AnimationAction>();
+    const matchesName = (clipName: string) =>
+      clipName === name || clipName.startsWith(`${name}_`) || clipName.includes(name);
+    const addTarget = (clipName: string, action: AnimationAction | undefined) => {
+      if (!action || seenActions.has(action)) return;
+      seenActions.add(action);
+      targets.push({ clipName, action });
     };
 
     const debugSnapshot = () => ({
@@ -2241,64 +2244,96 @@ export class BakedAnimationController {
 
     console.log('[Loom3] updateClipParams start', debugSnapshot());
 
-    const apply = (action: AnimationAction | null | undefined) => {
-      if (!action) return;
+    if (targetActionId) {
+      for (const [clipName, action] of this.clipActions.entries()) {
+        if (this.getActionId(action) === targetActionId) addTarget(clipName, action);
+      }
+      for (const [clipName, action] of this.animationActions.entries()) {
+        if (this.getActionId(action) === targetActionId) addTarget(clipName, action);
+      }
+
+      if (targets.length === 0) {
+        const clipName = this.actionIdToClip.get(targetActionId);
+        if (clipName) {
+          addTarget(clipName, this.clipActions.get(clipName));
+          addTarget(clipName, this.animationActions.get(clipName));
+        }
+      }
+    } else {
+      for (const [clipName, action] of this.clipActions.entries()) {
+        if (matchesName(clipName)) addTarget(clipName, action);
+      }
+      for (const [clipName, action] of this.animationActions.entries()) {
+        if (matchesName(clipName)) addTarget(clipName, action);
+      }
+    }
+
+    if (targets.length === 0) {
+      console.log('[Loom3] updateClipParams end', debugSnapshot());
+      return false;
+    }
+
+    const apply = (clipName: string, action: AnimationAction) => {
       const actionId = this.getActionId(action);
       const monitor = actionId ? this.clipMonitors.get(actionId) : undefined;
-      const clipName = action.getClip().name;
-      const next = this.playbackState.get(clipName)
+      const actionClipName = action.getClip().name;
+      const stateName = this.playbackState.has(clipName) ? clipName : actionClipName;
+      const next = this.playbackState.get(stateName)
         ?? this.normalizePlaybackOptions(undefined, { loop: false, source: this.clipSources.get(clipName) ?? 'clip' });
+
       try { action.paused = false; } catch {}
+
       if (typeof params.weight === 'number' && Number.isFinite(params.weight)) {
-        action.setEffectiveWeight(params.weight);
         next.weight = Math.max(0, params.weight);
-        updated = true;
+        action.setEffectiveWeight(next.weight);
       }
-      if (typeof params.rate === 'number' && Number.isFinite(params.rate)) {
-        next.playbackRate = Math.max(0, Math.abs(params.rate));
-        if (typeof params.reverse === 'boolean') {
-          next.reverse = params.reverse;
-        }
+
+      const hasRateUpdate = typeof params.rate === 'number' && Number.isFinite(params.rate);
+      const hasReverseUpdate = typeof params.reverse === 'boolean';
+      if (hasRateUpdate) {
+        next.playbackRate = Math.max(0, Math.abs(params.rate!));
+      }
+      if (hasReverseUpdate) {
+        next.reverse = params.reverse!;
+      }
+      if (hasRateUpdate || hasReverseUpdate) {
         const signedRate = next.reverse ? -next.playbackRate : next.playbackRate;
         action.setEffectiveTimeScale(signedRate);
         if (monitor) {
           monitor.direction = next.reverse ? -1 : 1;
           monitor.initialDirection = monitor.direction;
         }
-        updated = true;
       }
-      if (typeof params.loop === 'boolean' || params.loopMode || params.repeatCount !== undefined) {
-        next.loopMode = params.loopMode || (params.loop ? 'repeat' : 'once');
-        next.loop = next.loopMode !== 'once';
-        next.repeatCount = params.repeatCount;
+
+      let shouldApplyLoopState = false;
+      const requestedLoopMode = params.loopMode
+        ?? (typeof params.loop === 'boolean' ? (params.loop ? 'repeat' : 'once') : undefined);
+      if (requestedLoopMode) {
+        next.loopMode = requestedLoopMode;
+        next.loop = requestedLoopMode !== 'once';
+        shouldApplyLoopState = true;
+      }
+      if (params.repeatCount !== undefined) {
+        next.repeatCount = typeof params.repeatCount === 'number' && Number.isFinite(params.repeatCount)
+          ? Math.max(0, params.repeatCount)
+          : undefined;
+        shouldApplyLoopState = true;
+      }
+
+      if (shouldApplyLoopState) {
         this.applyPlaybackState(action, next);
         if (monitor) monitor.loopMode = next.loopMode;
-        updated = true;
       }
-      this.setPlaybackState(clipName, next);
+
+      this.setPlaybackState(stateName, next);
     };
 
-    for (const [clipName, action] of this.clipActions.entries()) {
-      if (matches(clipName, action)) {
-        apply(action);
-      }
-    }
-    for (const [clipName, action] of this.animationActions.entries()) {
-      if (matches(clipName, action)) {
-        apply(action);
-      }
-    }
-
-    if (!updated && params.actionId) {
-      const clipName = this.actionIdToClip.get(params.actionId);
-      if (clipName) {
-        const action = this.clipActions.get(clipName) || this.animationActions.get(clipName);
-        if (action) apply(action);
-      }
+    for (const { clipName, action } of targets) {
+      apply(clipName, action);
     }
 
     console.log('[Loom3] updateClipParams end', debugSnapshot());
-    return updated;
+    return true;
   }
 
   private addMorphTracks(

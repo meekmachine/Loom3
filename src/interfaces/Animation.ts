@@ -381,7 +381,7 @@ export interface Animation {
    * Update parameters on an active clip.
    * @param name - Name of the clip to update
    * @param params - Parameters to update
-   * @returns true if clip was found and updated
+   * @returns true if a matching active clip/action was found
    */
   updateClipParams(
     name: string,

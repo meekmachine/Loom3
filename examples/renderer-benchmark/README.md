@@ -8,6 +8,12 @@ These fixtures run a deterministic procedural Loom3 scene in the browser and pri
 npm run benchmark:webgpu
 ```
 
+## WebGL
+
+```bash
+npm run benchmark:webgl
+```
+
 Open the printed local URL, then open the browser console. The benchmark writes a summary table and stores the full result on:
 
 ```js
@@ -20,6 +26,6 @@ Re-run the benchmark from the console with:
 window.runLoom3Benchmark()
 ```
 
-The WebGPU fixture maps `three` and `three/webgpu` to the same Three.js WebGPU build so Loom3 and the renderer share one Three.js class graph.
+The WebGPU fixture maps `three` and `three/webgpu` to the same Three.js WebGPU build so Loom3 and the renderer share one Three.js class graph. The WebGL fixture maps `three` to the standard Three.js module build.
 
 The benchmark reports both renderer submit time and RAF interval cadence. It does not use GPU timestamp queries, so treat the numbers as browser-visible smoke/compare metrics rather than a full GPU profiler.

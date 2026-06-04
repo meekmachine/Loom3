@@ -28,6 +28,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "benchmark:webgl": "npm run build && node examples/renderer-benchmark/serve.mjs /examples/webgl-benchmark/",
     "benchmark:webgpu": "npm run build && node examples/renderer-benchmark/serve.mjs /examples/webgpu-benchmark/",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build"

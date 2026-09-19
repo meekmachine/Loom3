@@ -1,0 +1,39 @@
+name: "Propose a capability or engineering change"
+description: "Explain the need, affected workflow, ownership, bounded delivery, and acceptance."
+body:
+  - type: markdown
+    attributes:
+      value: "Describe the need before the mechanism. Internal work may remove an engineering constraint; do not invent an immediate end-user benefit."
+  - type: textarea
+    id: need
+    attributes:
+      label: "Need and current limitation"
+      description: "Who needs what capability, and why? Identify the current behavior or constraint and the evidence or uncertainty behind it."
+    validations:
+      required: true
+  - type: textarea
+    id: flow
+    attributes:
+      label: "Affected workflow and owner"
+      description: "Describe the relevant action/input and result. Name the app area, API, or consumer and the responsible repository/component. Flag unresolved ownership."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Deliverable and boundary"
+      description: "What does completing this issue provide? Distinguish interfaces/scaffolding, working behavior, host integration, and release. Identify remaining work."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Observable completion criteria"
+      description: "Describe scenarios or evidence that demonstrate the intended result. Include relevant failure/recovery cases; implementation artifacts alone may not prove the capability."
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: "Design context and dependencies"
+      description: "Optional: link the relevant architecture/decision and explain each blocking interface or behavior. Separate proposals from accepted decisions and preferred ordering from technical dependencies."

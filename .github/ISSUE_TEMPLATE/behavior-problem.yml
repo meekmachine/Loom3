@@ -1,0 +1,32 @@
+name: "Report a behavior problem"
+description: "Describe the affected flow, actual result, expected result, and evidence."
+body:
+  - type: markdown
+    attributes:
+      value: "Keep this concrete and proportionate. Distinguish observed behavior from a suspected cause; do not include credentials or private user data."
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Problem and affected flow"
+      description: "Who encounters the problem, and where? Name the screen/control, API, or library consumer and its consequence."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "Trigger and observed result"
+      description: "Give the starting conditions, action/input, and actual result. State if the report is based on code inspection rather than a reproduced failure."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected result and completion check"
+      description: "What should happen in that situation, and what observation would demonstrate the fix?"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "Evidence and relevant context"
+      description: "Link a screenshot, log, test, code location, or related decision if available. Identify the build/version and uncertainty; a guessed cause is optional."

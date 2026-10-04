@@ -1,4 +1,4 @@
-<!-- Explain the final change for a teammate unfamiliar with the task. Keep small PRs short; remove unused sections. Use the repository AGENTS.md writing rules. -->
+<!-- Explain the final change for a teammate unfamiliar with the task. Keep small PRs short; remove unused sections. Use the repository AGENTS.md writing rules and docs/development-guidance.md. Explain changed ownership, lifecycle, or public contracts when relevant; update their existing documentation. -->
 
 ## Problem
 

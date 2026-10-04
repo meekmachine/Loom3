@@ -79,3 +79,9 @@ Keep refactoring and documentation proportional to the task. Do not rename every
 legacy alias, split working modules by arbitrary line counts, or add generic
 abstractions merely to satisfy a style preference. Explain the concrete ambiguity
 or contract risk a clarity change resolves.
+
+## Examples grounded in this repository
+
+See [writing examples](writing-examples.md) for source excerpts, context-specific
+weaknesses, proposed rewrites, and existing explanations worth preserving. Use
+the examples to apply these rules; verify current code before copying a claim.

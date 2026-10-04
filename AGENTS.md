@@ -17,6 +17,25 @@
 - Every changed line should trace directly to the user's request. If you notice unrelated cleanup, mention it instead of editing it.
 - Define success criteria before editing, then verify them with focused checks. For behavior changes, add or update tests that prove the intended behavior.
 
+## Code Clarity and Documentation
+
+Before changing behavior, read [Development guidance](docs/development-guidance.md)
+and the owning code. Apply it to the affected scope:
+
+- Name domain actions, identities, units, and coordinate spaces explicitly.
+- Keep state, effects, and cleanup with their owning layer; make the path from
+  input to observable result easy to follow.
+- Express lifecycle transitions and boundary contracts, including failure and
+  cancellation, without adding speculative abstractions or redundant state.
+- Explain reasons and invariants in comments. Verify observable behavior with
+  focused tests; do not test implementation details merely to mirror the code.
+- Update the existing documentation that owns the changed contract or workflow,
+  following the project-specific map in the guidance. Distinguish current
+  implementation, intended architecture, and unverified consumer integration.
+- Keep clarity improvements within the task. A style preference alone is not a
+  blocking defect; explain the concrete ambiguity, failure risk, or maintenance
+  consequence when requesting a change.
+
 ## Engineering Writing
 
 Apply these rules to issues, implementation plans, design proposals, PR

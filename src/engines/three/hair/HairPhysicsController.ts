@@ -1,5 +1,4 @@
-import { Mesh } from 'three';
-import type { Object3D } from 'three';
+import type { Mesh, Object3D } from 'three';
 import type { ClipHandle, ClipOptions, CurvesMap } from '../../../core/types';
 import type {
   HairPhysicsDirectionConfig as SharedHairPhysicsDirectionConfig,
@@ -22,6 +21,10 @@ export interface HairPhysicsHost {
 }
 
 const clamp01 = (value: number) => (value < 0 ? 0 : value > 1 ? 1 : value);
+
+function isMeshObject(obj: Object3D): obj is Mesh {
+  return (obj as Mesh).isMesh === true;
+}
 
 export class HairPhysicsController {
   private host: HairPhysicsHost;
@@ -106,7 +109,7 @@ export class HairPhysicsController {
     const result: Array<{ name: string; isMesh: boolean; isEyebrow: boolean }> = [];
 
     for (const obj of objects) {
-      if (obj instanceof Mesh) {
+      if (isMeshObject(obj)) {
         const mesh = obj;
         this.registeredHairObjects.set(mesh.name, mesh);
 

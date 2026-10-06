@@ -81,10 +81,12 @@ export interface ModelData {
 function extractBones(root: THREE.Object3D): BoneInfo[] {
   const bones: BoneInfo[] = [];
   const boneDepths = new Map<string, number>();
+  const isBoneObject = (obj: THREE.Object3D | null | undefined): obj is THREE.Bone =>
+    !!obj && ((obj as THREE.Bone).isBone === true || obj.type === 'Bone');
 
   // First pass: find all bones and calculate depths
   root.traverse((obj) => {
-    if (obj instanceof THREE.Bone || obj.type === 'Bone') {
+    if (isBoneObject(obj)) {
       const worldPos = new THREE.Vector3();
       obj.getWorldPosition(worldPos);
 
@@ -92,14 +94,14 @@ function extractBones(root: THREE.Object3D): BoneInfo[] {
       let depth = 0;
       let parent = obj.parent;
       while (parent) {
-        if (parent instanceof THREE.Bone || parent.type === 'Bone') {
+        if (isBoneObject(parent)) {
           depth++;
         }
         parent = parent.parent;
       }
       boneDepths.set(obj.name, depth);
 
-      const parentBone = obj.parent instanceof THREE.Bone || obj.parent?.type === 'Bone'
+      const parentBone = isBoneObject(obj.parent)
         ? obj.parent.name
         : null;
 

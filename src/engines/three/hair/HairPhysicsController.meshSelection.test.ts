@@ -38,6 +38,28 @@ function makeClipHandle(clipName: string): ClipHandle {
 }
 
 describe('HairPhysicsController mesh selection', () => {
+  it('accepts mesh-like objects without relying on Three constructor identity', () => {
+    const hair = makeMorphMesh('HairA') as any;
+    Object.setPrototypeOf(hair, Object.prototype);
+    expect(hair instanceof Mesh).toBe(false);
+
+    const host: HairPhysicsHost = {
+      getMeshByName: (name) => (name === hair.name ? hair : undefined),
+    };
+
+    const controller = new HairPhysicsController(host);
+    const result = controller.registerHairObjects([hair]);
+
+    expect(result).toEqual([
+      {
+        name: 'HairA',
+        isMesh: true,
+        isEyebrow: false,
+      },
+    ]);
+    expect(controller.getRegisteredHairObjects()).toEqual([hair]);
+  });
+
   it('uses selected hair meshes from host config when building physics clips', () => {
     const hairA = makeMorphMesh('HairA');
     const hairB = makeMorphMesh('HairB');

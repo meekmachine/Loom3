@@ -19,10 +19,13 @@ Loom3 is broader than a face-controller wrapper. The library spans four practica
 - Inspection and validation: mesh, morph, and bone discovery; preset-fit checks; correction suggestions; and full model analysis.
 - Runtime tooling: mesh/material debugging, mixer animation clip helpers, hair physics, and region/geometry helpers for annotation or camera tooling.
 
+The inspection and validation layer is what makes the rest of the system scalable. A product such as LoomLarge can upload an unknown GLB, inventory its bones and morph targets, choose the closest preset, explain what is missing, propose corrections, and save a reusable character profile. Once that profile exists, app code and AI agents can drive the character through semantic controls like AUs, visemes, gaze, head motion, and expression clips instead of hard-coding rig-specific morph names.
+
 ## Reading Paths
 
 Use the README in one of these paths:
 - First successful character: [Installation & Setup](#1-installation--setup) -> [Using Presets](#2-using-presets) -> [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Action Unit Control](#7-action-unit-control) -> [Viseme System](#12-viseme-system) -> [Transition System](#13-transition-system) -> [Baked Animations](#16-baked-animations)
+- Uploading or onboarding a new character: [Using Presets](#2-using-presets) -> [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Extending & Custom Presets](#5-extending--custom-presets) -> [API Reference](#18-api-reference)
 - Retargeting an existing rig: [Using Presets](#2-using-presets) -> [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Extending & Custom Presets](#5-extending--custom-presets)
 - Skeletal-only character: [Creating Skeletal Animation Presets](#6-creating-skeletal-animation-presets) -> [Baked Animations](#16-baked-animations) -> [Regions & Geometry Helpers](#17-regions--geometry-helpers)
 - Annotation or camera tooling: [Preset Selection & Validation](#3-preset-selection--validation) -> [Getting to Know Your Character](#4-getting-to-know-your-character) -> [Regions & Geometry Helpers](#17-regions--geometry-helpers)
@@ -383,7 +386,94 @@ see [ANNOTATION_CONFIGURATION.md](./ANNOTATION_CONFIGURATION.md).
 
 Open in LoomLarge: [Properties tab](https://www.characterloom.com/?drawer=open&tab=properties) | [Mappings tab](https://www.characterloom.com/?drawer=open&tab=mappings) | [Bones tab](https://www.characterloom.com/?drawer=open&tab=bones)
 
-Before you tune AUs or hand-edit a profile, confirm that you picked the right preset and that the model actually matches it. Loom3 exposes a full preset-selection and validation workflow, not just low-level control APIs.
+This section is about the path from "I have a 3D character file" to "this character can be controlled semantically." The goal is not merely to list validation APIs. The goal is to make character rigging repeatable enough that a product UI, upload wizard, or LLM-assisted workflow can do most of the boring inspection work before a human starts tuning.
+
+Most character failures happen before animation code runs:
+
+- the model has morph targets, but their names do not match the selected preset
+- the model has useful bones, but the saved profile points at different bone names
+- visemes exist on a different mesh than the one the runtime is driving
+- the model is usable, but only after a small prefix, suffix, or naming correction
+- the model is not compatible, and the user needs to know that before spending time tuning
+
+Loom3's preflight APIs turn those unknowns into a profile decision. They help answer:
+
+- What does this GLB contain?
+- Which preset is the closest starting point?
+- What parts of the preset actually resolve on this model?
+- What should the product ask the user to fix?
+- What can be corrected automatically and saved back into the character profile?
+
+That matters for the bigger platform vision: once a character has a validated Loom3 profile, downstream code can ask for intent, not plumbing. A human, app workflow, or LLM can say "smile," "blink," "look left," "speak this phoneme," or "play this expression" through stable Loom3 controls while the profile translates that intent into the character's actual morphs, bones, meshes, visemes, and clips.
+
+The preflight loop is:
+
+1. Upload or load the GLB, then extract facts with `extractFromGLTF()` or `extractModelData()`.
+2. Use the extracted morph, bone, mesh, and animation inventory to show the user what the character can support.
+3. Pick a candidate preset with `getPreset()` or choose the strongest candidate with `suggestBestPreset()`.
+4. Lint the saved or edited profile with `validateMappingConfig()` so broken profile data does not enter the runtime.
+5. Compare the actual model to the profile with `validateMappings()` or the coarse `isPresetCompatible()` check.
+6. Use `generateMappingCorrections()` to propose safe renames and save a corrected profile when confidence is high enough.
+7. Use `analyzeModel()` when an upload wizard or debug report needs one summary object with model facts, preset fit, suggested corrections, animations, and a plain-language result.
+
+In practice, this lets users rig a character by progressively answering "what is in the file, what preset fits, what is missing, what can be corrected, and what profile should be saved" instead of manually reading every mesh, bone, and morph target name.
+
+### Character upload preflight
+
+This is the product-level shape these APIs are meant to support:
+
+```typescript
+import * as THREE from 'three';
+import {
+  BETTA_FISH_PRESET,
+  CC4_PRESET,
+  analyzeModel,
+  collectMorphMeshes,
+  extractFromGLTF,
+  generateMappingCorrections,
+  suggestBestPreset,
+  validateMappingConfig,
+  validateMappings,
+} from '@lovelace_lol/loom3';
+
+const modelData = extractFromGLTF(gltf);
+const meshes = collectMorphMeshes(gltf.scene);
+const skinnedMesh = gltf.scene.getObjectByProperty('type', 'SkinnedMesh') as THREE.SkinnedMesh | undefined;
+const skeleton = skinnedMesh?.skeleton ?? null;
+
+const best = suggestBestPreset(meshes, skeleton, [
+  CC4_PRESET,
+  BETTA_FISH_PRESET,
+]);
+
+const selectedProfile = best?.preset ?? CC4_PRESET;
+const corrections = generateMappingCorrections(meshes, skeleton, selectedProfile, {
+  minConfidence: 0.75,
+  useResolvedNames: true,
+});
+
+const profileToSave = corrections.correctedConfig;
+const consistency = validateMappingConfig(profileToSave);
+const validation = validateMappings(meshes, skeleton, profileToSave);
+
+const report = await analyzeModel({
+  source: { type: 'gltf', gltf },
+  preset: profileToSave,
+  suggestCorrections: true,
+});
+
+const uploadResult = {
+  modelData,
+  selectedPresetScore: best?.score ?? 0,
+  readyForRuntime: consistency.valid && validation.score >= 70,
+  warnings: [...validation.warnings, ...consistency.warnings.map((issue) => issue.message)],
+  unresolved: corrections.unresolved,
+  profileToSave,
+  summary: report.summary,
+};
+```
+
+In a character upload wizard, that result can drive the whole onboarding screen: show the detected morphs and bones, display a preset score, warn about missing face/eye/jaw controls, list unresolved mappings for the user to fix, and save the corrected profile when the match is good enough.
 
 ### Looking Up and Extending Presets by Type
 
@@ -400,6 +490,8 @@ const preset = getPreset('cc4');
 const extended = getPresetWithProfile('cc4', {
   morphToMesh: { face: ['Object_9'] },
 });
+
+const selectedProfile = extended;
 ```
 
 ### Validating the config itself
@@ -409,9 +501,20 @@ const extended = getPresetWithProfile('cc4', {
 ```typescript
 import { validateMappingConfig } from '@lovelace_lol/loom3';
 
-const consistency = validateMappingConfig(resolved);
+const consistency = validateMappingConfig(selectedProfile);
 console.log(consistency.errors, consistency.warnings);
 ```
+
+Use this when you are editing a profile by hand or applying saved profile data from a product UI. It catches structural mistakes such as missing semantic bone nodes, invalid composite rotation references, empty composite AU lists, duplicated AU directions, invalid continuum pairs, and mesh-category references that cannot be resolved from the profile itself.
+
+`validateMappingConfig()` returns a `MappingConsistencyResult`:
+
+| Field | Meaning |
+|-------|---------|
+| `valid` | `true` when there are no blocking internal config errors. |
+| `errors` | Blocking `MappingIssue[]` entries with `code`, `message`, `severity`, and optional `data`. |
+| `warnings` | Non-blocking `MappingIssue[]` entries that should be reviewed. |
+| `issues` | Combined `errors` and `warnings` in one list. |
 
 ### Checking a model against a preset
 
@@ -426,15 +529,21 @@ import {
 const skinnedMesh = gltf.scene.getObjectByProperty('type', 'SkinnedMesh') as THREE.SkinnedMesh | undefined;
 const skeleton = skinnedMesh?.skeleton ?? null;
 
-const validation = validateMappings(meshes, skeleton, resolved, {
+const validation = validateMappings(meshes, skeleton, selectedProfile, {
   suggestCorrections: true,
 });
 
-const compatible = isPresetCompatible(meshes, skeleton, resolved);
-const corrections = generateMappingCorrections(meshes, skeleton, resolved, {
+const compatible = isPresetCompatible(meshes, skeleton, selectedProfile);
+const corrections = generateMappingCorrections(meshes, skeleton, selectedProfile, {
   useResolvedNames: true,
 });
 ```
+
+`validateMappings()` compares a profile against the actual model assets. It reports found, missing, and unmapped morphs, bones, and meshes; computes a 0-100 compatibility `score`; and can include correction suggestions when `suggestCorrections` is enabled.
+
+`isPresetCompatible()` is the quick yes/no wrapper around `validateMappings()`. It currently returns `true` when the validation score is at least `50`. Use it for coarse preset filtering, not final authoring decisions.
+
+`generateMappingCorrections()` is a best-effort fuzzy matching helper. It returns a `correctedConfig`, `corrections`, and `unresolved` entries. Each correction records its `type`, `source`, `target`, `confidence`, `reason`, whether it was `applied`, and optional `auId` or `key`. Use `minConfidence` to tune how aggressive suggestions should be, and `useResolvedNames` when the model's actual names should replace prefix/suffix-derived names in the corrected profile.
 
 ### Suggesting the best preset from a candidate set
 
@@ -451,6 +560,8 @@ const best = suggestBestPreset(meshes, skeleton, [
 ]);
 ```
 
+`suggestBestPreset()` runs `validateMappings()` for each candidate and returns `{ preset, score }` for the highest-scoring match, or `null` if the candidate list is empty. Treat the returned `score` as a starting point: a best match can still be too incomplete for production if important bones, visemes, or face meshes are missing.
+
 ### Running a full model analysis
 
 ```typescript
@@ -465,12 +576,24 @@ const runtimeData = extractModelData(gltf.scene, meshes, gltf.animations);
 
 const report = await analyzeModel({
   source: { type: 'gltf', gltf },
-  preset: resolved,
+  preset: selectedProfile,
   suggestCorrections: true,
 });
 
 console.log(report.summary, report.overallScore);
 ```
+
+`extractModelData()` and `extractFromGLTF()` produce the same `ModelData` shape:
+
+| Field | Meaning |
+|-------|---------|
+| `bones` | Bone hierarchy entries with names, parents, children, world positions, and depth. |
+| `morphs` | Morph targets with name, mesh name, and morph index. |
+| `meshes` | Mesh records with name, `hasMorphTargets`, and `morphCount`. |
+| `animations` | Clip summaries with duration, tracks, animated bones, and animated morphs. |
+| `boneNames`, `morphNames`, `meshNames` | Quick lookup lists for tooling and UI filters. |
+
+`analyzeModel()` wraps extraction, optional preset validation, animation analysis, scoring, and summary generation. Use it for product onboarding, upload checks, and debug reports where a human-readable answer is more useful than separate low-level helper calls.
 
 Use this section when you need to:
 - choose between built-in presets before wiring the character into your app
@@ -569,7 +692,9 @@ import {
   extractFromGLTF,
   extractModelData,
   analyzeModel,
+  validateMappingConfig,
   validateMappings,
+  isPresetCompatible,
   generateMappingCorrections,
   getPreset,
 } from '@lovelace_lol/loom3';
@@ -584,18 +709,28 @@ const analysis = await analyzeModel({
   suggestCorrections: true,
 });
 
+const consistency = validateMappingConfig(preset);
+
 // Validate against lower-level mesh + skeleton inputs when you already have them
 const validation = validateMappings(meshes, skeleton, preset, { suggestCorrections: true });
+const compatible = isPresetCompatible(meshes, skeleton, preset);
 const corrections = generateMappingCorrections(meshes, skeleton, preset, { useResolvedNames: true });
+
+console.log(consistency.valid, compatible, validation.score, corrections.corrections.length);
 ```
 
 If you already have a `ModelData` bundle, `analyzeModel()` is the higher-level path; `validateMappings()` and `generateMappingCorrections()` are intentionally lower-level mesh/skeleton helpers.
 
 Use these helpers to:
 - Extract raw model facts with `extractModelData(model, meshes?, animations?)` or `extractFromGLTF(gltf)`
+- Lint the profile without model data with `validateMappingConfig(profile)`
 - Validate a preset against mesh/skeleton data with `validateMappings(meshes, skeleton, preset, options)`
+- Run a quick 50%-score compatibility check with `isPresetCompatible(meshes, skeleton, preset)`
+- Pick the highest-scoring preset from candidates with `suggestBestPreset(meshes, skeleton, presets)`
 - Generate best-effort fixes with `generateMappingCorrections(meshes, skeleton, preset, options)`
 - Run a single end-to-end pass with `analyzeModel({ source, preset, suggestCorrections })`
+
+`validateMappingConfig()` returns a `MappingConsistencyResult` with `valid`, `errors`, `warnings`, and combined `issues`.
 
 `validateMappings()` returns a `ValidationResult` with:
 - `valid` and `score`
@@ -603,6 +738,10 @@ Use these helpers to:
 - `missingMeshes`, `foundMeshes`, `unmappedMorphs`, `unmappedBones`, `unmappedMeshes`
 - `warnings`
 - optional `suggestedConfig`, `corrections`, and `unresolved` when suggestion mode is enabled
+
+`isPresetCompatible()` returns `true` when the validation score is at least `50`.
+
+`suggestBestPreset()` returns `{ preset, score }` for the highest-scoring candidate, or `null` when no candidates are provided.
 
 `generateMappingCorrections()` returns:
 - `correctedConfig`
